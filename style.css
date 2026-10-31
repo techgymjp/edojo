@@ -58,9 +58,9 @@ h1 { font-family: "Yuji Syuku", serif; font-size: clamp(52px, 13vw, 96px); line-
 .time { font-size: 18px; opacity: 0.85; }
 .hud-right { position: absolute; top: max(10px, env(safe-area-inset-top)); right: 12px; pointer-events: auto; }
 .mini-btn { font: inherit; font-weight: 700; width: 42px; height: 42px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.4); background: rgba(0,0,0,0.45); color: #fff; font-size: 16px; cursor: pointer; }
-#alert { position: absolute; top: 108px; left: 50%; transform: translateX(-50%); background: rgba(150,10,10,0.82); padding: 8px 18px; border-radius: 8px; font-size: 22px; font-weight: 700; opacity: 0; transition: opacity 0.3s; white-space: nowrap; max-width: 94vw; overflow: hidden; text-overflow: ellipsis; }
+#alert { position: absolute; top: 150px; left: 50%; transform: translateX(-50%); background: rgba(150,10,10,0.82); padding: 8px 18px; border-radius: 8px; font-size: 22px; font-weight: 700; opacity: 0; transition: opacity 0.3s; white-space: nowrap; max-width: 94vw; overflow: hidden; text-overflow: ellipsis; }
 #alert.show { opacity: 1; }
-#danger { position: absolute; top: 162px; left: 50%; transform: translateX(-50%); text-align: center; }
+#danger { position: absolute; top: 200px; left: 50%; transform: translateX(-50%); text-align: center; }
 #dangerArrow { position: absolute; left: 50%; top: -6px; font-size: 40px; color: #ff3030; text-shadow: 0 0 8px #000; transform-origin: 50% 50%; }
 #dangerArrow { transform: translate(-50%,-50%); }
 #dangerInfo { margin-top: 18px; font-size: 20px; font-weight: 700; color: #ffb0a0; text-shadow: 0 1px 3px #000; white-space: nowrap; }
@@ -106,3 +106,6 @@ h1 { font-family: "Yuji Syuku", serif; font-size: clamp(52px, 13vw, 96px); line-
   #alert { font-size: 16px; top: 78px; }
   .story { font-size: 14px; }
 }
+
+#nav { position: absolute; top: max(96px, calc(env(safe-area-inset-top) + 86px)); left: 50%; transform: translateX(-50%); background: rgba(10, 40, 80, 0.7); border: 1px solid rgba(160, 220, 255, 0.6); border-radius: 22px; padding: 4px 16px; font-size: 20px; font-weight: 800; color: #bfe8ff; white-space: nowrap; text-shadow: 0 1px 2px #000; }
+#navArrow { display: inline-block; color: #6fd8ff; font-size: 26px; }

@@ -137,6 +137,13 @@ def main():
         for x, y in pts:
             d.ellipse([x - r, y - r, x + r, y + r], fill=0)
     A = np.array(img)
+    # 川の中の小さな陸 (橋脚・中州のかけら) を水にする: 水を 2 画素ふくらませてから縮める (お城の陸はそのまま)
+    from PIL import ImageFilter
+    wm = Image.fromarray(np.where(A == 0, 255, 0).astype(np.uint8))
+    closed = np.array(wm.filter(ImageFilter.MaxFilter(5)).filter(ImageFilter.MinFilter(5)))
+    fill = (closed == 255) & (A == 5)
+    print('filled specks', int(fill.sum()))
+    A[fill] = 0
     # ---- 水のかたまりに番号を付け、離れたお濠どうしをワープでつなぐ ----
     lab = np.zeros(A.shape, np.int32)
     water = A == 0
@@ -191,7 +198,8 @@ def main():
                     yy, xx = y + dy, x + dx
                     if not (0 <= yy < h and 0 <= xx < w): continue
                     if water[yy, xx]:
-                        if lab[yy, xx] in joined:
+                        # 内堀どうしだけをワープでつなぐ (内堀と外の川・外堀は日比谷濠〜山下の堀でしかつながらない)
+                        if lab[yy, xx] in joined and I[yy, xx] >= 3:
                             hit = (orig, (yy, xx)); break
                         continue
                     if (yy, xx) not in dist:

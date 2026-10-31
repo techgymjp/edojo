@@ -36,6 +36,31 @@ function windowTex(kind, lit, renderer) {
   return t;
 }
 
+// カメラと小舟のあいだにある建物を透かして消す (主人公が建物の陰で見えなくならないように)
+export const CUT = { cam: { value: new THREE.Vector3() }, boat: { value: new THREE.Vector3(0, -1e5, 0) }, r: { value: 9 } };
+export function addCutaway(mat) {
+  const prev = mat.onBeforeCompile;
+  mat.onBeforeCompile = (sh, r) => {
+    if (prev) prev(sh, r);
+    sh.uniforms.uCutCam = CUT.cam; sh.uniforms.uCutBoat = CUT.boat; sh.uniforms.uCutR = CUT.r;
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vCutW;')
+      .replace('#include <project_vertex>', `#include <project_vertex>
+        vec4 cutw = vec4(transformed, 1.0);
+        #ifdef USE_INSTANCING
+          cutw = instanceMatrix * cutw;
+        #endif
+        vCutW = (modelMatrix * cutw).xyz;`);
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vCutW; uniform vec3 uCutCam; uniform vec3 uCutBoat; uniform float uCutR;')
+      .replace('void main() {', `void main() {
+        vec3 cutAB = uCutBoat - uCutCam;
+        float cutT = clamp(dot(vCutW - uCutCam, cutAB) / max(dot(cutAB, cutAB), 1e-3), 0.0, 1.0);
+        if (cutT > 0.0 && cutT < 0.96 && length(vCutW - (uCutCam + cutAB * cutT)) < uCutR + cutT * 4.0) discard;`);
+  };
+  const key = mat.customProgramCacheKey ? mat.customProgramCacheKey.bind(mat) : () => '';
+  mat.customProgramCacheKey = () => key() + '|cut';
+  mat.needsUpdate = true;
+}
+
 export function buildTokyo(scene, renderer) {
   const OX = (139.745 - W.W) * W.KX, OZ = (W.N - 35.674) * W.KZ;
   const root = new THREE.Group();
@@ -47,6 +72,7 @@ export function buildTokyo(scene, renderer) {
     roof: new THREE.MeshLambertMaterial({ vertexColors: true }),
   };
   const city = new City();
+  for (const m of Object.values(mats)) addCutaway(m);
   // 水 (戻した江戸の堀を含む) と皇居ゾーン (江戸城) に建つビルは描かない
   const bad = (x, z) => { const c = codeAt(x + OX, z + OZ); return c === 0 || c === 3 || c === 4; };
   let dropped = 0;
@@ -57,6 +83,7 @@ export function buildTokyo(scene, renderer) {
   }
   city.skipGround = (x, z) => isWater(x + OX, z + OZ);
   city.buildMeshes(root, mats);
+  addCutaway(city.boxMat);
   city.buildRoads(root);
   // 名所 (皇居・武道館・皇居の門は江戸城にするので入れない)
   const tower = addTokyoTower(root, city);
