@@ -355,12 +355,88 @@ function waterNormalTexture() {
   return t;
 }
 
+// 水面: 皇居ランナーと同じ、鏡に映した景色 (reflect) をさざ波でゆらして重ねる (three.js の Reflector と同じ方法)
 export function buildWater(scene) {
-  const nt = waterNormalTexture();
-  nt.repeat.set(W.sizeX / 40, W.sizeZ / 40);
-  const m = new THREE.MeshPhongMaterial({ color: 0x0b4a66, specular: 0x24384a, shininess: 30, emissive: 0x062a3c, normalMap: nt, normalScale: new THREE.Vector2(0.6, 0.6) });
-  const g = quadXZ(-200, -200, W.sizeX + 200, W.sizeZ + 200, 0);
-  const mesh = new THREE.Mesh(g, m);
+  const rt = new THREE.WebGLRenderTarget(256, 256, { type: THREE.HalfFloatType });
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      tReflect: { value: rt.texture }, texMat: { value: new THREE.Matrix4() }, time: { value: 0 },
+      color: { value: new THREE.Color(0x24525e) }, fogColor: { value: new THREE.Color() }, fogNear: { value: 300 }, fogFar: { value: 2000 },
+      camPos: { value: new THREE.Vector3() }, strength: { value: 0.8 },
+    },
+    vertexShader: `uniform mat4 texMat; varying vec4 vR; varying vec3 vW; varying float vDepth;
+      void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; vR = texMat * w;
+        vec4 mv = viewMatrix * w; vDepth = -mv.z; gl_Position = projectionMatrix * mv; }`,
+    fragmentShader: `uniform sampler2D tReflect; uniform float time; uniform vec3 color; uniform vec3 fogColor; uniform float fogNear; uniform float fogFar; uniform vec3 camPos; uniform float strength;
+      varying vec4 vR; varying vec3 vW; varying float vDepth;
+      void main(){
+        vec2 p = vW.xz;
+        float w1 = sin(p.x * 0.35 + time * 1.3) + sin(p.y * 0.42 - time * 1.1) + sin((p.x + p.y) * 0.9 + time * 2.1) * 0.5;
+        float w2 = cos(p.y * 0.31 + time * 1.2) + cos(p.x * 0.47 + time * 0.9) + cos((p.x - p.y) * 1.1 - time * 1.7) * 0.5;
+        vec4 r = vR; r.xy += vec2(w1, w2) * 0.012 * r.w;
+        vec3 refl = texture2DProj(tReflect, r).rgb;
+        vec3 v = normalize(camPos - vW);
+        float fres = 0.25 + 0.75 * pow(1.0 - max(v.y, 0.0), 3.0);
+        vec3 c = mix(color, refl, clamp(fres * strength + 0.15, 0.0, 0.95));
+        c += vec3(0.04) * (w1 * 0.5 + 0.5) * (1.0 - fres);
+        float f = smoothstep(fogNear, fogFar, vDepth);
+        gl_FragColor = vec4(mix(c, fogColor, f), 1.0);
+        #include <colorspace_fragment>
+      }`,
+  });
+  const mesh = new THREE.Mesh(quadXZ(-200, -200, W.sizeX + 200, W.sizeZ + 200, 0), mat);
   scene.add(mesh);
-  return { mesh, update(t) { nt.offset.set(t * 0.012, t * 0.008); } };
+  const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
+  const mirrorCam = new THREE.PerspectiveCamera();
+  const rScale = isTouch ? 0.33 : 0.5;
+  const _v = new THREE.Vector3(), _t = new THREE.Vector3(), _n = new THREE.Vector3(0, 1, 0), _rm = new THREE.Matrix4(), _la = new THREE.Vector3();
+  const _plane = new THREE.Plane(), _clip = new THREE.Vector4(), _q = new THREE.Vector4(), P = new THREE.Vector3(0, 0, 0);
+  return {
+    mesh,
+    update(t) { mat.uniforms.time.value = t; },
+    // 水面を鏡にして、カメラを上下反転した所から景色を描く
+    reflect(renderer, scene, camera) {
+      const w = Math.max(64, Math.floor(renderer.domElement.width * rScale)), h = Math.max(64, Math.floor(renderer.domElement.height * rScale));
+      if (rt.width !== w || rt.height !== h) rt.setSize(w, h);
+      const cp = camera.position;
+      camera.updateMatrixWorld();
+      _v.subVectors(P, cp);
+      if (_v.dot(_n) > 0) return;
+      _v.reflect(_n).negate().add(P);
+      _rm.extractRotation(camera.matrixWorld);
+      _la.set(0, 0, -1).applyMatrix4(_rm).add(cp);
+      _t.subVectors(P, _la).reflect(_n).negate().add(P);
+      mirrorCam.position.copy(_v);
+      mirrorCam.up.set(0, 1, 0).applyMatrix4(_rm).reflect(_n);
+      mirrorCam.lookAt(_t);
+      mirrorCam.far = camera.far;
+      mirrorCam.updateMatrixWorld();
+      mirrorCam.projectionMatrix.copy(camera.projectionMatrix);
+      const tm = mat.uniforms.texMat.value;
+      tm.set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1);
+      tm.multiply(mirrorCam.projectionMatrix).multiply(mirrorCam.matrixWorldInverse);
+      // 水面より下を切り落とす (斜めのクリップ面)
+      _plane.setFromNormalAndCoplanarPoint(_n, P).applyMatrix4(mirrorCam.matrixWorldInverse);
+      _clip.set(_plane.normal.x, _plane.normal.y, _plane.normal.z, _plane.constant);
+      const pm = mirrorCam.projectionMatrix.elements;
+      _q.x = (Math.sign(_clip.x) + pm[8]) / pm[0];
+      _q.y = (Math.sign(_clip.y) + pm[9]) / pm[5];
+      _q.z = -1;
+      _q.w = (1 + pm[10]) / pm[14];
+      _clip.multiplyScalar(2 / _clip.dot(_q));
+      pm[2] = _clip.x; pm[6] = _clip.y; pm[10] = _clip.z + 1 - 0.003; pm[14] = _clip.w;
+      mesh.visible = false;
+      const fogFar = scene.fog.far;
+      scene.fog.far = Math.min(fogFar, 1200);
+      renderer.setRenderTarget(rt);
+      renderer.clear();
+      renderer.render(scene, mirrorCam);
+      renderer.setRenderTarget(null);
+      scene.fog.far = fogFar;
+      mesh.visible = true;
+      const u = mat.uniforms;
+      u.camPos.value.copy(cp);
+      u.fogColor.value.copy(scene.fog.color); u.fogNear.value = scene.fog.near; u.fogFar.value = scene.fog.far;
+    },
+  };
 }

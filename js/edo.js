@@ -64,7 +64,7 @@ export function labelSprite(text, color = '#fff', size = 1) {
   g.fillText(text, c.width / 2, c.height / 2 + 2);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthWrite: false, transparent: true }));
-  s.scale.set(c.width / c.height * 4 * size, 4 * size, 1);
+  s.scale.set(c.width / c.height * 6 * size, 6 * size, 1);
   return s;
 }
 

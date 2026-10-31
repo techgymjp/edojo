@@ -5,6 +5,7 @@ import { buildTown, buildModern, buildCastle, buildWarps, buildBalloon, moatName
 import { makeBoat, animateBoat, makeNinja, poseNinja, makeBamboo, makeCoin } from './models.js';
 import * as A from './audio.js';
 import { Fireworks } from './fireworks.js';
+import { buildTokyo } from './tokyo.js';
 
 const $ = (id) => document.getElementById(id);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -22,6 +23,7 @@ export const CFG = {
   swim: 2.3,          // 竹筒 (水遁の術) の速さ
   climbStone: 0.55,   // 石垣を登る速さ (m/s)
   climbDote: 0.8,     // 土手を這い上がる速さ
+  run: 9,             // 外堀を越えたあと、ビルの屋根伝いに走る速さ (m/s)
   hp: 3,              // 投げ銭で何枚当てれば捕まるか (竹筒・登っている忍者)
   coinRange: 38, coinCd: 0.75, coinSpeed: 65,
   lassoRange: 140, lassoCd: 2.2, lassoCatch: 5,
@@ -61,7 +63,7 @@ const G = {
   warpCd: 0, camYaw: 0, camDist: 38, lastMouse: -99, mouseDir: null, endT: 0, result: null, intruder: null,
 };
 const P = { x: 0, z: 0, h: 0, v: 0, gear: 1, roll: 0, dashT: 0 };
-let boat, water, modern, castle, warps = [], balloon, navi, fw;
+let boat, water, modern, castle, warps = [], balloon, navi, fw, tokyo;
 
 // ---------- 入力 ----------
 const I = { keys: new Set(), pressed: new Set(), joy: null, tDash: false, mx: 0, my: 0, wheel: 0 };
@@ -139,20 +141,26 @@ async function boot() {
     $('loadtext').textContent = '町を建てています……';
     await frame();
     const town = buildTown(scene);
+    $('loadtext').textContent = '今の東京を建てています……';
+    await frame();
+    tokyo = buildTokyo(scene, renderer);
+    // ターザン大東京の街がない所だけ、PLATEAU の箱のビルで埋める
     const bld = await fetch('data/bld.json').then((r) => r.json());
-    modern = buildModern(scene, bld);
+    const covered = new Set();
+    for (const r of tokyo.roofs) covered.add(Math.floor(r.x / 120) * 1000 + Math.floor(r.z / 120));
+    for (const bd of tokyo.city.bld) if (bd.plateau) covered.add(Math.floor((bd.cx + tokyo.OX) / 120) * 1000 + Math.floor((bd.cz + tokyo.OZ) / 120));
+    modern = buildModern(scene, bld.filter(([h, cx, cz]) => !covered.has(Math.floor(cx / 120) * 1000 + Math.floor(cz / 120))));
     $('loadtext').textContent = '江戸城を建てています……';
     await frame();
     castle = buildCastle(scene, segs.castleSegs);
     warps = buildWarps(scene);
-    balloon = buildBalloon(scene);
     navi = buildNav();
     fw = new Fireworks(scene, 2.5, false);
     boat = makeBoat();
     boat.scale.setScalar(1.5);
     scene.add(boat);
     buildMinimap();
-    console.log('town', town, 'buildings', bld.length, 'targets', navi.targets, 'landing', navi.landing.length, 'warps', warps.length);
+    console.log('town', town, 'boxes', modern.list.length, 'targets', navi.targets, 'landing', navi.landing.length, 'warps', warps.length);
     $('loading').classList.add('hidden');
     showTitle();
     G.state = 'title';
@@ -234,23 +242,52 @@ function buildNav() {
     if (!isWater(x + 6, z) || !isWater(x - 6, z) || !isWater(x, z + 6) || !isWater(x, z - 6)) continue;
     if (inRing(x, z)) landing.push(c);
   }
-  return { dist, climb, warpOf, landing, targets, inRing };
+  // 外堀に飛び込む所: 外堀の輪の線から 45m 以内の水
+  const segD = (x, z, a, b) => {
+    const dx = b[0] - a[0], dz = b[1] - a[1], l2 = dx * dx + dz * dz || 1;
+    const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / l2));
+    return Math.hypot(x - a[0] - dx * t, z - a[1] - dz * t);
+  };
+  const outerLand = [];
+  for (let c = 0; c < n; c += 5) {
+    if (code[c] !== 0 || dist[c] < 60) continue;
+    const x = cellX(c), z = cellZ(c);
+    let md = 1e9;
+    for (let i = 0; i < ring.length; i++) md = Math.min(md, segD(x, z, ring[i], ring[(i + 1) % ring.length]));
+    if (md < 45) outerLand.push(c);
+  }
+  // 内堀に飛び込む所: 内郭・本丸の石垣から 9〜75m の水
+  const innerEntry = [];
+  for (let c = 0; c < n; c += 3) if (code[c] === 0 && dist[c] >= 3 && dist[c] <= 25 && outer[comp[c]]) innerEntry.push(c);
+  // ビルの屋上の高さ (8m 角): 箱のビル + ターザン大東京の街
+  const RG = 8, rw = Math.ceil(W.sizeX / RG), rh = Math.ceil(W.sizeZ / RG), roof = new Float32Array(rw * rh);
+  for (const b of modern.list) {
+    const cs = Math.cos(-b.r), sn = Math.sin(-b.r), top = b.y + b.sy;
+    for (let u = -b.sx / 2; u <= b.sx / 2; u += 4) for (let v = -b.sz / 2; v <= b.sz / 2; v += 4) {
+      const x = b.x + u * cs - v * sn, z = b.z + u * sn + v * cs;
+      const i = Math.floor(x / RG), j = Math.floor(z / RG);
+      if (i >= 0 && j >= 0 && i < rw && j < rh && roof[j * rw + i] < top) roof[j * rw + i] = top;
+    }
+  }
+  const roofAt = (x, z) => { const i = Math.floor(x / RG), j = Math.floor(z / RG); return Math.max(i >= 0 && j >= 0 && i < rw && j < rh ? roof[j * rw + i] : 0, tokyo.roofAt(x, z)); };
+  return { dist, climb, warpOf, landing, targets, inRing, outerLand, innerEntry, roofAt };
 }
 const cellX = (c) => (c % W.w + 0.5) * W.res, cellZ = (c) => (((c / W.w) | 0) + 0.5) * W.res;
 
 // ---------- 忍者 ----------
+function allRoofs() { return G._roofs || (G._roofs = [...tokyo.roofs, ...modern.list]); }
 function spawnNinja() {
   const N = navi;
   let land = null, roof = null;
-  for (let tries = 0; tries < 40 && !roof; tries++) {
-    land = N.landing[(Math.random() * N.landing.length) | 0];
+  for (let tries = 0; tries < 60 && !roof; tries++) {
+    land = N.outerLand[(Math.random() * N.outerLand.length) | 0];
     const lx = cellX(land), lz = cellZ(land);
-    // 近くの今のビル (外堀の外) の屋上
+    // 外堀の外の今のビルの屋上
     const cands = [];
-    for (const b of modern.list) {
+    for (const b of allRoofs()) {
       if (b.sy < 14) continue;
       const d = Math.hypot(b.x - lx, b.z - lz);
-      if (d < 80 || d > 520) continue;
+      if (d < 70 || d > 420 || N.inRing(b.x, b.z)) continue;
       cands.push({ b, s: b.sy - d * 0.05 + Math.random() * 20 });
     }
     cands.sort((a, b) => b.s - a.s);
@@ -268,7 +305,7 @@ function spawnNinja() {
   $('marks').appendChild(marker);
   const nj = {
     id: G.spawned, m, bam, marker, state: 'roof', t: rand(...CFG.roofTime), hp: 1,
-    x: roof.x, y: y0, z: roof.z, sx: roof.x, sy: y0, sz: roof.z, lx, lz, vx: 0, vz: 0, stun: 0,
+    x: roof.x, y: y0, z: roof.z, sx: roof.x, sy: y0, sz: roof.z, lx, lz, vx: 0, vz: 0, stun: 0, outer: true,
   };
   G.ninjas.push(nj);
   G.spawned++;
@@ -278,7 +315,7 @@ function spawnNinja() {
 }
 
 function ninjaCenter(nj) {
-  if (nj.state === 'bamboo' || nj.state === 'dive') return new THREE.Vector3(nj.x, 0.8, nj.z);
+  if (nj.state === 'bamboo' || nj.state === 'dive' || nj.state === 'swim1') return new THREE.Vector3(nj.x, 0.8, nj.z);
   if (nj.state === 'glide') return new THREE.Vector3(nj.x, nj.y, nj.z);
   return new THREE.Vector3(nj.x, nj.y + 1, nj.z);
 }
@@ -317,6 +354,15 @@ function updateNinja(nj, dt) {
       break;
     }
     case 'dive': {
+      if (nj.t <= 0 && nj.outer) {
+        // 外堀: 外堀の内側の岸まで水の中を進む
+        nj.path = outerPath(cellOf(nj.x, nj.z));
+        nj.state = 'swim1'; nj.hp = CFG.hp;
+        nj.bam.visible = true; nj.bam.position.set(nj.x, -1, nj.z); nj.pop = 0.35;
+        A.pyokon();
+        floatText(nj.x, 3, nj.z, 'ぴょこん', 'green');
+        break;
+      }
       if (nj.t <= 0) {
         nj.state = 'bamboo'; nj.hp = CFG.hp;
         nj.bam.visible = true; nj.bam.position.set(nj.x, -1, nj.z); nj.pop = 0.35;
@@ -358,6 +404,65 @@ function updateNinja(nj, dt) {
       nj.bam.rotation.z = Math.sin(G.t * 2 + nj.id) * 0.1 + (nj.stun > 0 ? 0.5 : 0);
       nj.bam.userData.ring.scale.setScalar(1 + (G.t * 2 % 1) * 1.5);
       nj.bam.userData.ring.material.opacity = 0.6 * (1 - (G.t * 2 % 1));
+      break;
+    }
+    case 'swim1': {
+      if (nj.stun <= 0) {
+        const tgt = nj.path && nj.path.length ? nj.path[0] : null;
+        if (!tgt) { startClimbOut(nj); break; }
+        const tx = cellX(tgt), tz = cellZ(tgt), dx = tx - nj.x, dz = tz - nj.z, l = Math.hypot(dx, dz);
+        if (l < 2) { nj.path.shift(); if (!nj.path.length) { startClimbOut(nj); break; } }
+        else { const sp = CFG.swim; nj.vx = dx / l * sp; nj.vz = dz / l * sp; nj.x += nj.vx * dt; nj.z += nj.vz * dt; }
+      }
+      nj.pop = Math.max(0, (nj.pop || 0) - dt);
+      nj.bam.position.set(nj.x, Math.sin(G.t * 3 + nj.id) * 0.06 - nj.pop * 2.5 + (nj.stun > 0 ? 0.6 : 0), nj.z);
+      nj.bam.rotation.z = Math.sin(G.t * 2 + nj.id) * 0.1 + (nj.stun > 0 ? 0.5 : 0);
+      nj.bam.userData.ring.scale.setScalar(1 + (G.t * 2 % 1) * 1.5);
+      nj.bam.userData.ring.material.opacity = 0.6 * (1 - (G.t * 2 % 1));
+      break;
+    }
+    case 'emerge1': {
+      const s = 1 - nj.t / 1.0;
+      nj.m.visible = true;
+      nj.m.position.set(nj.bx, -1.8 + s * 1.8, nj.bz);
+      poseNinja(nj.m, 'climb', G.t);
+      if (nj.t <= 0) { nj.state = 'climbOut'; nj.prog = 0; }
+      break;
+    }
+    case 'climbOut': {
+      const sp = nj.dote ? CFG.climbDote : CFG.climbStone;
+      if (nj.stun <= 0) nj.prog += sp * 1.6 * dt / nj.H;
+      nj.prog = Math.max(0, nj.prog);
+      const s = Math.min(1, nj.prog);
+      nj.x = nj.bx + (nj.tx - nj.bx) * s; nj.z = nj.bz + (nj.tz - nj.bz) * s; nj.y = s * nj.H;
+      nj.m.position.set(nj.x, nj.y - 0.3, nj.z);
+      poseNinja(nj.m, nj.dote ? 'crawl' : 'climb', G.t);
+      if (s >= 1) startRun(nj);
+      break;
+    }
+    case 'run': {
+      // 屋根伝いに内堀へ (水の上は水蜘蛛の術)
+      const dx = nj.lx - nj.x, dz = nj.lz - nj.z, l = Math.hypot(dx, dz);
+      if (nj.stun <= 0) {
+        const sp = Math.min(l, CFG.run * dt);
+        nj.vx = dx / (l || 1) * CFG.run; nj.vz = dz / (l || 1) * CFG.run;
+        nj.x += dx / (l || 1) * sp; nj.z += dz / (l || 1) * sp;
+      }
+      const yt = Math.max(groundH(nj.x, nj.z), N.roofAt(nj.x, nj.z), isWater(nj.x, nj.z) ? 0.2 : 0);
+      nj.y += (yt - nj.y) * Math.min(1, dt * (yt > nj.y ? 9 : 5));
+      nj.m.position.set(nj.x, nj.y + Math.abs(Math.sin(G.t * 9 + nj.id)) * 0.5, nj.z);
+      nj.m.rotation.set(0, Math.atan2(dx, dz), 0);
+      poseNinja(nj.m, 'climb', G.t * 1.5);
+      nj.m.userData.body.rotation.x = 0.5;
+      if (l < 1) {
+        nj.outer = false;
+        nj.state = 'dive'; nj.t = 0.9; nj.y = 0;
+        nj.m.visible = false;
+        splash(nj.x, nj.z, 1.6);
+        A.dodon(); A.sfx('splash1', 0.8);
+        floatText(nj.x, 6, nj.z, 'どどん！ 水遁の術', 'blue');
+        alertMsg(`忍者が${moatName(nj.x, nj.z) || '内堀'}に飛び込んだ！`);
+      }
       break;
     }
     case 'emerge': {
@@ -427,15 +532,72 @@ function startClimb(nj, c) {
   A.sfx('bell', 0.6);
 }
 
+// 外堀の内側の岸までの水の道 (幅優先)
+function outerPath(start) {
+  const w = W.w, prev = new Map([[start, -1]]), q = [start];
+  let goal = -1;
+  for (let h = 0; h < q.length && q.length < 60000; h++) {
+    const c = q[h], x = c % w, y = (c / w) | 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nb = (y + dy) * w + x + dx;
+      if (nb < 0 || nb >= W.code.length) continue;
+      const cc = W.code[nb];
+      if (cc === 0) { if (!prev.has(nb)) { prev.set(nb, c); q.push(nb); } continue; }
+      // 外堀の内側の陸 (お城ではない所)
+      if (cc === 5 && navi.inRing(cellX(nb), cellZ(nb)) && h > 3) { goal = c; break; }
+    }
+    if (goal >= 0) break;
+  }
+  if (goal < 0) return [];
+  const path = [];
+  for (let c = goal; c >= 0; c = prev.get(c)) path.unshift(c);
+  return path.filter((_, i) => i % 3 === 0 || i === path.length - 1);
+}
+function startClimbOut(nj) {
+  const c = cellOf(nj.x, nj.z), w = W.w, x = c % w, y = (c / w) | 0;
+  let nx = 0, nz = 0;
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { if (W.code[(y + dy) * w + x + dx] !== 0) { nx = dx; nz = dy; break; } }
+  if (!nx && !nz) { const k = nearestLand(nj.x, nj.z); if (k) { const d = Math.hypot(k[0] - nj.x, k[1] - nj.z) || 1; nx = (k[0] - nj.x) / d; nz = (k[1] - nj.z) / d; } else nx = 1; }
+  const wx = cellX(c), wz = cellZ(c);
+  nj.dote = isDote(wx + nx * 3, wz + nz * 3);
+  nj.H = groundH(wx + nx * 4, wz + nz * 4);
+  nj.bx = wx - nx * (nj.dote ? 2 : -0.7); nj.bz = wz - nz * (nj.dote ? 2 : -0.7);
+  nj.tx = wx + nx * 4; nj.tz = wz + nz * 4;
+  nj.x = nj.bx; nj.z = nj.bz; nj.y = 0;
+  nj.m.rotation.set(0, Math.atan2(nx, nz), 0);
+  nj.state = 'emerge1'; nj.t = 1.0; nj.hp = CFG.hp;
+  nj.bam.visible = false;
+  splash(nj.x, nj.z, 0.8);
+  A.sfx('splash2', 0.5);
+  floatText(wx, nj.H + 3, wz, '外堀を越えるぞ！', 'red');
+}
+function nearestLand(x, z) {
+  for (let r = 3; r < 40; r += 3) for (let a = 0; a < 16; a++) {
+    const px = x + Math.cos(a * Math.PI / 8) * r, pz = z + Math.sin(a * Math.PI / 8) * r;
+    if (!isWater(px, pz)) return [px, pz];
+  }
+  return null;
+}
+function startRun(nj) {
+  // 一番近い内堀の水へ
+  let best = -1, bd = 1e18;
+  for (const c of navi.innerEntry) { const d = (cellX(c) - nj.x) ** 2 + (cellZ(c) - nj.z) ** 2; if (d < bd) { bd = d; best = c; } }
+  nj.lx = cellX(best); nj.lz = cellZ(best);
+  nj.state = 'run'; nj.hp = 1;
+  alertMsg(`${moatName(nj.bx, nj.bz)}を越えられた！ 忍者が内堀へ走っている`);
+  A.sfx('bell', 0.5, 1.1);
+}
+
 function hitNinja(nj, byLasso) {
-  if (!['roof', 'glide', 'bamboo', 'emerge', 'climb'].includes(nj.state)) return;
+  if (!['roof', 'glide', 'bamboo', 'emerge', 'climb', 'swim1', 'emerge1', 'climbOut', 'run'].includes(nj.state)) return;
   if (byLasso) { capture(nj); return; }
   nj.hp--;
   A.sfx('hit', 0.6, 1.3);
   if (nj.state === 'climb') { nj.prog -= 2 / nj.H; nj.stun = 0.5; }
-  if (nj.state === 'bamboo') { nj.stun = 0.7; }
+  if (nj.state === 'bamboo' || nj.state === 'swim1') { nj.stun = 0.7; }
+  if (nj.state === 'climbOut') { nj.prog -= 1 / nj.H; nj.stun = 0.5; }
   if (nj.hp <= 0) {
-    if (nj.state === 'glide' || nj.state === 'climb' || nj.state === 'roof' || nj.state === 'emerge') {
+    if (['glide', 'climb', 'roof', 'emerge', 'run', 'climbOut', 'emerge1'].includes(nj.state)) {
       // 落ちる
       const k = nj.state === 'glide' ? 0.3 : 0;
       nj.state = 'fall'; nj.vy = 2; nj.m.visible = true;
@@ -482,7 +644,7 @@ function pickTarget(range) {
   const hp = heroPos(), pd = preferDir();
   let best = null, bs = 1e9;
   for (const nj of G.ninjas) {
-    if (!['roof', 'glide', 'bamboo', 'emerge', 'climb'].includes(nj.state)) continue;
+    if (!['roof', 'glide', 'bamboo', 'emerge', 'climb', 'swim1', 'emerge1', 'climbOut', 'run'].includes(nj.state)) continue;
     const c = ninjaCenter(nj), d = c.distanceTo(hp);
     if (d > range) continue;
     const a = Math.abs(angDiff(Math.atan2(c.z - P.z, c.x - P.x), pd));
@@ -543,7 +705,7 @@ function updateWeapons(dt) {
     } else c.v.y -= 9.8 * dt;
     c.p.addScaledVector(c.v, dt);
     c.m.position.copy(c.p); c.m.rotation.x += dt * 20; c.m.rotation.y += dt * 13;
-    if (c.tg && ['roof', 'glide', 'bamboo', 'emerge', 'climb'].includes(c.tg.state) && ninjaCenter(c.tg).distanceTo(c.p) < 1.6) {
+    if (c.tg && ['roof', 'glide', 'bamboo', 'emerge', 'climb', 'swim1', 'emerge1', 'climbOut', 'run'].includes(c.tg.state) && ninjaCenter(c.tg).distanceTo(c.p) < 1.6) {
       hitNinja(c.tg, false); c.life = 0;
       spark(c.p);
     }
@@ -562,7 +724,7 @@ function updateWeapons(dt) {
     if (!l.done && l.t >= l.T) {
       l.done = true;
       const tg = l.tg;
-      if (tg && ['roof', 'glide', 'bamboo', 'emerge', 'climb'].includes(tg.state) && ninjaCenter(tg).distanceTo(l.to) < CFG.lassoCatch + (tg.state === 'climb' ? 2 : 0)) {
+      if (tg && ['roof', 'glide', 'bamboo', 'emerge', 'climb', 'swim1', 'emerge1', 'climbOut', 'run'].includes(tg.state) && ninjaCenter(tg).distanceTo(l.to) < CFG.lassoCatch + (tg.state === 'climb' ? 2 : 0)) {
         hitNinja(tg, true);
       } else {
         if (l.to.y < 1) { splash(l.to.x, l.to.z, 0.6); A.sfx('splash0', 0.4); }
@@ -788,7 +950,7 @@ function drawMinimap() {
     if (nj.state === 'gone' || nj.state === 'bound') continue;
     const danger = nj.state === 'climb' || nj.state === 'emerge';
     if (danger && Math.floor(G.t * 4) % 2) continue;
-    g.fillStyle = danger ? '#ff2020' : nj.state === 'bamboo' ? '#7cff6a' : '#ff9a40';
+    g.fillStyle = danger ? '#ff2020' : (nj.state === 'bamboo' || nj.state === 'swim1') ? '#7cff6a' : nj.state === 'run' ? '#ffe040' : '#ff9a40';
     // 画面の外の忍者は縁に出す
     g.beginPath(); g.arc(clamp(X(nj.x), 5, c.width - 5), clamp(Y(nj.z), 5, c.height - 5), danger ? 6 : 4.5, 0, Math.PI * 2); g.fill();
   }
@@ -811,7 +973,7 @@ function updateMarkers() {
   for (const nj of G.ninjas) {
     const el = nj.marker;
     // 水の中の忍者は、水面から出ている竹筒だけ (目印は出さない)
-    if (!['roof', 'glide', 'emerge', 'climb'].includes(nj.state)) { el.style.display = 'none'; continue; }
+    if (!['roof', 'glide', 'emerge', 'climb', 'emerge1', 'climbOut', 'run'].includes(nj.state)) { el.style.display = 'none'; continue; }
     const c = ninjaCenter(nj); c.y += nj.state === 'bamboo' ? 2.5 : 2.6;
     const danger = nj.state === 'climb' || nj.state === 'emerge';
     if (danger && (!worst || nj.prog > (worst.prog || 0))) worst = nj;
@@ -822,8 +984,8 @@ function updateMarkers() {
     el.className = 'nmark ' + (danger ? 'danger' : nj.state) + (hidden(c) ? ' behind' : '');
     el.style.left = ((tmpV.x + 1) / 2 * innerWidth) + 'px';
     el.style.top = ((1 - tmpV.y) / 2 * innerHeight) + 'px';
-    el.querySelector('s').style.width = danger ? (Math.min(1, nj.prog || 0) * 100) + '%' : (nj.hp / CFG.hp * 100) + '%';
-    el.querySelector('b').textContent = danger ? '登' : nj.state === 'bamboo' ? '竹' : nj.state === 'glide' ? '飛' : '!';
+    el.querySelector('s').style.width = danger ? (Math.min(1, nj.prog || 0) * 100) + '%' : (Math.min(1, nj.hp / CFG.hp) * 100) + '%';
+    el.querySelector('b').textContent = danger ? '登' : nj.state === 'run' ? '走' : nj.state === 'climbOut' || nj.state === 'emerge1' ? '越' : nj.state === 'glide' ? '飛' : '!';
   }
   // 一番危ない忍者への矢印
   const ar = $('dangerArrow');
@@ -869,10 +1031,10 @@ function startGame() {
   Object.assign(G, { t: 0, captured: 0, spawned: 0, nextSpawn: CFG.firstAt, st: 100, ninjas: [], coins: [], lassos: [], coinCd: 0, lassoCd: 0, warpCd: 0, camYaw: 0, intruder: null, result: null });
   G.name = ($('nameInput').value || '平次').slice(0, 10);
   $('hudName').textContent = G.name;
-  // 大手濠から
-  let [sx, sz] = ll(35.6872, 139.7612);
-  const k = nearestWater(sx, sz); if (k) [sx, sz] = k;
-  Object.assign(P, { x: sx, z: sz, h: -Math.PI / 2, v: 0, gear: 1, roll: 0, dashT: 0 });
+  // 両国橋の下 (隅田川) から、川下へ向いて
+  let [sx, sz] = ll(35.6935, 139.7893);
+  const k = isWater(sx, sz) ? null : nearestWater(sx, sz); if (k) [sx, sz] = k;
+  Object.assign(P, { x: sx, z: sz, h: Math.PI / 2, v: 0, gear: 1, roll: 0, dashT: 0 });
   camInit = false;
   $('title').classList.add('hidden'); $('result').classList.add('hidden'); $('pause').classList.add('hidden');
   $('hud').classList.remove('hidden');
@@ -987,9 +1149,12 @@ function loop(now) {
     updateSky();
   }
   water.update(now / 1000);
-  balloon.update(now / 1000, camera);
+  tokyo.update(dt, now / 1000, modern.mat.userData.night.value, scene.fog.color, camera);
+  // 見える範囲の街のタイルを組み立てる
+  { const t0 = performance.now(); while (tokyo.stream(camera.position, 2600, 1) > 0 && performance.now() - t0 < 5); }
   for (const w of warps) for (const e of [w.a, w.b]) e.disc.rotation.z = now / 400;
   I.pressed.clear();
+  water.reflect(renderer, scene, camera);
   renderer.render(scene, camera);
 }
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
