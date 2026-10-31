@@ -39,6 +39,24 @@ export function cellOf(x, z) {
 export function codeAt(x, z) { const k = cellOf(x, z); return k < 0 ? 5 : W.code[k]; }
 export function isWater(x, z) { const k = cellOf(x, z); return k >= 0 && W.code[k] === 0; }
 export function groundH(x, z) { const k = cellOf(x, z); return k < 0 ? LEVEL_H[1] : (W.code[k] === 0 ? 0 : LEVEL_H[W.lv[k]]); }
+// ---- お茶の水の谷: 神田川の水道橋〜昌平橋は、川の水面が道より約 9m 低い (両端はなだらかに) ----
+let GZ = null;
+function gorge() {
+  if (!GZ) {
+    const x = (lon) => (lon - W.W) * W.KX, z = (lat) => (W.N - lat) * W.KZ;
+    GZ = { x0: x(139.7495), x1: x(139.7535), x2: x(139.7690), x3: x(139.7730), z0: z(35.7042), z1: z(35.6960), D: 9 };
+  }
+  return GZ;
+}
+export function gorgeDepth(x, z) {
+  const g = gorge();
+  if (z < g.z0 || z > g.z1 || x < g.x0 || x > g.x3) return 0;
+  const s = (a, b, v) => { const t = Math.max(0, Math.min(1, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
+  return g.D * s(g.x0, g.x1, x) * (1 - s(g.x2, g.x3, x));
+}
+export function gorgeInfo() { return gorge(); }
+// 水面の高さ (ふつうは 0、お茶の水の谷では低い)
+export function waterY(x, z) { return -gorgeDepth(x, z); }
 export function inEdo(x, z) { const c = codeAt(x, z); return c >= 1 && c <= 4; }
 
 // 段の値を双一次補間 (セルの中心が格子点)
@@ -207,7 +225,7 @@ function nearCastle(x, z) {
 export function buildWalls(scene) {
   const w = W.w, h = W.h, L = W.lv, R = W.res;
   const grass = { p: [], n: [], uv: [] }, stone = { p: [], n: [], uv: [] }, conc = { p: [], n: [], uv: [] }, wallTop = { p: [], n: [], uv: [] }, cap = { p: [], n: [], uv: [] };
-  const castleSegs = [], doteSegs = [];
+  const castleSegs = [], doteSegs = [], gorgeTrees = [];
   const P = (i, j) => [(i + 0.5) * R, (j + 0.5) * R];
   const lerpPt = (i0, j0, v0, i1, j1, v1, t) => {
     const a = (t - v0) / (v1 - v0);
@@ -232,7 +250,26 @@ export function buildWalls(scene) {
     const hc = codeAt(hx, hz);
     // お城のお濠の向こう岸 (皇居ゾーンから 100m 以内) は石垣、それより外は今のコンクリートの護岸
     const modern = (hc === 5 || codeAt(mx + nx * R * 0.6, mz + nz * R * 0.6) === 5 && hc === 0) && !nearCastle(mx, mz);
-    const y0 = LEVEL_H[k - 1], y1 = LEVEL_H[k];
+    let y0 = LEVEL_H[k - 1];
+    const y1 = LEVEL_H[k];
+    const gd = k === 1 ? gorgeDepth(mx, mz) : 0;
+    if (gd > 0.05) {
+      // お茶の水の谷: 水ぎわは石垣、その上は木の茂った急な崖
+      y0 = -gd - 2.5;
+      const tu2 = Math.abs(dx) > Math.abs(dz) ? 1 : 0, uu0 = (tu2 ? ax : az) / 4, uu1 = (tu2 ? bx : bz) / 4;
+      const mid = -gd + 1.5;
+      if (mid > y1 - 0.5) { quad(stone, ax, az, bx, bz, y0, y1, nx, nz, uu0, uu1, 3.2); return; }
+      quad(stone, ax, az, bx, bz, y0, mid, nx, nz, uu0, uu1, 3.2);
+      const off = Math.min(4, (y1 - mid) * 0.45), ox = nx * off, oz = nz * off;
+      let A0 = [ax + ox, az + oz], B0 = [bx + ox, bz + oz], A1 = [ax, az], B1 = [bx, bz];
+      if (-(bz - az) * nx + (bx - ax) * nz < 0) { [A0, B0] = [B0, A0]; [A1, B1] = [B1, A1]; }
+      const sl = Math.hypot(off, y1 - mid) || 1, ny = off / sl, nh = (y1 - mid) / sl;
+      grass.p.push(A0[0], mid, A0[1], B0[0], mid, B0[1], B1[0], y1, B1[1], A0[0], mid, A0[1], B1[0], y1, B1[1], A1[0], y1, A1[1]);
+      for (let q = 0; q < 6; q++) grass.n.push(nx * nh, ny, nz * nh);
+      grass.uv.push(uu0, 0, uu1, 0, uu1, 2, uu0, 0, uu1, 2, uu0, 2);
+      gorgeTrees.push([(ax + bx) / 2 + nx * off * 0.15, y1 - 3, (az + bz) / 2 + nz * off * 0.15]);
+      return;
+    }
     // 縦の模様が切れにくいよう、u は向きに沿った世界座標
     const tu = Math.abs(dx) > Math.abs(dz) ? 1 : 0;
     const u0 = (tu ? ax : az) / 4, u1 = (tu ? bx : bz) / 4;
@@ -326,6 +363,15 @@ export function buildWalls(scene) {
   mk(conc, new THREE.MeshLambertMaterial({ map: concreteTexture(), side: THREE.DoubleSide }));
   mk(wallTop, new THREE.MeshLambertMaterial({ color: 0xf2efe6, side: THREE.DoubleSide }));
   mk(cap, new THREE.MeshLambertMaterial({ color: 0x3c4146, side: THREE.DoubleSide }));
+  // 谷の崖の木 (間引いて)
+  if (gorgeTrees.length) {
+    const geo = new THREE.ConeGeometry(2.2, 6, 7).translate(0, 3, 0);
+    const im = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ color: 0x3f6a34 }), Math.ceil(gorgeTrees.length / 3));
+    const m4 = new THREE.Matrix4();
+    let n = 0;
+    for (let i = 0; i < gorgeTrees.length; i += 7) { const [x, y, z] = gorgeTrees[i]; const k = 0.45 + ((i * 37) % 10) / 30; m4.makeScale(k, k, k).setPosition(x, y + 1.5, z); im.setMatrixAt(n++, m4); }
+    im.count = n; scene.add(im);
+  }
   return { castleSegs, doteSegs };
 }
 
@@ -363,13 +409,16 @@ export function buildWater(scene) {
       tReflect: { value: rt.texture }, texMat: { value: new THREE.Matrix4() }, time: { value: 0 },
       color: { value: new THREE.Color(0x24525e) }, fogColor: { value: new THREE.Color() }, fogNear: { value: 300 }, fogFar: { value: 2000 },
       camPos: { value: new THREE.Vector3() }, strength: { value: 0.8 },
+      gz: { value: new THREE.Vector4() }, gx: { value: new THREE.Vector4() }, isGorge: { value: 0 },
     },
     vertexShader: `uniform mat4 texMat; varying vec4 vR; varying vec3 vW; varying float vDepth;
       void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; vR = texMat * w;
         vec4 mv = viewMatrix * w; vDepth = -mv.z; gl_Position = projectionMatrix * mv; }`,
     fragmentShader: `uniform sampler2D tReflect; uniform float time; uniform vec3 color; uniform vec3 fogColor; uniform float fogNear; uniform float fogFar; uniform vec3 camPos; uniform float strength;
-      varying vec4 vR; varying vec3 vW; varying float vDepth;
+      varying vec4 vR; varying vec3 vW; varying float vDepth; uniform vec4 gx; uniform vec4 gz; uniform float isGorge;
       void main(){
+        // お茶の水の谷の所は、低い水面 (別の面) にまかせる
+        if (isGorge < 0.5 && vW.z > gz.x && vW.z < gz.y && vW.x > gx.x + 1.0 && vW.x < gx.w - 1.0) discard;
         vec2 p = vW.xz;
         float w1 = sin(p.x * 0.35 + time * 1.3) + sin(p.y * 0.42 - time * 1.1) + sin((p.x + p.y) * 0.9 + time * 2.1) * 0.5;
         float w2 = cos(p.y * 0.31 + time * 1.2) + cos(p.x * 0.47 + time * 0.9) + cos((p.x - p.y) * 1.1 - time * 1.7) * 0.5;
@@ -386,6 +435,21 @@ export function buildWater(scene) {
   });
   const mesh = new THREE.Mesh(quadXZ(-200, -200, W.sizeX + 200, W.sizeZ + 200, 0), mat);
   scene.add(mesh);
+  // お茶の水の谷の水面 (川に沿って低くなる面)
+  const g = gorgeInfo();
+  mat.uniforms.gx.value.set(g.x0, g.x1, g.x2, g.x3); mat.uniforms.gz.value.set(g.z0, g.z1, 0, 0);
+  const gmat = mat.clone();
+  gmat.uniforms = { ...mat.uniforms, isGorge: { value: 1 } };
+  const N = 80, pos = [], idx = [];
+  for (let i = 0; i <= N; i++) {
+    const x = g.x0 + (g.x3 - g.x0) * i / N, y = -gorgeDepth(x, (g.z0 + g.z1) / 2);
+    pos.push(x, y, g.z0, x, y, g.z1);
+    if (i < N) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+  }
+  const gg = new THREE.BufferGeometry();
+  gg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); gg.setIndex(idx);
+  const gmesh = new THREE.Mesh(gg, gmat);
+  scene.add(gmesh);
   const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
   const mirrorCam = new THREE.PerspectiveCamera();
   const rScale = isTouch ? 0.33 : 0.5;
@@ -425,7 +489,7 @@ export function buildWater(scene) {
       _q.w = (1 + pm[10]) / pm[14];
       _clip.multiplyScalar(2 / _clip.dot(_q));
       pm[2] = _clip.x; pm[6] = _clip.y; pm[10] = _clip.z + 1 - 0.003; pm[14] = _clip.w;
-      mesh.visible = false;
+      mesh.visible = false; gmesh.visible = false;
       const fogFar = scene.fog.far;
       scene.fog.far = Math.min(fogFar, 1200);
       renderer.setRenderTarget(rt);
@@ -433,7 +497,7 @@ export function buildWater(scene) {
       renderer.render(scene, mirrorCam);
       renderer.setRenderTarget(null);
       scene.fog.far = fogFar;
-      mesh.visible = true;
+      mesh.visible = true; gmesh.visible = true;
       const u = mat.uniforms;
       u.camPos.value.copy(cp);
       u.fogColor.value.copy(scene.fog.color); u.fogNear.value = scene.fog.near; u.fogFar.value = scene.fog.far;

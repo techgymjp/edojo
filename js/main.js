@@ -1,6 +1,6 @@
 // 風雲江戸城: 起動・入力・小舟・忍者・投げ銭と投げ輪・HUD
 import * as THREE from '../vendor/three.module.min.js';
-import { W, loadWorld, buildGround, buildWalls, buildWater, isWater, codeAt, groundH, cellOf, ll, isDote, LEVEL_H } from './world.js';
+import { W, loadWorld, buildGround, buildWalls, buildWater, isWater, codeAt, groundH, cellOf, ll, isDote, LEVEL_H, waterY } from './world.js';
 import { buildTown, buildModern, buildCastle, buildWarps, buildBalloon, moatName, labelSprite } from './edo.js';
 import { makeBoat, animateBoat, makeNinja, poseNinja, makeBamboo, makeCoin } from './models.js';
 import * as A from './audio.js';
@@ -335,7 +335,7 @@ function spawnNinja(plan) {
 }
 
 function ninjaCenter(nj) {
-  if (nj.state === 'bamboo' || nj.state === 'dive' || nj.state === 'swim1') return new THREE.Vector3(nj.x, 0.8, nj.z);
+  if (nj.state === 'bamboo' || nj.state === 'dive' || nj.state === 'swim1') return new THREE.Vector3(nj.x, waterY(nj.x, nj.z) + 0.8, nj.z);
   if (nj.state === 'glide') return new THREE.Vector3(nj.x, nj.y, nj.z);
   return new THREE.Vector3(nj.x, nj.y + 1, nj.z);
 }
@@ -359,7 +359,7 @@ function updateNinja(nj, dt) {
     case 'glide': {
       const s = 1 - nj.t / nj.T, px = nj.x, pz = nj.z;
       nj.x = nj.sx + (nj.lx - nj.sx) * s; nj.z = nj.sz + (nj.lz - nj.sz) * s;
-      nj.y = nj.sy * (1 - Math.pow(s, 1.4)) + Math.sin(s * Math.PI) * 10 + 1;
+      nj.y = waterY(nj.lx, nj.lz) + (nj.sy - waterY(nj.lx, nj.lz)) * (1 - Math.pow(s, 1.4)) + Math.sin(s * Math.PI) * 10 + 1;
       nj.vx = (nj.x - px) / dt; nj.vz = (nj.z - pz) / dt;
       nj.m.position.set(nj.x, nj.y, nj.z);
       nj.m.rotation.y = Math.atan2(nj.lx - nj.sx, nj.lz - nj.sz);
@@ -378,14 +378,14 @@ function updateNinja(nj, dt) {
         // 外堀: 外堀の内側の岸まで水の中を進む
         nj.path = outerPath(cellOf(nj.x, nj.z));
         nj.state = 'swim1'; nj.hp = CFG.hp;
-        nj.bam.visible = true; nj.bam.position.set(nj.x, -1, nj.z); nj.pop = 0.35;
+        nj.bam.visible = true; nj.bam.position.set(nj.x, waterY(nj.x, nj.z) - 1, nj.z); nj.pop = 0.35;
         A.pyokon();
         floatText(nj.x, 3, nj.z, 'ぴょこん', 'green');
         break;
       }
       if (nj.t <= 0) {
         nj.state = 'bamboo'; nj.hp = CFG.hp;
-        nj.bam.visible = true; nj.bam.position.set(nj.x, -1, nj.z); nj.pop = 0.35;
+        nj.bam.visible = true; nj.bam.position.set(nj.x, waterY(nj.x, nj.z) - 1, nj.z); nj.pop = 0.35;
         A.pyokon();
         floatText(nj.x, 3, nj.z, 'ぴょこん', 'green');
       }
@@ -420,7 +420,7 @@ function updateNinja(nj, dt) {
         }
       }
       nj.pop = Math.max(0, (nj.pop || 0) - dt);
-      nj.bam.position.set(nj.x, Math.sin(G.t * 3 + nj.id) * 0.06 - nj.pop * 2.5 + (nj.stun > 0 ? 0.6 : 0), nj.z);
+      nj.bam.position.set(nj.x, waterY(nj.x, nj.z) + Math.sin(G.t * 3 + nj.id) * 0.06 - nj.pop * 2.5 + (nj.stun > 0 ? 0.6 : 0), nj.z);
       nj.bam.rotation.z = Math.sin(G.t * 2 + nj.id) * 0.1 + (nj.stun > 0 ? 0.5 : 0);
       nj.bam.userData.ring.scale.setScalar(1 + (G.t * 2 % 1) * 1.5);
       nj.bam.userData.ring.material.opacity = 0.6 * (1 - (G.t * 2 % 1));
@@ -435,7 +435,7 @@ function updateNinja(nj, dt) {
         else { const sp = CFG.swim; nj.vx = dx / l * sp; nj.vz = dz / l * sp; nj.x += nj.vx * dt; nj.z += nj.vz * dt; }
       }
       nj.pop = Math.max(0, (nj.pop || 0) - dt);
-      nj.bam.position.set(nj.x, Math.sin(G.t * 3 + nj.id) * 0.06 - nj.pop * 2.5 + (nj.stun > 0 ? 0.6 : 0), nj.z);
+      nj.bam.position.set(nj.x, waterY(nj.x, nj.z) + Math.sin(G.t * 3 + nj.id) * 0.06 - nj.pop * 2.5 + (nj.stun > 0 ? 0.6 : 0), nj.z);
       nj.bam.rotation.z = Math.sin(G.t * 2 + nj.id) * 0.1 + (nj.stun > 0 ? 0.5 : 0);
       nj.bam.userData.ring.scale.setScalar(1 + (G.t * 2 % 1) * 1.5);
       nj.bam.userData.ring.material.opacity = 0.6 * (1 - (G.t * 2 % 1));
@@ -444,17 +444,17 @@ function updateNinja(nj, dt) {
     case 'emerge1': {
       const s = 1 - nj.t / 1.0;
       nj.m.visible = true;
-      nj.m.position.set(nj.bx, -1.8 + s * 1.8, nj.bz);
+      nj.m.position.set(nj.bx, (nj.wy || 0) - 1.8 + s * 1.8, nj.bz);
       poseNinja(nj.m, 'climb', G.t);
       if (nj.t <= 0) { nj.state = 'climbOut'; nj.prog = 0; }
       break;
     }
     case 'climbOut': {
       const sp = nj.dote ? CFG.climbDote : CFG.climbStone;
-      if (nj.stun <= 0) nj.prog += sp * 1.6 * dt / nj.H;
+      if (nj.stun <= 0) nj.prog += sp * 1.6 * dt / Math.max(1, nj.H - (nj.wy || 0));
       nj.prog = Math.max(0, nj.prog);
       const s = Math.min(1, nj.prog);
-      nj.x = nj.bx + (nj.tx - nj.bx) * s; nj.z = nj.bz + (nj.tz - nj.bz) * s; nj.y = s * nj.H;
+      nj.x = nj.bx + (nj.tx - nj.bx) * s; nj.z = nj.bz + (nj.tz - nj.bz) * s; nj.y = (nj.wy || 0) + s * (nj.H - (nj.wy || 0));
       nj.m.position.set(nj.x, nj.y - 0.3, nj.z);
       poseNinja(nj.m, nj.dote ? 'crawl' : 'climb', G.t);
       if (s >= 1) startRun(nj);
@@ -468,7 +468,7 @@ function updateNinja(nj, dt) {
         nj.vx = dx / (l || 1) * CFG.run; nj.vz = dz / (l || 1) * CFG.run;
         nj.x += dx / (l || 1) * sp; nj.z += dz / (l || 1) * sp;
       }
-      const yt = Math.max(groundH(nj.x, nj.z), N.roofAt(nj.x, nj.z), isWater(nj.x, nj.z) ? 0.2 : 0);
+      const yt = Math.max(groundH(nj.x, nj.z), N.roofAt(nj.x, nj.z), isWater(nj.x, nj.z) ? waterY(nj.x, nj.z) + 0.2 : 0);
       nj.y += (yt - nj.y) * Math.min(1, dt * (yt > nj.y ? 9 : 5));
       nj.m.position.set(nj.x, nj.y + Math.abs(Math.sin(G.t * 9 + nj.id)) * 0.5, nj.z);
       nj.m.rotation.set(0, Math.atan2(dx, dz), 0);
@@ -580,6 +580,7 @@ function startClimbOut(nj) {
   if (!nx && !nz) { const k = nearestLand(nj.x, nj.z); if (k) { const d = Math.hypot(k[0] - nj.x, k[1] - nj.z) || 1; nx = (k[0] - nj.x) / d; nz = (k[1] - nj.z) / d; } else nx = 1; }
   const wx = cellX(c), wz = cellZ(c);
   nj.dote = isDote(wx + nx * 3, wz + nz * 3);
+  nj.wy = waterY(wx, wz);
   nj.H = groundH(wx + nx * 4, wz + nz * 4);
   nj.bx = wx - nx * (nj.dote ? 2 : -0.7); nj.bz = wz - nz * (nj.dote ? 2 : -0.7);
   nj.tx = wx + nx * 4; nj.tz = wz + nz * 4;
@@ -649,7 +650,7 @@ function intrude(nj) {
 }
 
 // ---------- 投げ銭 (近い敵に 3 連射) と投げ輪 (遠くまで届く) ----------
-function heroPos() { return new THREE.Vector3(P.x - Math.cos(P.h) * 0.6, 3.6, P.z - Math.sin(P.h) * 0.6); }
+function heroPos() { return new THREE.Vector3(P.x - Math.cos(P.h) * 0.6, waterY(P.x, P.z) + 3.6, P.z - Math.sin(P.h) * 0.6); }
 function preferDir() {
   if (G.t - G.lastMouse < 3 && !I.joy) {
     const ray = new THREE.Raycaster();
@@ -729,7 +730,7 @@ function updateWeapons(dt) {
       hitNinja(c.tg, false); c.life = 0;
       spark(c.p);
     }
-    if (c.p.y < 0) { c.life = 0; splash(c.p.x, c.p.z, 0.25); }
+    if (c.p.y < waterY(c.p.x, c.p.z)) { c.life = 0; splash(c.p.x, c.p.z, 0.25); }
     if (c.life <= 0) scene.remove(c.m);
   }
   G.coins = G.coins.filter((c) => c.life > 0);
@@ -760,9 +761,9 @@ function updateWeapons(dt) {
 const splashGeo = new THREE.RingGeometry(0.6, 1.0, 24);
 function splash(x, z, s = 1) {
   const m = new THREE.Mesh(splashGeo, new THREE.MeshBasicMaterial({ color: 0xe8f4ff, transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false }));
-  m.rotation.x = -Math.PI / 2; m.position.set(x, 0.1, z); scene.add(m);
+  m.rotation.x = -Math.PI / 2; m.position.set(x, waterY(x, z) + 0.1, z); scene.add(m);
   const col = new THREE.Mesh(new THREE.CylinderGeometry(0.3 * s, 1.0 * s, 4 * s, 10, 1, true), new THREE.MeshBasicMaterial({ color: 0xf0f8ff, transparent: true, opacity: 0.7, depthWrite: false }));
-  col.position.set(x, 2 * s, z); scene.add(col);
+  col.position.set(x, waterY(x, z) + 2 * s, z); scene.add(col);
   G.fx.push({ m, col, t: 0, s });
 }
 function spark(p) {
@@ -882,7 +883,7 @@ function pushTrail() {
 }
 function updateBoatMesh(dt, dash) {
   pushTrail();
-  boat.position.set(P.x, 0.05 + Math.sin(G.t * 1.6) * 0.06, P.z);
+  boat.position.set(P.x, waterY(P.x, P.z) + 0.05 + Math.sin(G.t * 1.6) * 0.06, P.z);
   boat.rotation.set(0, 0, 0);
   boat.rotation.y = Math.atan2(Math.cos(P.h), Math.sin(P.h));
   boat.rotateZ(P.roll); boat.rotateX(Math.sin(G.t * 1.2) * 0.02 - (dash ? 0.04 : 0));
@@ -894,7 +895,7 @@ const wakes = [];
 const wakeGeo = new THREE.RingGeometry(0.5, 0.8, 16);
 function addWake() {
   const m = new THREE.Mesh(wakeGeo, new THREE.MeshBasicMaterial({ color: 0xdfefff, transparent: true, opacity: 0.4, side: THREE.DoubleSide, depthWrite: false }));
-  m.rotation.x = -Math.PI / 2; m.position.set(P.x - Math.cos(P.h) * 6, 0.06, P.z - Math.sin(P.h) * 6); scene.add(m);
+  m.rotation.x = -Math.PI / 2; m.position.set(P.x - Math.cos(P.h) * 6, waterY(P.x, P.z) + 0.06, P.z - Math.sin(P.h) * 6); scene.add(m);
   wakes.push({ m, t: 0 });
 }
 function updateWakes(dt) {
@@ -921,7 +922,7 @@ function updateCamera(dt) {
   // カメラは小舟が通ってきた水の上の道筋をたどって後ろにつく (ビルや石垣にめり込んで迷子にならないように)
   const obst = (x, z) => Math.max(groundH(x, z), navi.roofAt(x, z));
   // ローアングル (水面から 7m ほど。首都高の高架の下から小舟を見る)
-  let dist = G.camDist, ty = 4.5 + G.camDist * 0.1, blockF = -1;
+  let dist = G.camDist, ty = waterY(P.x, P.z) + 4.5 + G.camDist * 0.1, blockF = -1;
   let tx, tz;
   if (Math.abs(G.camYaw) < 0.25 && trail.length > 3) {
     let need = dist, cx = P.x, cz = P.z;
@@ -951,7 +952,7 @@ function updateCamera(dt) {
   camera.position.z += (tz - camera.position.z) * k;
   camera.position.y += (ty - camera.position.y) * k;
   if (G.shake > 0) { G.shake -= dt; camera.position.x += rand(-0.3, 0.3); camera.position.y += rand(-0.2, 0.2); }
-  camera.lookAt(P.x + Math.cos(P.h) * 20, 3.5, P.z + Math.sin(P.h) * 20);
+  camera.lookAt(P.x + Math.cos(P.h) * 20, waterY(P.x, P.z) + 3.5, P.z + Math.sin(P.h) * 20);
 }
 
 // ---------- 空の色: 暮れ六つから始まり、10 分で 1 日 (夜 → 朝 → 昼 → 夕方) ----------
@@ -1361,7 +1362,7 @@ function loop(now) {
   for (const w of warps) for (const e of [w.a, w.b]) e.disc.rotation.z = now / 400;
   I.pressed.clear();
   // 建物の透かし: 遊んでいるときだけ (カメラ → 小舟の主人公)
-  if (G.state === 'play' || G.state === 'ending') { CUT.cam.value.copy(camera.position); CUT.boat.value.set(P.x, 3, P.z); }
+  if (G.state === 'play' || G.state === 'ending') { CUT.cam.value.copy(camera.position); CUT.boat.value.set(P.x, waterY(P.x, P.z) + 3, P.z); }
   else CUT.boat.value.set(0, -1e5, 0);
   // 水面の映り込みには透かしを使わない
   const cb = CUT.boat.value.y; CUT.boat.value.y = -1e5;
