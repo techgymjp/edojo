@@ -117,8 +117,9 @@ export function buildGround(scene) {
     scene.add(mesh);
   }
   // 範囲の外 (遠景の地面)
-  const out = new THREE.Mesh(quadXZ(-6000, -6000, W.sizeX + 6000, W.sizeZ + 6000, LEVEL_H[1] - 0.6), new THREE.MeshLambertMaterial({ color: 0x6e7076 }));
-  scene.add(out);
+  // 範囲の外は 4 枚で囲む (範囲の中の水面をふさがないように)
+  const om = new THREE.MeshLambertMaterial({ color: 0x6e7076 }), y = LEVEL_H[1] - 0.05, F = 6000, X = W.sizeX, Z = W.sizeZ;
+  for (const [x0, z0, x1, z1] of [[-F, -F, X + F, 0], [-F, Z, X + F, Z + F], [-F, 0, 0, Z], [X, 0, X + F, Z]]) scene.add(new THREE.Mesh(quadXZ(x0, z0, x1, z1, y), om));
 }
 
 // ---------- 石垣のテクスチャ (打込接ぎ) ----------

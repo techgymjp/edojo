@@ -14,12 +14,12 @@ const rand = (a, b) => a + Math.random() * (b - a);
 // ---------- 遊びの数値 ----------
 export const CFG = {
   total: 20,          // 忍者の数
-  maxActive: 5,       // 同時に出る数の上限
+  maxActive: 4,       // 同時に出る数の上限
   firstAt: 4,         // 最初の忍者 (秒)
-  gap0: 15, gap1: 7,  // 出てくる間隔 (最初 → 最後)
+  gap0: 17, gap1: 9,  // 出てくる間隔 (最初 → 最後)
   roofTime: [2.5, 4], // ビルの上で構える時間
   glideSpeed: 26,     // ムササビの術の速さ (m/s)
-  swim: 2.6,          // 竹筒 (水遁の術) の速さ
+  swim: 2.3,          // 竹筒 (水遁の術) の速さ
   climbStone: 0.55,   // 石垣を登る速さ (m/s)
   climbDote: 0.8,     // 土手を這い上がる速さ
   hp: 3,              // 投げ銭で何枚当てれば捕まるか (竹筒・登っている忍者)
@@ -899,6 +899,34 @@ $('title').addEventListener('pointerdown', () => { A.initAudio(); A.playBgm('bgm
 try { const n = localStorage.getItem('edojo-name'); if (n) $('nameInput').value = n; } catch (e) {}
 $('nameInput').addEventListener('change', () => { try { localStorage.setItem('edojo-name', $('nameInput').value); } catch (e) {} });
 
+function step(dt) {
+  G.t += dt;
+  if (G.state === 'play') {
+    updateBoat(dt);
+    if (pressed('KeyJ') || pressed('Coin')) throwCoins();
+    if (pressed('KeyK') || pressed('Lasso')) throwLasso();
+    I.pressed.delete('KeyJ'); I.pressed.delete('Coin'); I.pressed.delete('KeyK'); I.pressed.delete('Lasso'); I.pressed.delete('KeyW'); I.pressed.delete('KeyS'); I.pressed.delete('ArrowUp'); I.pressed.delete('ArrowDown');
+    G.coinCd = Math.max(0, G.coinCd - dt); G.lassoCd = Math.max(0, G.lassoCd - dt);
+    // 出現
+    const active = G.ninjas.filter((n) => !['gone', 'bound'].includes(n.state)).length;
+    if (G.spawned < CFG.total && G.t >= G.nextSpawn && active < CFG.maxActive) {
+      if (spawnNinja()) {
+        const f = G.spawned / CFG.total;
+        G.nextSpawn = G.t + CFG.gap0 + (CFG.gap1 - CFG.gap0) * f;
+      } else G.nextSpawn = G.t + 1;
+    }
+    const climbing = G.ninjas.some((n) => n.state === 'climb' || n.state === 'emerge');
+    A.playBgm(climbing ? 'bgmBattle' : 'bgmSea');
+  } else {
+    updateBoatMesh(dt, false);
+    G.endT -= dt;
+    if (G.endT <= 0) showResult();
+  }
+  for (const nj of G.ninjas) updateNinja(nj, dt);
+  updateWeapons(dt);
+  updateFx(dt); updateWakes(dt); fw.update(dt);
+}
+
 // ---------- ループ ----------
 let last = performance.now();
 function loop(now) {
@@ -907,37 +935,14 @@ function loop(now) {
   if (G.state === 'loading') return;
   if (G.state === 'play' || G.state === 'ending') {
     if (pressed('KeyP') || pressed('Escape')) { if (G.state === 'play') pause(true); }
-    G.t += dt;
-    if (G.state === 'play') {
-      updateBoat(dt);
-      if (pressed('KeyJ') || pressed('Coin')) throwCoins();
-      if (pressed('KeyK') || pressed('Lasso')) throwLasso();
-      G.coinCd = Math.max(0, G.coinCd - dt); G.lassoCd = Math.max(0, G.lassoCd - dt);
-      // 出現
-      const active = G.ninjas.filter((n) => !['gone', 'bound'].includes(n.state)).length;
-      if (G.spawned < CFG.total && G.t >= G.nextSpawn && active < CFG.maxActive) {
-        if (spawnNinja()) {
-          const f = G.spawned / CFG.total;
-          G.nextSpawn = G.t + CFG.gap0 + (CFG.gap1 - CFG.gap0) * f;
-        } else G.nextSpawn = G.t + 1;
-      }
-      const climbing = G.ninjas.some((n) => n.state === 'climb' || n.state === 'emerge');
-      A.playBgm(climbing ? 'bgmBattle' : 'bgmSea');
-    } else {
-      updateBoatMesh(dt, false);
-      G.endT -= dt;
-      if (G.endT <= 0) showResult();
-    }
-    for (const nj of G.ninjas) updateNinja(nj, dt);
-    updateWeapons(dt);
-    updateFx(dt); updateWakes(dt); fw.update(dt);
+    // 確かめ用: window.__ts で時間を速める
+    const reps = window.__ts || 1;
+    for (let r = 0; r < reps && (G.state === 'play' || G.state === 'ending'); r++) step(dt);
     if (G.state === 'ending' && G.result) {
-      // 花火を見上げる
       const [tx, tz] = castle.tenshu;
       updateCamera(dt);
       camera.lookAt(tx, 120, tz);
     } else if (G.state === 'ending' && G.intruder) {
-      // 忍び込んだ忍者を映す
       const nj = G.intruder;
       camera.position.lerp(new THREE.Vector3(nj.x - Math.cos(P.h) * 20, nj.y + 6, nj.z - Math.sin(P.h) * 20), 1 - Math.exp(-dt * 3));
       camera.lookAt(nj.x, nj.y, nj.z);
