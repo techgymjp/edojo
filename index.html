@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>風雲江戸城</title>
+<meta name="description" content="江戸城に忍び寄る忍者を、投げ銭と投げ輪で召し捕れ。江戸時代のお濠と水運を 3D で再現した小舟アクション。">
+<meta property="og:title" content="風雲江戸城">
+<meta property="og:description" content="ムササビの術で飛び込み、水遁の術で石垣に迫る忍者を、小舟で追って召し捕る。">
+<meta name="theme-color" content="#101828">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700;800&family=Yuji+Syuku&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Ccircle cx=%2732%27 cy=%2732%27 r=%2730%27 fill=%27%23d8a830%27/%3E%3Crect x=%2724%27 y=%2724%27 width=%2716%27 height=%2716%27 fill=%27%23101828%27/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css?v=1">
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="flash"></div>
+<div id="marks"></div>
+<div id="floats"></div>
+
+<div id="hud" class="hidden">
+  <div class="hud-left">
+    <div class="pname"><span id="hudName">平次</span> <small>岡っ引き</small></div>
+    <div class="bar"><div id="stbar" class="fill"></div><span class="lbl">ダッシュ</span></div>
+    <div class="place"><span id="hPlace"></span>　<span id="gear">漕</span></div>
+  </div>
+  <div class="hud-center">
+    <div class="cap">召し捕り <b id="hCap">0</b> / <span id="hTotal">20</span>　<small>残り <span id="hLeft">20</span> 人</small></div>
+    <div class="time" id="hTime">暮れ六つ</div>
+  </div>
+  <div class="hud-right"><button id="btnPause" class="mini-btn">止</button></div>
+  <div id="alert"></div>
+  <div id="danger"><div id="dangerArrow">➤</div><div id="dangerInfo"></div></div>
+  <canvas id="minimap" width="300" height="270"></canvas>
+  <div id="help" class="help">W/S 速さ　A/D 舵　Space ダッシュ　J・左クリック 投げ銭　K・右クリック 投げ輪　Q/E 視点</div>
+  <div id="joyzone"></div>
+  <div id="joybase"><div id="joyknob"></div></div>
+  <div id="tbtns">
+    <button id="btnLasso" class="tbtn lasso">なわ</button>
+    <button id="btnCoin" class="tbtn coin">ぜに</button>
+    <button id="btnDash" class="tbtn dash">ダッシュ</button>
+  </div>
+</div>
+
+<div id="loading" class="screen">
+  <div class="load-inner"><div class="spinner"></div><div id="loadtext">読み込み中……</div></div>
+</div>
+
+<div id="title" class="screen hidden">
+  <div class="title-inner">
+    <div class="pre">江戸の夜を守れ</div>
+    <h1>風雲<br class="br-sp">江戸城</h1>
+    <div class="title-sub">FŪUN EDO-JŌ</div>
+    <p class="story">暮れ六つ。お濠の外の高い屋根から、忍者が<b>ムササビの術</b>でお濠へ飛び込み、<b>水遁の術</b>で竹筒だけを水面に出して石垣へ迫る。<br>小舟を駆り、<b>投げ銭</b>と<b>投げ輪</b>で 20 人の忍者を召し捕れ。<br>ひとりでも内堀の石垣・土手を登り切られたら負けだ。</p>
+    <div class="name-row"><label for="nameInput">親分の名前</label><input id="nameInput" type="text" maxlength="10" value="平次" autocomplete="off" spellcheck="false"></div>
+    <button id="btnStart" class="btn primary">出　陣</button>
+    <button id="btnHowto" class="btn ghost small">遊び方</button>
+    <button id="btnMute" class="btn ghost small">音：入</button>
+    <div class="legal">
+      お濠・川: 国土地理院 ベクトルタイル（水面）を加工、江戸時代の外堀・道三堀などを復元<br>
+      ビル: 国土交通省 Project PLATEAU（東京都23区 2020年度、plateau-tokyo23ku-building-mvt-2020 by indigo-lab）<br>
+      音: 瀬戸内の海賊王・孤軍奮闘小早川（テックジム）より　3D: three.js
+    </div>
+  </div>
+</div>
+
+<div id="howto" class="screen hidden">
+  <div class="panel howto-panel">
+    <h2>遊び方</h2>
+    <ul>
+      <li><b>忍者の動き</b>：外堀の外のビルの屋上に現れ（!）、<b>ムササビの術</b>で飛んでお濠へ飛び込む →「どどん！」<b>水遁の術</b>で竹筒（ぴょこん）だけを出して水の中を進む → 内堀の石垣・土手に着くと登りはじめる。登り切られたら負け。外堀を抜けられても、内堀の中に入られなければ大丈夫。</li>
+      <li><b>ぜに（投げ銭）</b>：近くの忍者に 3 連射。屋根の上・飛んでいる忍者は 1 枚で落ちる。竹筒・登っている忍者は 3 枚当てると召し捕る（当たると少しずり落ちる）。</li>
+      <li><b>なわ（投げ輪）</b>：遠くまで届く。当たればその場で召し捕る。動いている相手には外れることもある。投げ直しに少し時間がかかる。</li>
+      <li><b>ダッシュ</b>：押している間、謎の力で速く進む（ゲージを使う）。</li>
+      <li><b>ワープ</b>：本当はつながっていないお濠（半蔵門の土橋など）には、水色の渦のワープがある。入ると向こう側のお濠へ出る。</li>
+      <li>狙う相手は自動で選ぶ。パソコンではマウスを向けた方の忍者を優先する。</li>
+    </ul>
+    <table>
+      <tr><th></th><th>パソコン</th><th>スマホ</th></tr>
+      <tr><td>進む・舵</td><td>W/S で速さ、A/D で舵</td><td>画面の左をなぞる</td></tr>
+      <tr><td>ダッシュ</td><td>Space</td><td>「ダッシュ」長押し</td></tr>
+      <tr><td>ぜに</td><td>J・左クリック</td><td>「ぜに」</td></tr>
+      <tr><td>なわ</td><td>K・右クリック</td><td>「なわ」</td></tr>
+      <tr><td>視点</td><td>Q/E・ホイール</td><td>画面の右をなぞる</td></tr>
+      <tr><td>一時停止</td><td>P・Esc</td><td>「止」</td></tr>
+    </table>
+    <button id="howtoClose" class="btn primary">閉じる</button>
+  </div>
+</div>
+
+<div id="pause" class="screen hidden">
+  <div class="panel">
+    <h2>一服</h2>
+    <button id="btnResume" class="btn primary">再び出る</button>
+    <button id="btnQuit" class="btn ghost">タイトルへ</button>
+  </div>
+</div>
+
+<div id="result" class="screen hidden">
+  <div class="panel result">
+    <div class="r-pre">風雲江戸城　捕物帳</div>
+    <h2 id="rHead">天晴れ</h2>
+    <div id="rTitle" class="r-title"></div>
+    <table class="r-stats">
+      <tr><th>召し捕り</th><td id="rCap"></td></tr>
+      <tr><th>時間</th><td id="rTime"></td></tr>
+    </table>
+    <div id="rNote" class="r-note"></div>
+    <button id="btnAgain" class="btn primary">もう一度</button>
+    <button id="btnToTitle" class="btn ghost">タイトルへ</button>
+  </div>
+</div>
+
+<script type="module" src="js/main.js?v=1"></script>
+</body>
+</html>

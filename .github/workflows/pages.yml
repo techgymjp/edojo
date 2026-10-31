@@ -1,0 +1,36 @@
+# main に push すると GitHub Pages に公開する（ビルド不要の静的サイト）
+name: Deploy to GitHub Pages
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Collect site files
+        run: |
+          mkdir _site
+          cp -r index.html style.css js vendor data assets _site/
+          rm -rf _site/data/src
+          # 古いファイルが残らないよう、読み込むファイルに版番号を付ける
+          V=${GITHUB_SHA::8}
+          echo -n $V > _site/version.txt
+          sed -i -E "s#(from '\./[a-z0-9./]+\.js)'#\1?v=$V'#g; s#(import\('\./[a-z0-9./]+\.js)'#\1?v=$V'#g" _site/js/*.js
+          sed -i -E "s#(fetch\('(data|assets)/[^'?]+)'#\1?v=$V'#g; s#(fetch\(\x60assets/[^\x60?]+)\x60#\1?v=$V\x60#g" _site/js/*.js
+          sed -i -E "s#(style\.css|js/main\.js)\?v=[a-z0-9]+#\1?v=$V#g" _site/index.html
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+      - id: deployment
+        uses: actions/deploy-pages@v4
