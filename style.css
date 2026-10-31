@@ -109,3 +109,5 @@ h1 { font-family: "Yuji Syuku", serif; font-size: clamp(52px, 13vw, 96px); line-
 
 #nav { position: absolute; top: max(96px, calc(env(safe-area-inset-top) + 86px)); left: 50%; transform: translateX(-50%); background: rgba(10, 40, 80, 0.7); border: 1px solid rgba(160, 220, 255, 0.6); border-radius: 22px; padding: 4px 16px; font-size: 20px; font-weight: 800; color: #bfe8ff; white-space: nowrap; text-shadow: 0 1px 2px #000; }
 #navArrow { display: inline-block; color: #6fd8ff; font-size: 26px; }
+#nav.ninja { background: rgba(110, 20, 20, 0.75); border-color: rgba(255, 170, 150, 0.7); color: #ffd8c8; }
+#nav.ninja #navArrow { color: #ff6a50; }

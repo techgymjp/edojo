@@ -67,6 +67,22 @@ CHANNELS = [
     ([(35.6836, 139.7624), (35.6845, 139.7655), (35.6855, 139.7690), (35.6860, 139.7710)], 24),
     # 日比谷濠 → 山下門
     ([(35.6758, 139.7597), (35.6735, 139.7600), (35.6703, 139.7598)], 30),
+    # ---- ほかのステージ用に、江戸の堀と水運をすべて戻す ----
+    # 汐留川 (幸橋 → 新橋 → 汐留 → 浜御殿の北)
+    ([(35.6683, 139.7553), (35.6668, 139.7592), (35.6652, 139.7618), (35.6632, 139.7640), (35.6620, 139.7662)], 34),
+    # 京橋川 → 白魚橋 → 桜川 (八丁堀) → 亀島川
+    ([(35.6772, 139.7686), (35.6768, 139.7710), (35.6762, 139.7735), (35.6758, 139.7752), (35.6750, 139.7785),
+      (35.6744, 139.7815), (35.6740, 139.7838), (35.6737, 139.7858)], 25),
+    # 楓川 (日本橋川 → 白魚橋)
+    ([(35.6842, 139.7768), (35.6815, 139.7766), (35.6788, 139.7760), (35.6760, 139.7752)], 25),
+    # 三十間堀 (京橋川 → 汐留川)
+    ([(35.6764, 139.7722), (35.6735, 139.7700), (35.6707, 139.7680), (35.6680, 139.7655), (35.6658, 139.7625)], 32),
+    # 築地川 (汐留川 → 築地 → 明石町 → 隅田川)
+    ([(35.6645, 139.7640), (35.6672, 139.7695), (35.6700, 139.7735), (35.6710, 139.7760), (35.6692, 139.7790), (35.6675, 139.7805)], 24),
+    # 龍閑川 (鎌倉河岸 → 浜町川)
+    ([(35.6893, 139.7665), (35.6905, 139.7720), (35.6912, 139.7775)], 16),
+    # 浜町川 (龍閑川 → 隅田川)
+    ([(35.6912, 139.7775), (35.6890, 139.7810), (35.6862, 139.7845), (35.6840, 139.7872)], 18),
 ]
 
 # ---- 武家地 (外堀の輪と重なる所だけ使う) ----
@@ -167,7 +183,8 @@ def main():
             n += 1
             cells = flood(y, x, n)
             inring = sum(1 for cy, cx in cells[::7] if R[cy, cx] or I[cy, cx] >= 3) * 7
-            comps.append({'id': n, 'n': len(cells), 'in': inring, 'cells': cells})
+            inner = sum(1 for cy, cx in cells[::5] if I[cy, cx] >= 3) * 2 > len(cells[::5])
+            comps.append({'id': n, 'n': len(cells), 'in': inring, 'cells': cells, 'inner': inner})
     # 江戸のお濠: 輪の中に 600m² 以上あるもの
     moats = [c for c in comps if c['in'] * RES * RES >= 4000]
     moats.sort(key=lambda c: -c['n'])
@@ -199,7 +216,7 @@ def main():
                     if not (0 <= yy < h and 0 <= xx < w): continue
                     if water[yy, xx]:
                         # 内堀どうしだけをワープでつなぐ (内堀と外の川・外堀は日比谷濠〜山下の堀でしかつながらない)
-                        if lab[yy, xx] in joined and I[yy, xx] >= 3:
+                        if lab[yy, xx] in joined and (I[yy, xx] >= 3) == c['inner']:
                             hit = (orig, (yy, xx)); break
                         continue
                     if (yy, xx) not in dist:
@@ -209,6 +226,44 @@ def main():
                 (ay, ax), (by, bx) = hit
                 warps.append([round(ax * RES + RES / 2, 1), round(ay * RES + RES / 2, 1), round(bx * RES + RES / 2, 1), round(by * RES + RES / 2, 1)])
                 joined.add(c['id']); changed = True
+    # 外堀を順に回れるよう、外堀の土橋 (見附) で切れている所にもワープを置く
+    ROUTE = [(35.7027, 139.7450), (35.7000, 139.7428), (35.6964, 139.7399), (35.6935, 139.7360), (35.6902, 139.7323),
+             (35.6862, 139.7305), (35.6820, 139.7330), (35.6765, 139.7378), (35.6728, 139.7418), (35.6703, 139.7468),
+             (35.6697, 139.7495), (35.6683, 139.7553), (35.6700, 139.7597), (35.6735, 139.7600)]
+    def snapc(la, lo):
+        x0, y0 = px(la, lo); x0, y0 = int(x0), int(y0)
+        for r in range(0, 40):
+            for dy in range(-r, r + 1):
+                for dx in range(-r, r + 1):
+                    yy, xx = y0 + dy, x0 + dx
+                    if 0 <= yy < h and 0 <= xx < w and water[yy, xx]: return (yy, xx)
+        return None
+    def field(src, limit):
+        dist = {src: 0}; q = deque([src])
+        while q:
+            y, x = q.popleft(); d = dist[(y, x)]
+            if d >= limit: continue
+            for yy, xx in ((y + 1, x), (y - 1, x), (y, x + 1), (y, x - 1)):
+                if 0 <= yy < h and 0 <= xx < w and water[yy, xx] and (yy, xx) not in dist:
+                    dist[(yy, xx)] = d + 1; q.append((yy, xx))
+        return dist
+    for (la0, lo0), (la1, lo1) in zip(ROUTE, ROUTE[1:]):
+        a, b = snapc(la0, lo0), snapc(la1, lo1)
+        if not a or not b: continue
+        eu = math.hypot(a[0] - b[0], a[1] - b[1])
+        fa = field(a, int(eu * 2.5 + 60))
+        if b in fa: continue  # 水でつながっている
+        fb = field(b, int(eu * 2.5 + 60))
+        A_ = list(fa.keys())[::3]; B_ = list(fb.keys())[::3]
+        best = None
+        for (ya, xa) in A_:
+            for (yb, xb) in B_:
+                d = (ya - yb) ** 2 + (xa - xb) ** 2
+                if best is None or d < best[0]: best = (d, ya, xa, yb, xb)
+        if best and best[0] ** 0.5 * RES < 260:
+            _, ya, xa, yb, xb = best
+            warps.append([round(xa * RES + RES / 2, 1), round(ya * RES + RES / 2, 1), round(xb * RES + RES / 2, 1), round(yb * RES + RES / 2, 1)])
+            print('outer warp', (la0, lo0), '->', (la1, lo1), round(best[0] ** 0.5 * RES), 'm')
     print('warps', len(warps), 'unjoined', [(c['id'], c['n']) for c in moats if c['id'] not in joined])
     Image.fromarray(A).save(os.path.join(D, 'map.png'), optimize=True)
     world = {'W': W, 'E': E, 'S': S, 'N': N, 'KX': KX, 'KZ': KZ, 'res': RES, 'w': w, 'h': h,

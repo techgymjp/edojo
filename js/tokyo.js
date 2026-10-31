@@ -93,6 +93,9 @@ export function buildTokyo(scene, renderer) {
   for (const f of [addSensoji, addAsahi, addUeno, addOchanomizu, addTokyoStation, addAkasaka, addAkibaSigns, addNewOtani, addYotsuyaKudan, addUenoAsakusa, addGinzaNihonbashi]) {
     try { f(root, city); } catch (e) { console.warn(f.name, e); }
   }
+  // 首都高・橋・名所なども、カメラと小舟のあいだにあれば透かす
+  const seen = new Set(Object.values(mats));
+  root.traverse((o) => { const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : []; for (const m of ms) if (!seen.has(m) && m.isMaterial && !m.isSpriteMaterial) { seen.add(m); addCutaway(m); } });
   let rails = null;
   try { rails = addRailways(root, city); } catch (e) { console.warn('rails', e); }
   const skytreeMat = addSkytree(root);
@@ -102,6 +105,7 @@ export function buildTokyo(scene, renderer) {
   // ニンジャが飛び立つビル (この地図の座標)
   const roofs = [];
   for (const bd of city.bld) if (bd.plateau && bd.h >= 14) roofs.push({ x: bd.cx + OX, z: bd.cz + OZ, y: LEVEL_H[1], sy: bd.h, bd });
+  root.traverse((o) => { const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : []; for (const m of ms) if (!seen.has(m) && m.isMaterial && !m.isSpriteMaterial) { seen.add(m); addCutaway(m); } });
   console.log('tokyo: buildings', city.bld.length, 'dropped', dropped);
   return {
     city, root, OX, OZ, roofs,
