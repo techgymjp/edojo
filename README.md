@@ -4,7 +4,7 @@
 外堀の内側は江戸時代のお濠・水運・石垣・城・町並み、外堀の外は今の東京のビルで作っています。
 
 `index.html` を Web サーバーで開けば遊べます（ビルド不要。`python3 -m http.server` など。ES Modules を使うので `file://` では動きません）。
-`main` に push すると GitHub Actions（`.github/workflows/pages.yml`）が GitHub Pages に公開します。
+GitHub Pages は「Deploy from a branch」（`main` の `/ (root)`）で公開します（ビルド不要。`.nojekyll` で Jekyll の処理を止めています）。
 
 ## 遊び方
 
