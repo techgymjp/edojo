@@ -1,7 +1,7 @@
 // 町並み・城・門・橋・ワープ・今のビル・テックジムのアドバルーン
 import * as THREE from '../vendor/three.module.min.js';
 import { W, ll, codeAt, isWater, groundH, cellOf, LEVEL_H } from './world.js';
-import { M, box, HIP, GABLE, makeTenshu, makeYagura, makeGate, makeBridge, makeHall } from './models.js';
+import { M, box, HIP, GABLE, makeTenshu, makeYagura, makeGate, makeBridge, makeHall, makeSamurai } from './models.js';
 
 // ---------- 名前 (お濠・門・橋) ----------
 const cp = (x, y) => [35.697 - y / 44200, 139.742 + x / 36200];
@@ -105,7 +105,7 @@ function instanced(geo, mat, list) {
   list.forEach((it, i) => {
     dummy.position.set(it.x, it.y, it.z); dummy.rotation.set(0, it.r || 0, 0); dummy.scale.set(it.sx, it.sy, it.sz);
     dummy.updateMatrix(); m.setMatrixAt(i, dummy.matrix);
-    if (it.c !== undefined) m.setColorAt(i, col.set(it.c));
+    if (it.c !== undefined) m.setColorAt(i, it.c.isColor ? it.c : col.set(it.c));
   });
   m.count = list.length;
   m.instanceMatrix.needsUpdate = true;
@@ -214,14 +214,23 @@ export function buildModern(scene, bld) {
           float u = dot(vWP.xz, hz) / 3.2;
           float v = (vWP.y - 2.5) / 3.6;
           float win = step(0.18, fract(u)) * step(fract(u), 0.82) * step(0.3, fract(v)) * step(fract(v), 0.85) * step(1.0, v);
-          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.22, 0.28, 0.34), win * 0.8);
+          diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.35 + vec3(0.1, 0.16, 0.24), win * 0.75);
           float lit = step(0.55, fract(sin(dot(floor(vec2(u, v)), vec2(12.9898, 78.233))) * 43758.5453));
           totalEmissiveRadiance += vec3(1.0, 0.85, 0.55) * win * lit * night * 0.9;
         } else {
           diffuseColor.rgb *= 0.75;
         }`);
   };
-  list.forEach((it, i) => { const k = rnd(i * 3.1); it.c = k < 0.3 ? 0xb8bcc2 : k < 0.6 ? 0xa4a8ae : k < 0.8 ? 0xc8c0b0 : 0x8e949c; });
+  // カラフルな街 (ターザン大東京と同じ色): 高いビルは色ガラス、低いビルはパステルやビビッドな外壁
+  const GLASS = [[0.35, 0.65, 1.0], [0.2, 0.85, 0.85], [0.6, 0.45, 1.0], [1.0, 0.45, 0.7], [0.4, 0.95, 0.55],
+    [1.0, 0.75, 0.3], [0.95, 0.35, 0.35], [0.55, 0.8, 1.0], [0.9, 0.9, 0.35], [0.3, 0.5, 0.95]];
+  const OFFICE = [[1.0, 0.6, 0.55], [1.0, 0.82, 0.45], [0.6, 0.85, 0.6], [0.55, 0.75, 1.0], [0.85, 0.65, 1.0],
+    [1.0, 0.7, 0.85], [0.5, 0.9, 0.85], [1.0, 0.95, 0.6], [0.95, 0.55, 0.35], [0.7, 0.95, 0.45], [0.95, 0.95, 0.95]];
+  list.forEach((it, i) => {
+    const glass = it.sy > 55 || (it.sy > 30 && rnd(i * 1.7) < 0.35);
+    const pal = glass ? GLASS : OFFICE, c = pal[Math.floor(rnd(i * 3.1) * pal.length)], sh = 0.85 + rnd(i * 5.3) * 0.2;
+    it.c = new THREE.Color(c[0] * sh, c[1] * sh, c[2] * sh);
+  });
   const m = instanced(UNIT_BOX, mat, list);
   m.frustumCulled = false;
   scene.add(m);
@@ -341,6 +350,8 @@ export function buildCastle(scene, castleSegs) {
       gx = x; gz = z; rot = Math.atan2(ux, uz);
     }
     const g = makeGate(!!big);
+    // 門番のお侍 (両わき)
+    for (const sx of [-1, 1]) { const gd = makeSamurai('guard'); gd.position.set(sx * 4.6, 0, 2.2); gd.scale.setScalar(1.3); g.add(gd); }
     g.position.set(gx, groundH(gx, gz), gz);
     g.rotation.y = rot;
     scene.add(g);

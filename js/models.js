@@ -70,9 +70,9 @@ export function makeBoat() {
   const floor = new THREE.Mesh(new THREE.ShapeGeometry(shape), dark);
   floor.rotation.x = -Math.PI / 2; floor.position.y = 0.42; floor.scale.set(0.85, 0.92, 1);
   g.add(floor);
-  // 岡っ引き (ひとりで乗る。動力は謎)
-  const hero = makePerson(0x2a3a6a, 0xd8c9a8, true);
-  hero.position.set(0, 0.45, -0.6);
+  // 主人公のお侍 (ひとりで乗る。動力は謎)。遠くからでも分かるよう少し大きめ
+  const hero = makeSamurai('hero');
+  hero.position.set(0, 0.45, -0.4); hero.scale.setScalar(1.35);
   g.add(hero);
   // 艫の謎の渦 (ダッシュのとき光る)
   const glow = new THREE.Mesh(new THREE.RingGeometry(0.3, 0.9, 16), new THREE.MeshBasicMaterial({ color: 0x9fe8ff, transparent: true, opacity: 0, side: THREE.DoubleSide }));
@@ -104,6 +104,75 @@ export function textTexture(text, color, bg) {
   [...text].forEach((ch, i) => g.fillText(ch, 32, 34 + i * 58));
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
   return t;
+}
+
+// お侍 (羽織袴・裃の肩衣・月代と髷・大小の二本差し)。足もとが原点、+z が前
+// kind: hero (主人公: 襷と鉢巻) / guard (門番: 陣笠と槍) / plain
+export function makeSamurai(kind = 'hero') {
+  const g = new THREE.Group();
+  const C = {
+    hero: { kami: 0x24345e, hakama: 0x5a5e6a, kimono: 0xe8e0cc },
+    guard: { kami: 0x3a3a3a, hakama: 0x4a4a52, kimono: 0x6a5a48 },
+    plain: { kami: 0x5a3020, hakama: 0x50505a, kimono: 0xd8d0bc },
+  }[kind];
+  const skin = M(0xe0b890), hair = M(0x141414), black = M(0x1a1a1a);
+  // 袴 (すそ広がり)
+  const hak = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.42, 0.9, 6), M(C.hakama));
+  hak.position.y = 0.45; g.add(hak);
+  for (let k = -2; k <= 2; k++) box(g, 0.03, 0.88, 0.02, k * 0.12, 0.01, 0.36 - Math.abs(k) * 0.03, M(0x3a3c44)); // 縞
+  box(g, 0.3, 0.08, 0.2, 0, 0, 0.08, black); // 足
+  // 着物と肩衣 (裃)
+  box(g, 0.46, 0.6, 0.3, 0, 0.88, 0, M(C.kimono));
+  box(g, 0.5, 0.06, 0.32, 0, 0.9, 0, M(0x2a2a2a)); // 帯
+  const kata = M(C.kami);
+  for (const sx of [-1, 1]) {
+    const w = box(g, 0.42, 0.06, 0.34, sx * 0.3, 1.42, 0, kata); // 肩衣の張った肩
+    w.rotation.z = sx * -0.12;
+    box(g, 0.2, 0.52, 0.31, sx * 0.13, 0.92, 0.005, kata); // 前の身頃
+  }
+  // 襟
+  box(g, 0.1, 0.4, 0.02, 0, 1.06, 0.16, M(0xf4f0e6));
+  // 家紋 (丸に白)
+  for (const sx of [-1, 1]) { const mon = new THREE.Mesh(new THREE.CircleGeometry(0.05, 12), M(0xf4f0e6)); mon.position.set(sx * 0.15, 1.28, 0.166); g.add(mon); }
+  // 大小 (左腰に二本)
+  const sayaL = box(g, 0.05, 0.05, 1.05, 0.26, 0.88, 0.05, black); sayaL.rotation.x = 0.35; sayaL.rotation.y = 0.15;
+  const sayaS = box(g, 0.045, 0.045, 0.7, 0.27, 0.84, 0.1, black); sayaS.rotation.x = 0.3; sayaS.rotation.y = 0.2;
+  box(g, 0.06, 0.06, 0.22, 0.26, 1.02, 0.5, M(0xd8c8a0)); // 柄
+  // 頭: 月代と髷
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), skin);
+  head.position.y = 1.62; g.add(head);
+  const side = new THREE.Mesh(new THREE.SphereGeometry(0.165, 12, 8, 0, Math.PI * 2, Math.PI * 0.35, Math.PI * 0.35), hair);
+  side.position.y = 1.62; g.add(side);
+  const mage = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.22, 6), hair);
+  mage.rotation.x = Math.PI / 2; mage.position.set(0, 1.8, 0.02); g.add(mage);
+  box(g, 0.05, 0.05, 0.05, 0, 1.76, -0.1, hair);
+  // 目と眉
+  for (const sx of [-1, 1]) box(g, 0.05, 0.02, 0.01, sx * 0.06, 1.66, 0.155, black);
+  if (kind === 'hero') {
+    // 白い鉢巻と赤い襷
+    const hb = new THREE.Mesh(new THREE.TorusGeometry(0.165, 0.025, 5, 16), M(0xf4f4f4)); hb.rotation.x = Math.PI / 2; hb.position.y = 1.68; g.add(hb);
+    for (const sx of [-1, 1]) { const t = box(g, 0.05, 0.75, 0.02, 0, 0.88, 0.17, M(0xc8201c)); t.rotation.z = sx * 0.55; }
+  }
+  if (kind === 'guard') {
+    const hat = new THREE.Mesh(new THREE.ConeGeometry(0.38, 0.18, 12), M(0x2a2a2a)); hat.position.y = 1.84; g.add(hat);
+  }
+  // 腕
+  const mkArm = (sx) => {
+    const a = new THREE.Group(); a.position.set(sx * 0.3, 1.36, 0);
+    box(a, 0.16, 0.6, 0.16, 0, -0.6, 0, M(C.kimono));
+    box(a, 0.1, 0.1, 0.1, 0, -0.7, 0, skin);
+    g.add(a); return a;
+  };
+  const armR = mkArm(1), armL = mkArm(-1);
+  if (kind === 'guard') {
+    const yari = new THREE.Group();
+    box(yari, 0.05, 3.2, 0.05, 0, -1.2, 0, M(0x4a2a18));
+    box(yari, 0.07, 0.35, 0.02, 0, 2.0, 0, M(0xe8eef4));
+    yari.position.set(0, -0.62, 0.05); armR.add(yari);
+    armR.rotation.x = -0.25;
+  }
+  g.userData = { armR, armL };
+  return g;
 }
 
 // 人 (高さ約 1.7m、足もとが原点、+z が前)

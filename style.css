@@ -69,6 +69,8 @@ h1 { font-family: "Yuji Syuku", serif; font-size: clamp(52px, 13vw, 96px); line-
 #marks, #floats { position: fixed; inset: 0; pointer-events: none; z-index: 9; overflow: hidden; }
 .nmark { position: absolute; transform: translate(-50%, -100%); text-align: center; }
 .nmark b { display: inline-block; width: 24px; height: 24px; line-height: 24px; border-radius: 50%; background: #ff8a20; color: #000; font-size: 14px; font-weight: 800; box-shadow: 0 0 6px #000; }
+.nmark.behind { opacity: 0.4; }
+.nmark.behind b { transform: scale(0.8); }
 .nmark.bamboo b { background: #7cff6a; }
 .nmark.glide b { background: #c070ff; }
 .nmark.danger b { background: #ff2020; color: #fff; animation: blink 0.5s infinite alternate; }

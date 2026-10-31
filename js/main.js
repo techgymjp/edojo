@@ -58,7 +58,7 @@ scene.add(moon);
 const G = {
   state: 'loading', t: 0, captured: 0, spawned: 0, nextSpawn: 0, st: 100, stDelay: 0,
   name: '平次', ninjas: [], coins: [], lassos: [], fx: [], floats: [], coinCd: 0, lassoCd: 0, throwT: 0,
-  warpCd: 0, camYaw: 0, camDist: 30, lastMouse: -99, mouseDir: null, endT: 0, result: null, intruder: null,
+  warpCd: 0, camYaw: 0, camDist: 38, lastMouse: -99, mouseDir: null, endT: 0, result: null, intruder: null,
 };
 const P = { x: 0, z: 0, h: 0, v: 0, gear: 1, roll: 0, dashT: 0 };
 let boat, water, modern, castle, warps = [], balloon, navi, fw;
@@ -149,7 +149,7 @@ async function boot() {
     navi = buildNav();
     fw = new Fireworks(scene, 2.5, false);
     boat = makeBoat();
-    boat.scale.setScalar(0.8);
+    boat.scale.setScalar(1.5);
     scene.add(boat);
     buildMinimap();
     console.log('town', town, 'buildings', bld.length, 'targets', navi.targets, 'landing', navi.landing.length, 'warps', warps.length);
@@ -467,7 +467,7 @@ function intrude(nj) {
 }
 
 // ---------- 投げ銭 (近い敵に 3 連射) と投げ輪 (遠くまで届く) ----------
-function heroPos() { return new THREE.Vector3(P.x + Math.cos(P.h) * 0.5, 2.0, P.z + Math.sin(P.h) * 0.5); }
+function heroPos() { return new THREE.Vector3(P.x - Math.cos(P.h) * 0.6, 3.6, P.z - Math.sin(P.h) * 0.6); }
 function preferDir() {
   if (G.t - G.lastMouse < 3 && !I.joy) {
     const ray = new THREE.Raycaster();
@@ -644,7 +644,7 @@ function updateBoat(dt) {
   const nx = P.x + Math.cos(P.h) * P.v * dt, nz = P.z + Math.sin(P.h) * P.v * dt;
   const sg = Math.sign(P.v || 1);
   const bow = (k) => isWater(nx + Math.cos(P.h) * k * sg, nz + Math.sin(P.h) * k * sg);
-  if (isWater(nx, nz) && bow(3.6) && bow(1.8)) { P.x = nx; P.z = nz; }
+  if (isWater(nx, nz) && bow(6.5) && bow(3.2) && isWater(nx - Math.cos(P.h) * 4.5 * sg, nz - Math.sin(P.h) * 4.5 * sg)) { P.x = nx; P.z = nz; }
   else {
     if (Math.abs(P.v) > 8) { A.sfx('clang', 0.3, 0.6); G.shake = 0.3; }
     P.v *= -0.3;
@@ -687,7 +687,7 @@ const wakes = [];
 const wakeGeo = new THREE.RingGeometry(0.5, 0.8, 16);
 function addWake() {
   const m = new THREE.Mesh(wakeGeo, new THREE.MeshBasicMaterial({ color: 0xdfefff, transparent: true, opacity: 0.4, side: THREE.DoubleSide, depthWrite: false }));
-  m.rotation.x = -Math.PI / 2; m.position.set(P.x - Math.cos(P.h) * 3.5, 0.06, P.z - Math.sin(P.h) * 3.5); scene.add(m);
+  m.rotation.x = -Math.PI / 2; m.position.set(P.x - Math.cos(P.h) * 6, 0.06, P.z - Math.sin(P.h) * 6); scene.add(m);
   wakes.push({ m, t: 0 });
 }
 function updateWakes(dt) {
@@ -711,9 +711,22 @@ function updateCamera(dt) {
   if (I.wheel) { G.camDist = clamp(G.camDist * (1 + I.wheel * 0.001), 14, 120); I.wheel = 0; }
   if (!I.joy && lookId === null) G.camYaw *= Math.exp(-dt * 0.5);
   const ch = camHeading();
-  const tx = P.x - Math.cos(ch) * G.camDist, tz = P.z - Math.sin(ch) * G.camDist;
-  const ty = Math.max(G.camDist * 0.42, groundH(tx, tz) + 4);
-  const k = camInit ? 1 - Math.exp(-dt * 4) : 1;
+  // 石垣や岸にめり込まないよう、舟からカメラまでの間に壁があれば手前へ寄せる
+  let dist = G.camDist;
+  const ty0 = G.camDist * 0.42 + 2;
+  for (let i = 1; i <= 16; i++) {
+    const f = i / 16, sx = P.x - Math.cos(ch) * G.camDist * f, sz = P.z - Math.sin(ch) * G.camDist * f;
+    if (groundH(sx, sz) + 1.2 > 3 + (ty0 - 3) * f) { dist = Math.max(5, G.camDist * (i - 1) / 16 - 1.5); break; }
+  }
+  let ty = Math.max(3 + (ty0 - 3) * dist / G.camDist, 2.5);
+  if (dist < 12) {
+    // すぐ後ろが石垣: 石垣の上から見下ろす
+    let top = 0;
+    for (let i = 1; i <= 8; i++) { const f = i / 8 * 0.6; top = Math.max(top, groundH(P.x - Math.cos(ch) * G.camDist * f, P.z - Math.sin(ch) * G.camDist * f)); }
+    dist = G.camDist * 0.5; ty = top + 14;
+  }
+  const tx = P.x - Math.cos(ch) * dist, tz = P.z - Math.sin(ch) * dist;
+  const k = camInit ? 1 - Math.exp(-dt * (dist < G.camDist ? 10 : 4)) : 1;
   camInit = true;
   camera.position.x += (tx - camera.position.x) * k;
   camera.position.z += (tz - camera.position.z) * k;
@@ -741,53 +754,64 @@ function updateSky() {
 }
 
 // ---------- HUD ----------
-const mm = { c: null, base: null, x0: 0, z0: 0, s: 1 };
+const mm = { c: null, base: null, x0: 0, z0: 0, s: 1, ox: 0, oy: 0 };
+// ミニマップ: 外堀の輪のまわりを 2 倍に拡大し、自分を真ん中にして動かす
 function buildMinimap() {
   const c = $('minimap');
-  // 外堀の輪のまわりを表示
   let x0 = 1e9, z0 = 1e9, x1 = -1e9, z1 = -1e9;
   for (const [x, z] of W.ring) { x0 = Math.min(x0, x); z0 = Math.min(z0, z); x1 = Math.max(x1, x); z1 = Math.max(z1, z); }
-  x0 -= 150; z0 -= 150; x1 += 150; z1 += 150;
-  const s = Math.min(c.width / (x1 - x0), c.height / (z1 - z0));
+  x0 -= 400; z0 -= 400; x1 += 400; z1 += 400;
+  const s = 2 * Math.min(c.width / (x1 - x0 - 800), c.height / (z1 - z0 - 800));
   Object.assign(mm, { c, x0, z0, s });
-  const base = document.createElement('canvas'); base.width = c.width; base.height = c.height;
-  const g = base.getContext('2d'), img = g.createImageData(c.width, c.height);
-  const PAL = [[60, 110, 170], [190, 170, 130], [170, 165, 140], [110, 140, 85], [90, 125, 70], [70, 72, 80]];
-  for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) {
-    const k = cellOf(x0 + x / s, z0 + y / s), cc = k < 0 ? 5 : W.code[k], p = PAL[cc], o = (y * c.width + x) * 4;
-    img.data[o] = p[0]; img.data[o + 1] = p[1]; img.data[o + 2] = p[2]; img.data[o + 3] = 230;
+  const base = document.createElement('canvas'); base.width = Math.ceil((x1 - x0) * s); base.height = Math.ceil((z1 - z0) * s);
+  const g = base.getContext('2d'), img = g.createImageData(base.width, base.height);
+  const PAL = [[60, 120, 190], [190, 170, 130], [170, 165, 140], [110, 140, 85], [90, 125, 70], [72, 74, 84]];
+  for (let y = 0; y < base.height; y++) for (let x = 0; x < base.width; x++) {
+    const k = cellOf(x0 + x / s, z0 + y / s), cc = k < 0 ? 5 : W.code[k], p = PAL[cc], o = (y * base.width + x) * 4;
+    img.data[o] = p[0]; img.data[o + 1] = p[1]; img.data[o + 2] = p[2]; img.data[o + 3] = 235;
   }
   g.putImageData(img, 0, 0);
-  g.fillStyle = '#fff';
+  g.fillStyle = '#fff'; g.font = 'bold 18px serif'; g.textAlign = 'center';
   const [tx, tz] = castle.tenshu;
-  g.font = 'bold 14px serif'; g.textAlign = 'center';
-  g.fillText('城', (tx - x0) * s, (tz - z0) * s + 5);
+  g.fillText('天守', (tx - x0) * s, (tz - z0) * s + 6);
   mm.base = base;
 }
 function drawMinimap() {
   const { c, x0, z0, s } = mm, g = c.getContext('2d');
-  g.drawImage(mm.base, 0, 0);
-  for (const w of warps) for (const e of [w.a, w.b]) { g.fillStyle = '#7ff'; g.fillRect((e.x - x0) * s - 2, (e.z - z0) * s - 2, 4, 4); }
+  const px = (P.x - x0) * s, py = (P.z - z0) * s;
+  const ox = clamp(px - c.width / 2, 0, mm.base.width - c.width), oy = clamp(py - c.height / 2, 0, mm.base.height - c.height);
+  g.fillStyle = '#484a54'; g.fillRect(0, 0, c.width, c.height);
+  g.drawImage(mm.base, -ox, -oy);
+  const X = (x) => (x - x0) * s - ox, Y = (z) => (z - z0) * s - oy;
+  for (const w of warps) for (const e of [w.a, w.b]) { g.fillStyle = '#7ff'; g.fillRect(X(e.x) - 3, Y(e.z) - 3, 6, 6); }
   for (const nj of G.ninjas) {
     if (nj.state === 'gone' || nj.state === 'bound') continue;
-    const x = (nj.x - x0) * s, y = (nj.z - z0) * s;
     const danger = nj.state === 'climb' || nj.state === 'emerge';
     if (danger && Math.floor(G.t * 4) % 2) continue;
     g.fillStyle = danger ? '#ff2020' : nj.state === 'bamboo' ? '#7cff6a' : '#ff9a40';
-    g.beginPath(); g.arc(clamp(x, 3, c.width - 3), clamp(y, 3, c.height - 3), danger ? 5 : 3.5, 0, Math.PI * 2); g.fill();
+    // 画面の外の忍者は縁に出す
+    g.beginPath(); g.arc(clamp(X(nj.x), 5, c.width - 5), clamp(Y(nj.z), 5, c.height - 5), danger ? 6 : 4.5, 0, Math.PI * 2); g.fill();
   }
-  // 自分
-  const px = (P.x - x0) * s, py = (P.z - z0) * s;
-  g.save(); g.translate(px, py); g.rotate(P.h);
+  g.save(); g.translate(X(P.x), Y(P.z)); g.rotate(P.h);
   g.fillStyle = '#ffe24a'; g.strokeStyle = '#000'; g.lineWidth = 1.5;
-  g.beginPath(); g.moveTo(8, 0); g.lineTo(-5, 5); g.lineTo(-3, 0); g.lineTo(-5, -5); g.closePath(); g.fill(); g.stroke();
+  g.beginPath(); g.moveTo(10, 0); g.lineTo(-6, 6); g.lineTo(-3, 0); g.lineTo(-6, -6); g.closePath(); g.fill(); g.stroke();
   g.restore();
+}
+// カメラから見て石垣・岸の陰か
+function hidden(c) {
+  const o = camera.position;
+  for (let i = 1; i < 12; i++) {
+    const f = i / 12, x = o.x + (c.x - o.x) * f, z = o.z + (c.z - o.z) * f, y = o.y + (c.y - o.y) * f;
+    if (groundH(x, z) > y) return true;
+  }
+  return false;
 }
 function updateMarkers() {
   let worst = null;
   for (const nj of G.ninjas) {
     const el = nj.marker;
-    if (!['roof', 'glide', 'bamboo', 'emerge', 'climb'].includes(nj.state)) { el.style.display = 'none'; continue; }
+    // 水の中の忍者は、水面から出ている竹筒だけ (目印は出さない)
+    if (!['roof', 'glide', 'emerge', 'climb'].includes(nj.state)) { el.style.display = 'none'; continue; }
     const c = ninjaCenter(nj); c.y += nj.state === 'bamboo' ? 2.5 : 2.6;
     const danger = nj.state === 'climb' || nj.state === 'emerge';
     if (danger && (!worst || nj.prog > (worst.prog || 0))) worst = nj;
@@ -795,7 +819,7 @@ function updateMarkers() {
     const d = c.distanceTo(camera.position);
     if (tmpV.z > 1 || Math.abs(tmpV.x) > 1.1 || Math.abs(tmpV.y) > 1.1 || (d > 700 && !danger)) { el.style.display = 'none'; continue; }
     el.style.display = '';
-    el.className = 'nmark ' + (danger ? 'danger' : nj.state);
+    el.className = 'nmark ' + (danger ? 'danger' : nj.state) + (hidden(c) ? ' behind' : '');
     el.style.left = ((tmpV.x + 1) / 2 * innerWidth) + 'px';
     el.style.top = ((1 - tmpV.y) / 2 * innerHeight) + 'px';
     el.querySelector('s').style.width = danger ? (Math.min(1, nj.prog || 0) * 100) + '%' : (nj.hp / CFG.hp * 100) + '%';
@@ -879,7 +903,7 @@ function showResult() {
   $('result').classList.remove('hidden');
   $('rHead').textContent = win ? '天晴れ！ 全員御用' : '曲者 侵入！';
   const n = G.captured;
-  const title = win ? (G.t < 330 ? '江戸一番の名親分' : '名親分') : n >= 15 ? '腕利きの岡っ引き' : n >= 10 ? '岡っ引き' : n >= 5 ? '下っ引き' : '見習い';
+  const title = win ? (G.t < 330 ? '江戸一番の名同心' : '名同心') : n >= 15 ? '腕利きの同心' : n >= 10 ? '同心' : n >= 5 ? '下っ引き' : '見習い';
   $('rTitle').textContent = `${G.name}　「${title}」`;
   $('rCap').textContent = `${n} / ${CFG.total} 人`;
   $('rTime').textContent = `${Math.floor(G.t / 60)}分${Math.floor(G.t % 60)}秒`;
