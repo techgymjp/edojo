@@ -22,7 +22,7 @@ export const CFG = {
   idleSpawn: 35,      // 誰も出ていないまま、これだけたつと一番近い忍者が現れる (秒)
   gap0: 17, gap1: 9,  // 出てくる間隔 (最初 → 最後)
   roofTime: [0.8, 1.5], // ビルの上で構える時間
-  glideSpeed: 90,     // ムササビの術の速さ (m/s)
+  glideSpeed: 40,     // ムササビの術の速さ (m/s)
   swim: 2.3,          // 竹筒 (水遁の術) の速さ
   climbStone: 0.55,   // 石垣を登る速さ (m/s)
   climbDote: 0.8,     // 土手を這い上がる速さ
@@ -305,10 +305,11 @@ function planNinjas() {
     if (land < 0 || bd > 200 * 200) land = cellOf(...(isWater(px, pz) ? [px, pz] : nearestWater(px, pz) || [px, pz]));
     const lx = cellX(land), lz = cellZ(land);
     // 外堀の外 (なければ近く) のビル
-    let cands = roofs.filter((b) => { const d = Math.hypot(b.x - lx, b.z - lz); return d > 60 && d < 320 && !N.inRing(b.x, b.z); });
-    if (!cands.length) cands = roofs.filter((b) => { const d = Math.hypot(b.x - lx, b.z - lz); return d > 50 && d < 350; });
+    // 小舟から見上げて見える高さ (20〜60m) の、岸に近いビル
+    let cands = roofs.filter((b) => { const d = Math.hypot(b.x - lx, b.z - lz); return b.sy >= 18 && b.sy <= 60 && d > 40 && d < 180 && !N.inRing(b.x, b.z); });
+    if (!cands.length) cands = roofs.filter((b) => { const d = Math.hypot(b.x - lx, b.z - lz); return b.sy <= 80 && d > 40 && d < 260; });
     if (!cands.length) continue;
-    cands.sort((a, b) => b.sy - a.sy);
+    cands.sort((a, b) => Math.hypot(a.x - lx, a.z - lz) - Math.hypot(b.x - lx, b.z - lz));
     plans.push({ roof: cands[(k * 7) % Math.min(5, cands.length)], land });
   }
   return plans;
@@ -358,7 +359,7 @@ function updateNinja(nj, dt) {
       if (nj.t <= 0) {
         nj.state = 'glide'; nj.hp = 1;
         const d = Math.hypot(nj.lx - nj.sx, nj.lz - nj.sz);
-        nj.T = clamp(d / CFG.glideSpeed, 1.4, 3.2); nj.t = nj.T;
+        nj.T = clamp(d / CFG.glideSpeed, 3, 4.5); nj.t = nj.T;
         A.sfx('whoosh', 0.5, 0.8);
       }
       break;
@@ -1346,7 +1347,8 @@ function step(dt) {
     // 小舟が近づくと、潜伏していた忍者がムササビの術で現れる。しばらく誰も出ていなければ一番近い所から
     const active = G.ninjas.filter((n) => !['gone', 'bound', 'in', 'fall', 'sink'].includes(n.state)).length;
     if (G.hidden && G.hidden.length && active < CFG.maxActive && G.t >= G.nextSpawn) {
-      const i = G.hidden.findIndex((p) => Math.hypot(cellX(p.land) - P.x, cellZ(p.land) - P.z) < CFG.wakeDist);
+      // 小舟の前方 (画面に入る所) に飛び込む忍者から現れる
+      const i = G.hidden.findIndex((p) => { const dx = cellX(p.land) - P.x, dz = cellZ(p.land) - P.z, d = Math.hypot(dx, dz); return d < CFG.wakeDist && d > 60 && (dx * Math.cos(P.h) + dz * Math.sin(P.h)) / d > 0.5; });
       if (i >= 0) { spawnNinja(G.hidden.splice(i, 1)[0]); G.nextSpawn = G.t + 2; G.lastSpawn = G.t; }
       else if ((active === 0 && G.t - (G.lastSpawn || 0) > CFG.idleSpawn) || G.t >= G.forceSpawn) { spawnNinja(); G.nextSpawn = G.t + 2; G.lastSpawn = G.t; G.forceSpawn = G.t + CFG.idleSpawn * 2; }
     }
