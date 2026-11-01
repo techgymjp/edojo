@@ -1,7 +1,7 @@
 // 風雲江戸城: 起動・入力・小舟・忍者・投げ銭と投げ輪・HUD
 import * as THREE from '../vendor/three.module.min.js';
 import { W, loadWorld, buildGround, buildWalls, buildWater, cullChunks, nearCastle, isWater, codeAt, groundH, cellOf, ll, isDote, LEVEL_H, waterY, terrainH, nearWaterGrid } from './world.js';
-import { buildTown, buildModern, buildCastle, buildWarps, buildBalloon, moatName, labelSprite } from './edo.js';
+import { buildTown, buildModern, buildCastle, buildWarps, buildBalloon, moatName, labelSprite, MOAT_NAMES } from './edo.js';
 import { makeBoat, animateBoat, makeNinja, poseNinja, makeBamboo, makeCoin } from './models.js';
 import * as A from './audio.js';
 import { Fireworks } from './fireworks.js';
@@ -26,6 +26,8 @@ export const CFG = {
   swim: 1.1,          // 竹筒 (水遁の術) の速さ
   climbStone: 0.55,   // 石垣を登る速さ (m/s)
   climbDote: 0.8,     // 土手を這い上がる速さ
+  swimInner: 2,       // 内堀の竹筒の速さ (m/s)
+  walkIn: 4,        // 石垣を登ったあと本丸へ歩く速さ (m/s)
   walk: 1.6,          // 上陸した忍者が内堀へ歩く速さの下限 (m/s)
   walkTime: 80,       // 上陸してから内堀に着くまでのおおよその秒数
   climbGrass: 0.9,    // 外堀の草の岸をよじ登る速さ (m/s)。石垣は climbStone で遅い
@@ -437,7 +439,7 @@ function updateNinja(nj, dt) {
         if (best >= 0) {
           const tx = cellX(best) + Math.sin(nj.id * 7 + G.t) * 0.3, tz = cellZ(best);
           const dx = tx - nj.x, dz = tz - nj.z, l = Math.hypot(dx, dz) || 1;
-          const sp = CFG.swim * (1 + Math.sin(G.t * 1.3 + nj.id) * 0.15);
+          const sp = CFG.swimInner * (1 + Math.sin(G.t * 1.3 + nj.id) * 0.15); // 内堀の竹筒
           nj.vx += ((dx / l) * sp - nj.vx) * Math.min(1, dt * 4); nj.vz += ((dz / l) * sp - nj.vz) * Math.min(1, dt * 4);
           nj.x += nj.vx * dt; nj.z += nj.vz * dt;
         }
@@ -472,12 +474,24 @@ function updateNinja(nj, dt) {
       if (nj.t <= 0) { nj.state = 'climbOut'; nj.prog = 0; }
       break;
     }
+    case 'walkin': {
+      // お城の中を本丸へ (着いたらゲームオーバー)
+      const dx = nj.lx - nj.x, dz = nj.lz - nj.z, l = Math.hypot(dx, dz);
+      if (l < 3 || codeAt(nj.x, nj.z) === 4) { intrude(nj); break; }
+      nj.x += dx / l * CFG.walkIn * dt; nj.z += dz / l * CFG.walkIn * dt;
+      nj.y = terrainH(nj.x, nj.z); nj.m.position.set(nj.x, nj.y, nj.z); nj.m.rotation.set(0, Math.atan2(dx, dz), 0);
+      poseNinja(nj.m, 'walk', G.t * 1.5 + nj.id);
+      break;
+    }
     case 'walk': {
+      nj.walkT = (nj.walkT || 0) + dt;
       // ビルをよけた道: 歩く道の地図で、今いるます目より近いとなりへ
       const F = walkField();
       { const i = Math.floor(nj.x / F.C), j = Math.floor(nj.z / F.C), k = j * F.gw + i, d0 = F.dist[k];
         if (d0 >= 0) {
-          if (d0 <= 2 || codeAt(nj.x, nj.z) === 3 || codeAt(nj.x, nj.z) === 4) { escape(nj); break; }
+          // 内堀に着いた: 水に飛び込んで竹筒で石垣へ。土橋などで陸のままお城に入ったら本丸へ歩く
+          if (isWater(nj.x, nj.z) && nj.walkT > 3) { innerDive(nj); break; }
+          if (codeAt(nj.x, nj.z) === 3 || codeAt(nj.x, nj.z) === 4) { startWalkIn(nj); break; }
           let best = -1, bd = d0;
           for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) { const nk = (j + dj) * F.gw + i + di, dd = F.dist[nk]; if (dd >= 0 && dd < bd) { bd = dd; best = nk; } }
           if (best >= 0) { nj.lx = (best % F.gw + 0.5) * F.C; nj.lz = (((best / F.gw) | 0) + 0.5) * F.C; }
@@ -546,7 +560,7 @@ function updateNinja(nj, dt) {
       nj.y = nj.wy + s * (nj.H - nj.wy);
       nj.m.position.set(nj.x, nj.y - 0.3, nj.z);
       poseNinja(nj.m, nj.dote ? 'crawl' : 'climb', G.t);
-      if (s >= 1) intrude(nj);
+      if (s >= 1) { if (codeAt(nj.x, nj.z) === 4) intrude(nj); else startWalkIn(nj); }
       break;
     }
     case 'fall': {
@@ -670,7 +684,7 @@ function startRun(nj) {
 
 // 投げ銭か投げ輪が当たれば、それで終わり: お濠へドボン
 function hitNinja(nj, byLasso) {
-  if (!['roof', 'glide', 'bamboo', 'emerge', 'climb', 'swim1', 'emerge1', 'climbOut', 'run', 'walk'].includes(nj.state)) return;
+  if (!['roof', 'glide', 'bamboo', 'emerge', 'climb', 'swim1', 'emerge1', 'climbOut', 'run', 'walk', 'walkin'].includes(nj.state)) return;
   A.sfx('hit', 0.6, 1.3);
   const c = ninjaCenter(nj);
   G.captured++;
@@ -757,8 +771,19 @@ function escape(nj) {
   nj.state = 'gone'; scene.remove(nj.m); scene.remove(nj.bam); nj.marker.remove();
   G.escaped = (G.escaped || 0) + 1;
   A.sfx('bell', 0.5, 0.8);
-  if (G.escaped >= CFG.maxEscape) { G.intruder = { x: nj.x, z: nj.z, y: nj.y }; finish(false); }
-  else if (G.captured + G.escaped >= CFG.total) finish(true);
+  if (G.captured + G.escaped >= CFG.total) finish(true);
+}
+// 内堀に飛び込む
+function innerDive(nj) {
+  nj.outer = false; nj.state = 'dive'; nj.t = 0.9; nj.y = waterY(nj.x, nj.z);
+  nj.m.visible = false; splash(nj.x, nj.z, 1.6); A.dodon(); A.sfx('splash1', 0.8);
+}
+// 石垣を登ったあと (または土橋から) 本丸へ歩く
+function startWalkIn(nj) {
+  let best = null, bd = 1e18;
+  for (let j = 0; j < W.h; j += 4) for (let i = 0; i < W.w; i += 4) { if (W.code[j * W.w + i] !== 4) continue; const x = (i + 0.5) * W.res, z = (j + 0.5) * W.res, d = (x - nj.x) ** 2 + (z - nj.z) ** 2; if (d < bd) { bd = d; best = [x, z]; } }
+  if (!best || bd < 9) { intrude(nj); return; }
+  nj.lx = best[0]; nj.lz = best[1]; nj.state = 'walkin';
 }
 function intrude(nj) {
   if (G.state !== 'play') return;
@@ -786,7 +811,7 @@ function pickTarget(maxR, minR = 0) {
   const hp = heroPos();
   let best = null, bd = 1e9;
   for (const nj of G.ninjas) {
-    if (!['roof', 'glide', 'bamboo', 'emerge', 'climb', 'swim1', 'emerge1', 'climbOut', 'run', 'walk'].includes(nj.state)) continue;
+    if (!['roof', 'glide', 'bamboo', 'emerge', 'climb', 'swim1', 'emerge1', 'climbOut', 'run', 'walk', 'walkin'].includes(nj.state)) continue;
     const c = ninjaCenter(nj), d = c.distanceTo(hp);
     // 前にしか投げられない: 舳先の向きから左右 CFG.throwArc (度) の中にいる忍者だけ
     const ang = Math.abs(angDiff(Math.atan2(c.z - P.z, c.x - P.x), P.h));
@@ -855,7 +880,7 @@ function updateWeapons(dt) {
     } else c.v.y -= 9.8 * dt;
     c.p.addScaledVector(c.v, dt);
     c.m.position.copy(c.p); c.m.rotation.x += dt * 20; c.m.rotation.y += dt * 13;
-    if (c.tg && ['roof', 'glide', 'bamboo', 'emerge', 'climb', 'swim1', 'emerge1', 'climbOut', 'run', 'walk'].includes(c.tg.state) && ninjaCenter(c.tg).distanceTo(c.p) < 3) {
+    if (c.tg && ['roof', 'glide', 'bamboo', 'emerge', 'climb', 'swim1', 'emerge1', 'climbOut', 'run', 'walk', 'walkin'].includes(c.tg.state) && ninjaCenter(c.tg).distanceTo(c.p) < 3) {
       hitNinja(c.tg, false); c.life = 0;
       spark(c.p);
     }
@@ -867,7 +892,7 @@ function updateWeapons(dt) {
     l.t += dt;
     const s = l.done ? (l.caught && l.tg.state === 'fall' ? 1 : Math.max(0, 1 - (l.t - (l.relT || l.T)) / 0.35)) : Math.min(1, l.t / l.T);
     if (l.done && l.caught && l.tg.state !== 'fall' && !l.relT) l.relT = l.t;
-    if (!l.done) { l.from.copy(heroPos()); if (l.tg && ['roof', 'glide', 'bamboo', 'emerge', 'climb', 'swim1', 'emerge1', 'climbOut', 'run', 'walk'].includes(l.tg.state)) l.to.copy(ninjaCenter(l.tg)); }
+    if (!l.done) { l.from.copy(heroPos()); if (l.tg && ['roof', 'glide', 'bamboo', 'emerge', 'climb', 'swim1', 'emerge1', 'climbOut', 'run', 'walk', 'walkin'].includes(l.tg.state)) l.to.copy(ninjaCenter(l.tg)); }
     else if (l.caught && l.tg.state === 'fall') { l.from.copy(heroPos()); l.to.set(l.tg.x, l.tg.y + 2, l.tg.z); l.side *= 0.9; l.apex *= 0.9; }
     const pts = [];
     for (let i = 0; i < 24; i++) pts.push(bez(l, (i / 23) * s));
@@ -877,7 +902,7 @@ function updateWeapons(dt) {
       l.done = true;
       const tg = l.tg;
       // 距離が合っていれば当たり
-      if (tg && ['roof', 'glide', 'bamboo', 'emerge', 'climb', 'swim1', 'emerge1', 'climbOut', 'run', 'walk'].includes(tg.state)) {
+      if (tg && ['roof', 'glide', 'bamboo', 'emerge', 'climb', 'swim1', 'emerge1', 'climbOut', 'run', 'walk', 'walkin'].includes(tg.state)) {
         hitNinja(tg, true); l.caught = true;
       } else {
         if (l.to.y < 1) { splash(l.to.x, l.to.z, 0.6); A.sfx('splash0', 0.4); }
@@ -1327,34 +1352,25 @@ function updateNav() {
   }
   G.navStage = ninja ? 'ninja' : 'route';
   const R0 = routePoints();
-  if (!ninja && (G.wpi || 0) >= R0.length - 1 && Math.hypot(R0[R0.length - 1].x - P.x, R0[R0.length - 1].z - P.z) < 120) { el.style.display = 'none'; G.navT = null; return; }
   let tx, tz, label;
   if (G.navStage !== 'ninja') {
-    const R = routePoints();
-    let i = G.wpi || 0;
-    // 近づいたら次へ (先の点の方が近ければ飛ばす)
-    while (i < R.length - 1 && (Math.hypot(R[i].x - P.x, R[i].z - P.z) < 70 || Math.hypot(R[i + 1].x - P.x, R[i + 1].z - P.z) < Math.hypot(R[i].x - P.x, R[i].z - P.z))) i++;
-    G.wpi = i;
-    tx = R[i].x; tz = R[i].z;
-    // 次の点まで水の中の道をたどり、まっすぐ見通せる一番先を指す
-    const f = fieldTo(i);
-    let cc = cellOf(P.x, P.z);
-    if (cc >= 0 && f[cc] > 0) {
-      const path = [cc];
-      for (let k = 0; k < 80; k++) {
-        const wp = navi.warpOf.get(cc);
-        if (wp !== undefined && f[wp] >= 0 && f[wp] < f[cc]) break;
-        const cx = cc % W.w, cy = (cc / W.w) | 0;
-        let best = cc, bd = f[cc];
-        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const nb = (cy + dy) * W.w + cx + dx, dd = f[nb]; if (dd >= 0 && dd < bd) { bd = dd; best = nb; } }
-        if (best === cc) break;
-        cc = best; path.push(cc);
-      }
-      const clear = (x, z) => { const l = Math.hypot(x - P.x, z - P.z); for (let s2 = 0; s2 < l; s2 += 2) if (!isWater(P.x + (x - P.x) * s2 / l, P.z + (z - P.z) * s2 / l)) return false; return true; };
-      for (const q of path) if (clear(cellX(q), cellZ(q))) { tx = cellX(q); tz = cellZ(q); }
+    // 向かっている方向 (舳先の左右 50 度) にある、一番近いお濠・川・見附の名前
+    if (!G.navPts) G.navPts = MOAT_NAMES.map(([n, la, lo]) => { const [x, z] = ll(la, lo); return { n, x, z }; });
+    const here = moatName(P.x, P.z);
+    let best = null, bs = 1e18;
+    for (const q of G.navPts) {
+      if (q.n === here) continue;
+      const dx = q.x - P.x, dz = q.z - P.z, d = Math.hypot(dx, dz);
+      if (d < 120 || d > 2500) continue;
+      const ang = Math.abs(angDiff(Math.atan2(dz, dx), P.h));
+      if (ang > 50 * Math.PI / 180) continue;
+      const sc = d * (1 + ang);
+      if (sc < bs) { bs = sc; best = q; }
     }
-    const dn = Math.hypot(R[i].x - P.x, R[i].z - P.z);
-    label = `${R[i].n}（約${dn >= 1000 ? (Math.round(dn / 100) / 10) + 'km' : Math.round(dn / 10) * 10 + 'm'}）`;
+    if (!best) { el.style.display = 'none'; G.navT = null; return; }
+    tx = best.x; tz = best.z;
+    const dn = Math.hypot(tx - P.x, tz - P.z);
+    label = `${best.n}（約${dn >= 1000 ? (Math.round(dn / 100) / 10) + 'km' : Math.round(dn / 10) * 10 + 'm'}）`;
   } else {
     const best = ninja;
     tx = best.x; tz = best.z;
@@ -1440,13 +1456,13 @@ function showResult() {
   G.state = 'result';
   $('hud').classList.add('hidden');
   $('result').classList.remove('hidden');
-  $('rHead').textContent = win ? '天晴れ！ 全員御用' : '曲者 侵入！';
+  $('rHead').textContent = win ? '天晴れ！ 全員御用' : '本丸に曲者！';
   const n = G.captured;
   const title = win ? (G.t < 330 ? '江戸一番の名同心' : '名同心') : n >= 15 ? '腕利きの同心' : n >= 10 ? '同心' : n >= 5 ? '下っ引き' : '見習い';
   $('rTitle').textContent = `${G.name}　「${title}」`;
   $('rCap').textContent = `${n} / ${CFG.total} 人`;
   $('rTime').textContent = `${Math.floor(G.t / 60)}分${Math.floor(G.t % 60)}秒`;
-  $('rNote').textContent = win ? `取り逃し ${G.escaped || 0} 人。江戸城は今日も安泰。` : `${CFG.maxEscape} 人に外堀を渡られた……`;
+  $('rNote').textContent = win ? '江戸城は今日も安泰。' : '本丸に忍び込まれた……';
 }
 
 $('btnStart').onclick = startGame;

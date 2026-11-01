@@ -126,7 +126,8 @@ function makeGroundTextures() {
   tex.anisotropy = 4;
   tex.needsUpdate = true;
   const lvData = new Uint8Array(n);
-  for (let k = 0; k < n; k++) lvData[k] = W.lv[k] * 63;
+  // 土手の所は印を足す (斜面を石垣ではなく草にする)
+  for (let j = 0; j < W.h; j++) for (let i = 0; i < W.w; i++) { const k = j * W.w + i; lvData[k] = W.lv[k] * 63 + (W.lv[k] > 0 && isDote((i + 0.5) * W.res, (j + 0.5) * W.res) ? 30 : 0); }
   const lvTex = new THREE.DataTexture(lvData, W.w, W.h, THREE.RedFormat);
   lvTex.unpackAlignment = 1;
   lvTex.magFilter = THREE.LinearFilter; lvTex.minFilter = THREE.LinearFilter; lvTex.generateMipmaps = false;
@@ -185,13 +186,14 @@ export function buildGround(scene) {
       .replace('#include <common>', '#include <common>\nuniform sampler2D lvMap; varying float vUp;')
       .replace('#include <map_fragment>', `
         float lvv = texture2D(lvMap, vMapUv).r * 255.0 / 63.0;
-        if (lvv < 0.5) discard;
+        if (lvv < 0.3) discard;
         #include <map_fragment>
         // お城の急な斜面 (石垣) は石の色、まちの急な斜面 (崖・土手) は草の色
         // 斜面: お城は石垣の色、まちの斜面 (土手・崖) は草の緑
-        float steep = lvv > 2.5 ? smoothstep(0.82, 0.6, vUp) : smoothstep(0.985, 0.9, vUp);
+        bool doteC = fract(lvv) > 0.25 && fract(lvv) < 0.75;
+        float steep = (lvv > 2.5 && !doteC) ? smoothstep(0.82, 0.6, vUp) : smoothstep(0.985, 0.9, vUp);
         vec3 stoneC = vec3(0.52, 0.5, 0.46) * (0.85 + 0.15 * fract(sin(dot(floor(vMapUv * 4000.0), vec2(12.9898, 78.233))) * 43758.5453));
-        diffuseColor.rgb = mix(diffuseColor.rgb, lvv > 2.5 ? stoneC : vec3(0.32, 0.45, 0.25), steep);`);
+        diffuseColor.rgb = mix(diffuseColor.rgb, (lvv > 2.5 && !doteC) ? stoneC : vec3(0.32, 0.45, 0.25), steep);`);
   };
   for (const g of geos) { const mesh = new THREE.Mesh(g, m); mesh.matrixAutoUpdate = false; scene.add(mesh); CHUNKS.push(mesh); }
   // 範囲の外は 4 枚で囲む

@@ -219,6 +219,13 @@ def main():
         d2.line(pts, fill=0, width=int(round(width / RES)), joint='curve')
         for x, y in pts: d2.ellipse([x - r, y - r, x + r, y + r], fill=0)
     B2 = np.array(img2); keep = (A == 3) | (A == 4); B2[keep] = A[keep]; A = B2
+    # 今の水面のデータで細くとぎれている所を広げる (半蔵濠の北の端)
+    img3 = Image.fromarray(A); d3 = ImageDraw.Draw(img3)
+    for line, width in [([(35.6829, 139.7448), (35.6838, 139.7450), (35.6846, 139.7452)], 24)]:
+        pts = [px(*p) for p in line]; r = width / RES / 2
+        d3.line(pts, fill=0, width=int(round(width / RES)), joint='curve')
+        for x, y in pts: d3.ellipse([x - r, y - r, x + r, y + r], fill=0)
+    A = np.array(img3)
     # 川の中の小さな陸 (橋脚・中州のかけら) を水にする: 水を 2 画素ふくらませてから縮める (お城の陸はそのまま)
     from PIL import ImageFilter
     wm = Image.fromarray(np.where(A == 0, 255, 0).astype(np.uint8))
@@ -331,11 +338,11 @@ def main():
             warps.append([round(xa * RES + RES / 2, 1), round(ya * RES + RES / 2, 1), round(xb * RES + RES / 2, 1), round(yb * RES + RES / 2, 1)])
             print('outer warp', (la0, lo0), '->', (la1, lo1), round(best[0] ** 0.5 * RES), 'm')
     # 実際はつながっていない外堀どうし (真田濠 ↔ 弁慶濠・赤坂見附) には必ずワープを置く
-    for (la0, lo0), (la1, lo1) in [((35.6818, 139.7322), (35.6790, 139.7352))]:
+    for (la0, lo0), (la1, lo1) in [((35.6818, 139.7322), (35.6790, 139.7352)), ((35.6860, 139.7456), (35.6845, 139.7456)), ((35.6798, 139.7612), (35.6779, 139.7612))]:
         a, b = snapc(la0, lo0), snapc(la1, lo1)
         if a and b and a != b:
             warps.append([round(a[1] * RES + RES / 2, 1), round(a[0] * RES + RES / 2, 1), round(b[1] * RES + RES / 2, 1), round(b[0] * RES + RES / 2, 1)])
-            print('forced warp', (la0, lo0), (la1, lo1))
+            print('forced warp', (la0, lo0), (la1, lo1), 'labs', lab[a], lab[b], round(math.hypot(a[0]-b[0], a[1]-b[1]) * RES), 'm')
     print('warps', len(warps), 'unjoined', [(c['id'], c['n']) for c in moats if c['id'] not in joined])
     Image.fromarray(A).save(os.path.join(D, 'map.png'), optimize=True)
     world = {'W': W, 'E': E, 'S': S, 'N': N, 'KX': KX, 'KZ': KZ, 'res': RES, 'w': w, 'h': h,

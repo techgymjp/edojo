@@ -6,7 +6,7 @@ import { City } from './tokyo/city.js';
 import { CITY } from './tokyo/city-data.js';
 import { ROADS, HIGHWAYS } from './tokyo/road-data.js';
 import { SHUTOKO } from './shutoko-data.js';
-import { addTokyoTower, addDiet, addTechGym, addTokyoDome, addSkytree, addFuji, addDistant } from './tokyo/landmarks.js';
+import { addTokyoTower, addDiet, addTechGym, addTokyoDome, addBudokan, addSkytree, addFuji, addDistant } from './tokyo/landmarks.js';
 import { addOchanomizu, addTokyoStation, addAkasaka, addRailways, addAkibaSigns, addNewOtani, addYotsuyaKudan, addGinzaNihonbashi, addUeno, addSensoji, addAsahi, addUenoAsakusa } from './tokyo/landmarks2.js';
 import { W, codeAt, isWater, LEVEL_H, terrainH, waterY, nearWaterGrid } from './world.js';
 import { mergeStatic } from './merge.js';
@@ -211,6 +211,7 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
   addDiet(root, city);
   const techgym = addTechGym(root, city);
   const dome = addTokyoDome(root, city);
+  // 日本武道館は北の丸 (内堀の内側 = 江戸時代の江戸城) にあるので置かない
   for (const f of [addSensoji, addAsahi, addUeno, addOchanomizu, addTokyoStation, addAkasaka, addAkibaSigns, addNewOtani, addYotsuyaKudan, addUenoAsakusa, addGinzaNihonbashi]) {
     try { f(root, city); } catch (e) { console.warn(f.name, e); }
   }
