@@ -15,6 +15,8 @@ export function initAudio() {
     master = ctx.createGain(); master.gain.value = muted ? 0 : 0.8; master.connect(ctx.destination);
     bgmGain = ctx.createGain(); bgmGain.gain.value = 0.55; bgmGain.connect(master);
     if (pendingBgm) setTimeout(() => playBgm(pendingBgm), 0);
+    // 曲を順に書き出しておく
+    setTimeout(async () => { for (const n of ['bgmTitle', 'bgmSea', 'bgmBattle', 'bgmClear']) { makeSongBuffer(n); try { await songMaking.get(n); } catch (e) {} } }, 300);
     for (const [k, f] of Object.entries(FILES)) {
       fetch(`assets/audio/${f}.mp3`).then((r) => r.arrayBuffer()).then((a) => ctx.decodeAudioData(a)).then((b) => {
         buf.set(k, b);
@@ -263,12 +265,42 @@ function playStep(S, i, t, stepT) {
   if (S.timp) for (const e of S.timp) if (e[0] === i) timpani(t, hz(S.sc, e[1], 73.42), 0.45, e[2] || 0);
 }
 let bgmSrc = null, bgmName = null, pendingBgm = null, seq = null;
+// 曲は一度だけ音のデータに書き出して (OfflineAudioContext)、あとはそれを繰り返し鳴らす (スマホで音が途切れないように軽く)
+const songBuf = new Map(), songMaking = new Map();
+function songLength(S) { let t = 0; for (let k = 0; k < S.len; k++) t += 60 / S.bpm / 2 * 2 * (k % 2 === 0 ? S.swing : 1 - S.swing); return t; }
+function makeSongBuffer(name) {
+  if (songBuf.has(name) || songMaking.has(name) || !ctx) return;
+  const S = SONGS[name], L = songLength(S), tail = S.loop ? 0 : 2.5, sr = 32000;
+  const off = new OfflineAudioContext(1, Math.ceil((L + tail + (S.loop ? 1.5 : 0)) * sr), sr);
+  const keep = [ctx, bgmGain, _noise];
+  ctx = off; bgmGain = off.createGain(); bgmGain.gain.value = 1; bgmGain.connect(off.destination); _noise = null;
+  const stepT = 60 / S.bpm / 2;
+  try {
+    for (let k = 0, t = 0; k < S.len; k++) { playStep(S, k, t, stepT); t += stepT * 2 * (k % 2 === 0 ? S.swing : 1 - S.swing); }
+  } finally { [ctx, bgmGain, _noise] = keep; }
+  const p = off.startRendering().then((b) => {
+    if (S.loop) {
+      // 1 周より後ろにはみ出した音 (伸ばした音の余韻) を頭に重ねて、つなぎ目で途切れないように
+      const d = b.getChannelData(0), n = Math.ceil(L * sr), out = ctx.createBuffer(1, n, sr), o = out.getChannelData(0);
+      for (let i = 0; i < n; i++) o[i] = d[i] + (i + n < d.length ? d[i + n] : 0);
+      songBuf.set(name, out);
+    } else songBuf.set(name, b);
+    songMaking.delete(name);
+    if (pendingBgm === name && bgmName === name && seq) { stopBgm(); playBgm(name); }
+  }).catch(() => songMaking.delete(name));
+  songMaking.set(name, p);
+}
 export function playBgm(name) {
   if (bgmName === name && (bgmSrc || seq)) return;
   pendingBgm = name;
   if (!ctx) return;
   stopBgm(); pendingBgm = name;
   const S = SONGS[name];
+  if (S && songBuf.has(name)) {
+    const s = ctx.createBufferSource(); s.buffer = songBuf.get(name); s.loop = !!S.loop; s.connect(bgmGain); s.start();
+    bgmSrc = s; bgmName = name; return;
+  }
+  if (S) makeSongBuffer(name);
   if (!S) {
     if (!buf.has(name)) return;
     const s = ctx.createBufferSource(); s.buffer = buf.get(name); s.loop = true; s.connect(bgmGain); s.start();
@@ -348,3 +380,4 @@ export function gun(vol = 0.5) {
   if (buf.has(k)) { sfx(k, vol * 1.6, 0.95 + Math.random() * 0.1); return; }
   noiseHit(0.35, 500, 0.6, vol, 'lowpass'); noiseHit(0.05, 3000, 1, vol * 0.6, 'bandpass');
 }
+export function bgmStatus() { return { ready: [...songBuf.keys()], playing: bgmName, buffer: !!bgmSrc }; }

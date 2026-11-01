@@ -47,8 +47,10 @@ export const CFG = {
 
 // ---------- 描画の準備 ----------
 const canvas = $('game');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 1.25));
+// スマホ (指で触る画面) は軽くする: アンチエイリアスなし、解像度を下げる、映り込みを減らす、遠くを描かない
+const MOBILE = matchMedia('(pointer: coarse)').matches;
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: !MOBILE, powerPreference: 'high-performance' });
+renderer.setPixelRatio(MOBILE ? Math.min(devicePixelRatio, 0.9) : Math.min(devicePixelRatio, 1.25));
 renderer.setSize(innerWidth, innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 const scene = new THREE.Scene();
@@ -139,7 +141,7 @@ const holdBtn = (id, on, off) => {
   b.addEventListener('mouseup', () => off && off());
   b.addEventListener('mouseleave', () => off && off());
 };
-document.getElementById('btnCam')?.addEventListener('click', (e) => { e.stopPropagation(); toggleCam(); });
+holdBtn('btnCam', () => toggleCam());
 holdBtn('btnJump', () => { I.tJump = true; }, () => { I.tJump = false; });
 holdBtn('btnLasso', () => I.pressed.add('Lasso'));
 holdBtn('btnCoin', () => I.pressed.add('Coin'));
@@ -1864,10 +1866,10 @@ function loop(now) {
     updateSky();
   }
   water.update(now / 1000, skyMat.uniforms.hor.value, scene.fog, camera);
-  cullChunks(camera.position, 1500);
+  cullChunks(camera.position, MOBILE ? 1000 : 1500);
   tokyo.update(dt, now / 1000, modern.mat.userData.night.value, scene.fog.color, camera);
   // 見える範囲の街のタイルを組み立てる
-  { const t0 = performance.now(); while (tokyo.stream(camera.position, 1200, 1) > 0 && performance.now() - t0 < 4); }
+  { const t0 = performance.now(); while (tokyo.stream(camera.position, MOBILE ? 900 : 1200, 1) > 0 && performance.now() - t0 < 4); }
   for (const w of warps) for (const e of [w.a, w.b]) { e.disc.rotation.z = now / 400; e.beam.visible = Math.hypot(camera.position.x - e.x, camera.position.z - e.z) > 25; }
   I.pressed.clear();
   // 建物の透かし: 遊んでいるときだけ (カメラ → 小舟の主人公)
@@ -1877,7 +1879,7 @@ function loop(now) {
   const cb = CUT.boat.value.y; CUT.boat.value.y = -1e5;
   // 映り込みは 2 フレームに 1 回 (軽くする)
   // 水面の映り込み (3 フレームに 1 回、低い解像度で)
-  if ((G.frame = (G.frame || 0) + 1) % 3 === 0) water.reflect(renderer, scene, camera, (G.state === 'play' || G.state === 'ending') ? waterY(P.x, P.z) : undefined);
+  if ((G.frame = (G.frame || 0) + 1) % (MOBILE ? 8 : 3) === 0) water.reflect(renderer, scene, camera, (G.state === 'play' || G.state === 'ending') ? waterY(P.x, P.z) : undefined);
   CUT.boat.value.y = cb;
   renderer.render(scene, camera);
 }

@@ -56,7 +56,7 @@ h1 { font-family: "Yuji Syuku", serif; font-size: clamp(52px, 13vw, 96px); line-
 .cap b { font-size: 40px; color: #ffd98a; }
 .cap small { font-size: 18px; opacity: 0.85; }
 .time { font-size: 18px; opacity: 0.85; }
-.hud-right { position: absolute; top: max(10px, env(safe-area-inset-top)); right: 12px; pointer-events: auto; }
+.hud-right { position: absolute; top: max(10px, env(safe-area-inset-top)); right: 12px; pointer-events: auto; z-index: 3; } /* 指でなぞる所 (joyzone) より上に */
 .mini-btn { font: inherit; font-weight: 700; width: 42px; height: 42px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.4); background: rgba(0,0,0,0.45); color: #fff; font-size: 16px; cursor: pointer; }
 #alert { position: absolute; top: 150px; left: 50%; transform: translateX(-50%); background: rgba(150,10,10,0.82); padding: 8px 18px; border-radius: 8px; font-size: 22px; font-weight: 700; opacity: 0; transition: opacity 0.3s; white-space: nowrap; max-width: 94vw; overflow: hidden; text-overflow: ellipsis; }
 #alert.show { opacity: 1; }
