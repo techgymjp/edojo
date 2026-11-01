@@ -23,10 +23,10 @@ export const CFG = {
   gap0: 17, gap1: 9,  // 出てくる間隔 (最初 → 最後)
   roofTime: [0.3, 0.6], // ビルの上で構える時間
   glideSpeed: 40,     // ムササビの術の速さ (m/s)
-  swim: 2.3,          // 竹筒 (水遁の術) の速さ
+  swim: 1.1,          // 竹筒 (水遁の術) の速さ
   climbStone: 0.55,   // 石垣を登る速さ (m/s)
   climbDote: 0.8,     // 土手を這い上がる速さ
-  climbGrass: 1.4,    // 外堀の草の岸をよじ登る速さ (m/s)。石垣は climbStone で遅い
+  climbGrass: 0.9,    // 外堀の草の岸をよじ登る速さ (m/s)。石垣は climbStone で遅い
   run: 9,             // 外堀を越えたあと、ビルの屋根伝いに走る速さ (m/s)
   hp: 3,              // 投げ銭で何枚当てれば捕まるか (竹筒・登っている忍者)
   coinRange: 40, coinCd: 0.75, coinSpeed: 70, // ぜに: 40m 以内の一番近い忍者
