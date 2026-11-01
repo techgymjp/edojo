@@ -1272,7 +1272,7 @@ function updateHud(dt) {
   updateNav();
   $('hCap').textContent = G.captured;
   $('hTotal').textContent = CFG.total;
-  $('hLeft').textContent = CFG.total - G.captured;
+
   // 江戸の時刻 (2 時間ずつ)
   const KOKU = ['暁九つ', '暁八つ', '暁七つ', '明け六つ', '朝五つ', '昼四つ', '昼九つ', '昼八つ', '夕七つ', '暮れ六つ', '宵五つ', '夜四つ'];
   $('hTime').textContent = KOKU[Math.floor(((hourNow() + 1) % 24) / 2)];
