@@ -168,7 +168,7 @@ async function boot() {
     console.log('merge castle', mergeStatic(scene, scene.children.filter((c) => !before.has(c))));
     warps = buildWarps(scene);
     navi = buildNav();
-    fw = new Fireworks(scene, 2.5, false);
+    fw = new Fireworks(scene, 1.6, true); // 昼でも見えるように普通に重ねて描く
     boat = makeBoat();
     boat.scale.setScalar(1.5);
     scene.add(boat);
@@ -662,6 +662,8 @@ function hitNinja(nj, byLasso) {
   const c = ninjaCenter(nj);
   G.captured++;
   A.hyoshigi(); A.sfx('kill', 0.5);
+  // 仕留めたら花火 (小舟の前の空に)
+  { const d = 200, wy = waterY(P.x, P.z); fw.show(P.x + Math.cos(P.h) * d, wy - 50, P.z + Math.sin(P.h) * d, 3, false, 0.35, 90); }
   nj.m.visible = true; nj.bam.visible = false; nj.marker.style.display = 'none';
   poseNinja(nj.m, 'stun', G.t);
   if (['bamboo', 'swim1', 'dive'].includes(nj.state)) {
@@ -1448,4 +1450,4 @@ requestAnimationFrame(loop);
 boot();
 window.__G = G; window.__P = P; window.__CFG = CFG; window.__ll = ll; window.__gh = groundH;
 window.__tokyo = () => tokyo; window.__W = W; window.__renderer = renderer; window.__scene = scene;
-window.__dbg = { spawnNinja, throwCoins, throwLasso, startGame, navi: () => navi, isWater, cellOf, step, updateNav };
+window.__dbg = { hitNinja, spawnNinja, throwCoins, throwLasso, startGame, navi: () => navi, isWater, cellOf, step, updateNav };
