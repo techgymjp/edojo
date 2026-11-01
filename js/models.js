@@ -128,7 +128,7 @@ export function makeSamurai(kind = 'hero') {
   for (const sx of [-1, 1]) {
     const w = box(g, 0.42, 0.06, 0.34, sx * 0.3, 1.42, 0, kata); // 肩衣の張った肩
     w.rotation.z = sx * -0.12;
-    box(g, 0.2, 0.52, 0.31, sx * 0.13, 0.92, 0.005, kata); // 前の身頃
+    box(g, 0.2, 0.52, 0.29, sx * 0.13, 0.92, 0.016, kata); // 前の身頃 (背中で着物の面と重ならないよう、少し前へ)
   }
   // 襟
   box(g, 0.1, 0.4, 0.02, 0, 1.06, 0.16, M(0xf4f0e6));
