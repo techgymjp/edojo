@@ -60,6 +60,21 @@ function bil(arr, x, z) {
 export function terrainH(x, z) { return bil(W.T, x, z); }
 export function waterY(x, z) { return bil(W.WL, x, z); }
 export function groundH(x, z) { return isWater(x, z) ? waterY(x, z) : terrainH(x, z); }
+// 水 (川・お濠) から r m 以内か (30m 格子で調べる)。小舟から見える所だけ建物を描くのに使う
+let NW = null;
+export function nearWaterGrid(x, z, r = 180) {
+  const C = 30;
+  if (!NW || NW.r !== r) {
+    const gw = Math.ceil(W.sizeX / C), gh = Math.ceil(W.sizeZ / C), a = new Uint8Array(gw * gh);
+    for (let j = 0; j < W.h; j += 2) for (let i = 0; i < W.w; i += 2) if (W.code[j * W.w + i] === 0) a[Math.floor(j * W.res / C) * gw + Math.floor(i * W.res / C)] = 1;
+    const R = Math.ceil(r / C), b = new Uint8Array(gw * gh), c = new Uint8Array(gw * gh);
+    for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) { let v = 0; for (let d = -R; d <= R && !v; d++) { const ii = i + d; if (ii >= 0 && ii < gw && a[j * gw + ii]) v = 1; } b[j * gw + i] = v; }
+    for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) { let v = 0; for (let d = -R; d <= R && !v; d++) { const jj = j + d; if (jj >= 0 && jj < gh && b[jj * gw + i]) v = 1; } c[j * gw + i] = v; }
+    NW = { r, gw, gh, c };
+  }
+  const i = Math.floor(x / C), j = Math.floor(z / C);
+  return i >= 0 && j >= 0 && i < NW.gw && j < NW.gh && NW.c[j * NW.gw + i] === 1;
+}
 // 昔の谷のしかけ (今は標高から谷ができるので使わない)
 export function gorgeDepth() { return 0; }
 export function inEdo(x, z) { const c = codeAt(x, z); return c >= 1 && c <= 4; }
@@ -128,27 +143,38 @@ function quadXZ(x0, z0, x1, z1, y) {
   return g;
 }
 
+// 地面と水面のかたまり (遠くのものは描かない)
+export const CHUNKS = [];
+export function cullChunks(cam, R = 2300) {
+  for (const m of CHUNKS) { const c = m.geometry.boundingSphere.center; m.visible = Math.hypot(c.x - cam.x, c.z - cam.z) - m.geometry.boundingSphere.radius < R; }
+}
 // 地面: 国土地理院の標高で起伏を付けたメッシュ (6m 格子)。水の所は描かない。お城の急な斜面は石垣の色
 export function buildGround(scene) {
   const { tex, lvTex } = makeGroundTextures();
-  const G = 10, nx = Math.ceil(W.sizeX / G) + 1, nz = Math.ceil(W.sizeZ / G) + 1;
-  const pos = new Float32Array(nx * nz * 3), uv = new Float32Array(nx * nz * 2);
-  for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
-    const x = Math.min(W.sizeX, i * G), z = Math.min(W.sizeZ, j * G), k = j * nx + i;
-    pos[k * 3] = x; pos[k * 3 + 1] = terrainH(x, z); pos[k * 3 + 2] = z;
-    uv[k * 2] = x / W.sizeX; uv[k * 2 + 1] = z / W.sizeZ;
+  // 640m 四方のかたまりに分ける (見えているかたまりだけ描く)
+  const G = 10, CH = 64, nx = Math.ceil(W.sizeX / G) + 1, nz = Math.ceil(W.sizeZ / G) + 1;
+  const geos = [];
+  for (let cj = 0; cj < nz - 1; cj += CH) for (let ci = 0; ci < nx - 1; ci += CH) {
+    const ex = Math.min(nx - 1, ci + CH), ez = Math.min(nz - 1, cj + CH), cw = ex - ci + 1, chh = ez - cj + 1;
+    const pos = new Float32Array(cw * chh * 3), uv = new Float32Array(cw * chh * 2);
+    for (let j = 0; j < chh; j++) for (let i = 0; i < cw; i++) {
+      const x = Math.min(W.sizeX, (ci + i) * G), z = Math.min(W.sizeZ, (cj + j) * G), k = j * cw + i;
+      pos[k * 3] = x; pos[k * 3 + 1] = terrainH(x, z); pos[k * 3 + 2] = z;
+      uv[k * 2] = x / W.sizeX; uv[k * 2 + 1] = z / W.sizeZ;
+    }
+    const idx = [];
+    for (let j = 0; j < chh - 1; j++) for (let i = 0; i < cw - 1; i++) {
+      const a = j * cw + i, b = a + 1, c = a + cw, d = c + 1;
+      idx.push(a, c, b, b, c, d);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    g.setIndex(idx);
+    g.computeVertexNormals();
+    g.computeBoundingSphere();
+    geos.push(g);
   }
-  const idx = new Uint32Array((nx - 1) * (nz - 1) * 6);
-  let q = 0;
-  for (let j = 0; j < nz - 1; j++) for (let i = 0; i < nx - 1; i++) {
-    const a = j * nx + i, b = a + 1, c = a + nx, d = c + 1;
-    idx[q++] = a; idx[q++] = c; idx[q++] = b; idx[q++] = b; idx[q++] = c; idx[q++] = d;
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
-  g.setIndex(new THREE.BufferAttribute(idx, 1));
-  g.computeVertexNormals();
   const m = new THREE.MeshLambertMaterial({ map: tex });
   m.customProgramCacheKey = () => 'terrain';
   m.onBeforeCompile = (sh) => {
@@ -166,9 +192,7 @@ export function buildGround(scene) {
         vec3 stoneC = vec3(0.52, 0.5, 0.46) * (0.85 + 0.15 * fract(sin(dot(floor(vMapUv * 4000.0), vec2(12.9898, 78.233))) * 43758.5453));
         diffuseColor.rgb = mix(diffuseColor.rgb, lvv > 2.5 ? stoneC : vec3(0.32, 0.45, 0.25), steep);`);
   };
-  const mesh = new THREE.Mesh(g, m);
-  mesh.matrixAutoUpdate = false;
-  scene.add(mesh);
+  for (const g of geos) { const mesh = new THREE.Mesh(g, m); mesh.matrixAutoUpdate = false; scene.add(mesh); CHUNKS.push(mesh); }
   // 範囲の外は 4 枚で囲む
   const om = new THREE.MeshLambertMaterial({ color: 0x6e7076 }), y = 2, F = 6000, X = W.sizeX, Z = W.sizeZ;
   for (const [x0, z0, x1, z1] of [[-F, -F, X + F, 0], [-F, Z, X + F, Z + F], [-F, 0, 0, Z], [X, 0, X + F, Z]]) scene.add(new THREE.Mesh(quadXZ(x0, z0, x1, z1, y), om));
@@ -427,24 +451,25 @@ export function buildWater(scene) {
     uniforms: {
       tReflect: { value: rt.texture }, texMat: { value: new THREE.Matrix4() }, time: { value: 0 },
       color: { value: new THREE.Color(0x24525e) }, fogColor: { value: new THREE.Color() }, fogNear: { value: 300 }, fogFar: { value: 2000 },
-      camPos: { value: new THREE.Vector3() }, strength: { value: 0.55 },
+      camPos: { value: new THREE.Vector3() }, strength: { value: 0.55 }, useRefl: { value: 0 }, skyCol: { value: new THREE.Color(0x8090a8) },
       gz: { value: new THREE.Vector4() }, gx: { value: new THREE.Vector4() }, isGorge: { value: 0 },
     },
     vertexShader: `uniform mat4 texMat; varying vec4 vR; varying vec3 vW; varying float vDepth;
       void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; vR = texMat * w;
         vec4 mv = viewMatrix * w; vDepth = -mv.z; gl_Position = projectionMatrix * mv; }`,
     fragmentShader: `uniform sampler2D tReflect; uniform float time; uniform vec3 color; uniform vec3 fogColor; uniform float fogNear; uniform float fogFar; uniform vec3 camPos; uniform float strength;
-      varying vec4 vR; varying vec3 vW; varying float vDepth; uniform vec4 gx; uniform vec4 gz; uniform float isGorge;
+      varying vec4 vR; varying vec3 vW; varying float vDepth; uniform vec4 gx; uniform vec4 gz; uniform float isGorge; uniform float useRefl; uniform vec3 skyCol;
       void main(){
         // お茶の水の谷の所は、低い水面 (別の面) にまかせる
         vec2 p = vW.xz;
         float w1 = sin(p.x * 0.35 + time * 1.3) + sin(p.y * 0.42 - time * 1.1) + sin((p.x + p.y) * 0.9 + time * 2.1) * 0.5;
         float w2 = cos(p.y * 0.31 + time * 1.2) + cos(p.x * 0.47 + time * 0.9) + cos((p.x - p.y) * 1.1 - time * 1.7) * 0.5;
         vec4 r = vR; r.xy += vec2(w1, w2) * 0.012 * r.w;
-        vec3 refl = texture2DProj(tReflect, r).rgb;
+        // 映り込みは切ってある (軽くするため)。空の色をゆらして映す
+        vec3 refl = useRefl > 0.5 ? texture2DProj(tReflect, r).rgb : skyCol * (0.85 + 0.15 * (w1 * 0.25 + 0.5));
         vec3 v = normalize(camPos - vW);
         float fres = 0.25 + 0.75 * pow(1.0 - max(v.y, 0.0), 3.0);
-        vec3 c = mix(color, refl, clamp(fres * strength + 0.1, 0.0, 0.6));
+        vec3 c = mix(color, refl, clamp(fres * strength + 0.05, 0.0, 0.35));
         c += vec3(0.04) * (w1 * 0.5 + 0.5) * (1.0 - fres);
         float f = smoothstep(fogNear, fogFar, vDepth);
         gl_FragColor = vec4(mix(c, fogColor, f), 1.0);
@@ -460,17 +485,26 @@ export function buildWater(scene) {
     if (vid[k] < 0) { const x = Math.min(W.sizeX, i * G), z = Math.min(W.sizeZ, j * G); vid[k] = pos.length / 3; pos.push(x, Math.min(waterY(x, z), terrainH(x, z) - 0.3), z); }
     return vid[k];
   };
+  // 640m 四方のかたまりごとに
+  const CHW = 107, chunkIdx = new Map();
   for (let j = 0; j < nz - 1; j++) for (let i = 0; i < nx - 1; i++) {
     if (!wet(i + 0.5, j + 0.5)) continue;
     const a = V(i, j), b = V(i + 1, j), c = V(i, j + 1), d = V(i + 1, j + 1);
-    idx.push(a, c, b, b, c, d);
+    const key = Math.floor(j / CHW) * 1000 + Math.floor(i / CHW);
+    if (!chunkIdx.has(key)) chunkIdx.set(key, []);
+    chunkIdx.get(key).push(a, c, b, b, c, d);
   }
-  const wg = new THREE.BufferGeometry();
-  wg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  wg.setIndex(idx);
-  const mesh = new THREE.Mesh(wg, mat);
-  mesh.frustumCulled = false;
-  scene.add(mesh);
+  const posAttr = new THREE.Float32BufferAttribute(pos, 3);
+  const meshes = [];
+  for (const ix of chunkIdx.values()) {
+    const wg = new THREE.BufferGeometry();
+    wg.setAttribute('position', posAttr);
+    wg.setIndex(ix);
+    wg.computeBoundingSphere();
+    const m = new THREE.Mesh(wg, mat); m.matrixAutoUpdate = false;
+    scene.add(m); meshes.push(m); CHUNKS.push(m);
+  }
+  const mesh = { set visible(v) { for (const m of meshes) m.visible = v; } };
   const gmesh = { visible: true };
   const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
   const mirrorCam = new THREE.PerspectiveCamera();
@@ -480,7 +514,13 @@ export function buildWater(scene) {
   let mirrorY = null;
   return {
     mesh,
-    update(t) { mat.uniforms.time.value = t; },
+    update(t, sky, fog, cam) {
+      const u = mat.uniforms;
+      u.time.value = t;
+      if (sky) u.skyCol.value.copy(sky);
+      if (fog) { u.fogColor.value.copy(fog.color); u.fogNear.value = fog.near; u.fogFar.value = fog.far; }
+      if (cam) u.camPos.value.copy(cam.position);
+    },
     // 水面を鏡にして、カメラを上下反転した所から景色を描く
     reflect(renderer, scene, camera, level) {
       const w = Math.max(64, Math.floor(renderer.domElement.width * rScale)), h = Math.max(64, Math.floor(renderer.domElement.height * rScale));

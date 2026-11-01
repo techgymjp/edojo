@@ -1,6 +1,6 @@
 // 風雲江戸城: 起動・入力・小舟・忍者・投げ銭と投げ輪・HUD
 import * as THREE from '../vendor/three.module.min.js';
-import { W, loadWorld, buildGround, buildWalls, buildWater, isWater, codeAt, groundH, cellOf, ll, isDote, LEVEL_H, waterY, terrainH } from './world.js';
+import { W, loadWorld, buildGround, buildWalls, buildWater, cullChunks, isWater, codeAt, groundH, cellOf, ll, isDote, LEVEL_H, waterY, terrainH, nearWaterGrid } from './world.js';
 import { buildTown, buildModern, buildCastle, buildWarps, buildBalloon, moatName, labelSprite } from './edo.js';
 import { makeBoat, animateBoat, makeNinja, poseNinja, makeBamboo, makeCoin } from './models.js';
 import * as A from './audio.js';
@@ -155,8 +155,8 @@ async function boot() {
     const bld = await fetch('data/bld.json').then((r) => r.json());
     const covered = new Set();
     for (const r of tokyo.roofs) covered.add(Math.floor(r.x / 120) * 1000 + Math.floor(r.z / 120));
-    for (const bd of tokyo.city.bld) if (bd.plateau) covered.add(Math.floor((bd.cx + tokyo.OX) / 120) * 1000 + Math.floor((bd.cz + tokyo.OZ) / 120));
-    modern = buildModern(scene, bld.filter(([h, cx, cz]) => !covered.has(Math.floor(cx / 120) * 1000 + Math.floor(cz / 120))));
+    for (const bd of tokyo.city.bld) if (bd.plateau || bd.far) covered.add(Math.floor((bd.cx + tokyo.OX) / 120) * 1000 + Math.floor((bd.cz + tokyo.OZ) / 120));
+    modern = buildModern(scene, bld.filter(([h, cx, cz]) => !covered.has(Math.floor(cx / 120) * 1000 + Math.floor(cz / 120)) && (h >= 45 || nearWaterGrid(cx, cz, 200))));
     addCutaway(modern.mat);
     $('loadtext').textContent = '江戸城を建てています……';
     await frame();
@@ -1401,7 +1401,8 @@ function loop(now) {
     G.t = 0;
     updateSky();
   }
-  water.update(now / 1000);
+  water.update(now / 1000, skyMat.uniforms.hor.value, scene.fog, camera);
+  cullChunks(camera.position, 2300);
   tokyo.update(dt, now / 1000, modern.mat.userData.night.value, scene.fog.color, camera);
   // 見える範囲の街のタイルを組み立てる
   { const t0 = performance.now(); while (tokyo.stream(camera.position, 1800, 1) > 0 && performance.now() - t0 < 4); }
@@ -1413,7 +1414,7 @@ function loop(now) {
   // 水面の映り込みには透かしを使わない
   const cb = CUT.boat.value.y; CUT.boat.value.y = -1e5;
   // 映り込みは 2 フレームに 1 回 (軽くする)
-  if ((G.frame = (G.frame || 0) + 1) % 2 === 0) water.reflect(renderer, scene, camera, (G.state === 'play' || G.state === 'ending') ? waterY(P.x, P.z) : undefined);
+  // 水面の映り込みは切る (重いので)。水面には空の色を映す
   CUT.boat.value.y = cb;
   renderer.render(scene, camera);
 }
