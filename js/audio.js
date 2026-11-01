@@ -54,13 +54,17 @@ export function chirin(k = 0) {
   }
 }
 // 拍子木 (御用！)
-export function hyoshigi() {
+export function hyoshigi(vol = 0.25) {
   if (!ctx) return;
   for (const dt of [0, 0.16]) {
-    const t = ctx.currentTime + dt, o = ctx.createOscillator(), g = ctx.createGain();
-    o.type = 'square'; o.frequency.value = 1800;
-    g.gain.setValueAtTime(0.25, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
-    o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.08);
+    const t = ctx.currentTime + dt;
+    // 木を打つ「カン！」: 高い音と、木の胴鳴り (低めの音) を重ねる
+    for (const [f, type, v, len] of [[1800, 'square', 1, 0.06], [900, 'triangle', 0.8, 0.12], [2900, 'sine', 0.5, 0.04]]) {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = type; o.frequency.value = f;
+      g.gain.setValueAtTime(vol * v, t); g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+      o.connect(g); g.connect(master); o.start(t); o.stop(t + len + 0.02);
+    }
   }
 }
 let bgmSrc = null, bgmName = null, pendingBgm = null;

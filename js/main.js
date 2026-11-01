@@ -736,7 +736,11 @@ function hitNinja(nj, byLasso) {
   A.sfx('hit', 0.6, 1.3);
   const c = ninjaCenter(nj);
   G.captured++;
-  A.hyoshigi(); A.sfx('kill', 0.5);
+  A.hyoshigi(0.6); A.sfx('kill', 0.5);
+  // 仕留めた演出: 画面が一瞬止まって白く光り、中央に大きな「御用！」、召し捕り数が弾む
+  G.hitStop = 0.1;
+  for (const id of ['hitflash', 'goyo']) { const el = $(id); el.classList.remove('on'); void el.offsetWidth; el.classList.add('on'); }
+  { const el = $('hCap'); el.textContent = G.captured; el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
   // 仕留められた忍者の「オーー」という嘆きの叫び (少し遅れて)
   setTimeout(() => A.ooh(0.6), 150);
   // 仕留めたら花火 (小舟の前の空に)
@@ -1735,7 +1739,9 @@ function loop(now) {
     if (pressed('KeyP') || pressed('Escape')) { if (G.state === 'play') pause(true); }
     // 確かめ用: window.__ts で時間を速める
     const reps = window.__ts || 1;
-    for (let r = 0; r < reps && (G.state === 'play' || G.state === 'ending'); r++) step(dt);
+    // ヒットストップ (仕留めた瞬間に 0.1 秒止める)
+    if (G.hitStop > 0) G.hitStop -= dt;
+    else for (let r = 0; r < reps && (G.state === 'play' || G.state === 'ending'); r++) step(dt);
     if (G.state === 'ending' && G.result) {
       const [tx, tz] = castle.tenshu;
       updateCamera(dt);

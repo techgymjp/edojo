@@ -115,3 +115,21 @@ h1 { font-family: "Yuji Syuku", serif; font-size: clamp(52px, 13vw, 96px); line-
 @keyframes bob { to { margin-top: 8px; } }
 #ninjaNav { position: absolute; top: max(62px, calc(env(safe-area-inset-top) + 54px)); right: 12px; background: rgba(110, 20, 20, 0.78); border: 1px solid rgba(255, 170, 150, 0.7); border-radius: 22px; padding: 4px 14px; font-size: 20px; font-weight: 800; color: #ffd8c8; white-space: nowrap; text-shadow: 0 1px 2px #000; display: none; }
 #ninjaArrow { display: inline-block; color: #ff6a50; font-size: 24px; }
+
+/* 仕留めたとき: 白い光、画面中央の大きな「御用！」(朱の判子風)、召し捕り数が弾む */
+#hitflash { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 6; }
+#hitflash.on { animation: hitflash 0.35s ease-out; }
+@keyframes hitflash { 0% { opacity: 0.75; } 100% { opacity: 0; } }
+#goyo { position: fixed; left: 50%; top: 42%; transform: translate(-50%, -50%) scale(0.5) rotate(-8deg); font-family: 'Shippori Mincho', serif; font-weight: 800;
+  font-size: min(18vw, 120px); color: #d0201a; border: 0.07em solid #d0201a; border-radius: 0.12em; padding: 0.02em 0.18em 0.06em; background: rgba(255, 248, 232, 0.88);
+  letter-spacing: 0.04em; line-height: 1.1; opacity: 0; pointer-events: none; z-index: 60; text-shadow: 0 2px 0 rgba(0,0,0,0.15); box-shadow: 0 6px 24px rgba(0,0,0,0.35); white-space: nowrap; }
+#goyo.on { animation: goyo 0.95s ease-out; }
+@keyframes goyo {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(2.2) rotate(-8deg); }
+  12% { opacity: 1; transform: translate(-50%, -50%) scale(0.92) rotate(-8deg); }
+  20% { transform: translate(-50%, -50%) scale(1.05) rotate(-8deg); }
+  70% { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(-8deg); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.1) rotate(-8deg); }
+}
+#hCap.bump { display: inline-block; animation: capbump 0.5s ease-out; }
+@keyframes capbump { 0% { transform: scale(1); } 25% { transform: scale(1.9); color: #fff; } 100% { transform: scale(1); } }
