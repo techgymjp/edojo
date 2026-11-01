@@ -306,7 +306,7 @@ export function nearCastle(x, z) {
 // ---------- 石垣 (段の境目を marching squares で線にして、縦の面を立てる) ----------
 // 返り値: 城の塀の線 (櫓を置く所を選ぶのに使う)
 // 地面のメッシュ (16m 格子、三角形 a-c-b / b-c-d) の上の高さ
-function groundMeshH(x, z) {
+export function groundMeshH(x, z) {
   const G = 16, i = Math.floor(x / G), j = Math.floor(z / G), fx = x / G - i, fz = z / G - j;
   const h = (ii, jj) => terrainH(Math.min(W.sizeX, ii * G), Math.min(W.sizeZ, jj * G));
   const a = h(i, j), b = h(i + 1, j), c = h(i, j + 1), d = h(i + 1, j + 1);

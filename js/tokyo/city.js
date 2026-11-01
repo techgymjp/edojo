@@ -654,7 +654,7 @@ export class City {
     g.setAttribute('position', new THREE.Float32BufferAttribute(deck.p, 3));
     g.setAttribute('normal', new THREE.Float32BufferAttribute(deck.n, 3));
     g.setAttribute('color', new THREE.Float32BufferAttribute(deck.c, 3));
-    const mesh = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+    const mesh = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }));
     scene.add(mesh);
     // 橋脚
     const pg = new THREE.BoxGeometry(3, 1, 3);

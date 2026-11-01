@@ -442,9 +442,14 @@ export function buildWarps(scene) {
     const ends = [];
     for (const [x, z, ox, oz] of [[x1, z1, x2, z2], [x2, z2, x1, z1]]) {
       // 水の中へ少し入れる (岸から 5m)
-      let px = x, pz = z;
-      const d = Math.hypot(ox - x, oz - z) || 1;
-      for (let s = 0; s < 8; s++) { const nx = x - (ox - x) / d * s, nz = z - (oz - z) / d * s; if (isWater(nx, nz)) { px = nx; pz = nz; } }
+      // 渦は、岸 (石垣) から離れた水の上に置く: 端から 18m 以内で、まわりの岸から一番遠い所
+      let px = x, pz = z, bestC = -1;
+      const clear = (cx, cz) => { let m = 12; for (let a = 0; a < 8; a++) { const dx = Math.cos(a * Math.PI / 4), dz = Math.sin(a * Math.PI / 4); for (let r = 0; r < m; r += 1.5) if (!isWater(cx + dx * r, cz + dz * r)) { m = r; break; } } return m; };
+      for (let dz = -18; dz <= 18; dz += 3) for (let dx = -18; dx <= 18; dx += 3) {
+        const cx = x + dx, cz = z + dz; if (!isWater(cx, cz)) continue;
+        const c = clear(cx, cz) - Math.hypot(dx, dz) * 0.15;
+        if (c > bestC) { bestC = c; px = cx; pz = cz; }
+      }
       const g = new THREE.Group();
       g.position.set(px, waterY(px, pz) + 0.15, pz);
       const disc = new THREE.Mesh(new THREE.CircleGeometry(6, 32), new THREE.MeshBasicMaterial({ map: swirlTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));

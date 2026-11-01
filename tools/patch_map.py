@@ -40,6 +40,39 @@ for la, lo in FILL:
     if len(seen) >= 20000: print('too big, skip', la, lo); continue
     for y, x in seen: A[y, x] = 5
     print('filled', la, lo, len(seen))
+# 隅田川のすぐそばで行き止まりになっている堀・運河 (40m 以内) は、隅田川につなぐ (江戸の堀は川へ抜けていた)
+def label_all(A):
+    lab = np.zeros(A.shape, np.int32); sizes = [0]; n = 0
+    for y0, x0 in zip(*np.nonzero(A == 0)):
+        if lab[y0, x0]: continue
+        n += 1; q = deque([(y0, x0)]); lab[y0, x0] = n; c = 0
+        while q:
+            y, x = q.popleft(); c += 1
+            for yy, xx in ((y + 1, x), (y - 1, x), (y, x + 1), (y, x - 1)):
+                if 0 <= yy < h and 0 <= xx < wdt and A[yy, xx] == 0 and not lab[yy, xx]: lab[yy, xx] = n; q.append((yy, xx))
+        sizes.append(c)
+    return lab, sizes
+labA, sizes = label_all(A)
+my, mx = cell(35.6880, 139.7905); main = labA[my, mx]
+xE = int((139.7740 - W0) * KX / RES)
+img = Image.fromarray(A); d = ImageDraw.Draw(img); nj = 0
+mainpts = np.argwhere(labA == main)
+mainpts = mainpts[::3]
+for k in range(1, len(sizes)):
+    if k == main or sizes[k] < 150: continue
+    pts = np.argwhere(labA == k)
+    if pts[:, 1].max() < xE: continue
+    pts = pts[::2]
+    best = None
+    for py, px in pts:
+        dd = (mainpts[:, 0] - py) ** 2 + (mainpts[:, 1] - px) ** 2
+        i = int(dd.argmin())
+        if best is None or dd[i] < best[0]: best = (dd[i], py, px, mainpts[i][0], mainpts[i][1])
+    if best and best[0] ** 0.5 * RES < 40:
+        _, ya, xa, yb, xb = best
+        d.line([(xa, ya), (xb, yb)], fill=0, width=max(3, int(10 / RES))); nj += 1
+        print('joined to 隅田川', round(N0 - ya * RES / KZ, 4), round(W0 + xa * RES / KX, 4), round(best[0] ** 0.5 * RES), 'm')
+A = np.array(img)
 # 丘の上を通ってしまった想像の堀 (溜池の水路が日枝神社の山王の丘を切っている所) を陸に戻す: 半径の中で岸の高さが高い水のマス
 HILL = [((35.6748, 139.7397), 110, 16)]  # (中心, 半径 m, この高さ m より高い岸)
 Tp = np.array(Image.open(os.path.join(D, 'terrain.png')).convert('RGB')).astype(float); TH = (Tp[..., 0] * 256 + Tp[..., 1]) / 200 - 20
@@ -49,6 +82,39 @@ for (la, lo), rad, thr in HILL:
         for x in range(x0 - r, x0 + r + 1):
             if (y - y0) ** 2 + (x - x0) ** 2 <= r * r and A[y, x] == 0 and TH[y, x] > thr: A[y, x] = 5; nfill += 1
     print('hill fill', la, lo, nfill)
+# 岸の線をなめらかに (3m のマスの段々・ギザギザをならす。まっすぐ・ゆるいカーブの岸に)
+def boxmean(m, r):
+    c = np.cumsum(np.cumsum(np.pad(m.astype(np.float64), ((1, 0), (1, 0))), 0), 1)
+    y0 = np.clip(np.arange(h) - r, 0, h); y1 = np.clip(np.arange(h) + r + 1, 0, h)
+    x0 = np.clip(np.arange(wdt) - r, 0, wdt); x1 = np.clip(np.arange(wdt) + r + 1, 0, wdt)
+    s_ = c[y1][:, x1] - c[y0][:, x1] - c[y1][:, x0] + c[y0][:, x0]
+    return s_ / ((y1 - y0)[:, None] * (x1 - x0)[None, :])
+wat = A == 0
+f = boxmean(boxmean(wat, 2), 2)
+# 細い水路 (幅 15m 未満) は消えないように、もとの水を残す
+thin = wat & (boxmean(wat, 3) < 0.45)
+neww = (f > 0.5) | thin
+# 新しく水にするマスで、別々の水面 (土橋・見附をはさんだお濠) をつないでしまうものは水にしない
+labW, _ = label_all(A)
+BIG = 1 << 30
+mx_ = np.zeros(A.shape, np.int64); mn_ = np.full(A.shape, BIG, np.int64)
+pl = np.pad(labW, 3)
+for dy in range(-3, 4):
+    for dx in range(-3, 4):
+        v = pl[3 + dy:3 + dy + h, 3 + dx:3 + dx + wdt].astype(np.int64)
+        mx_ = np.maximum(mx_, v); mn_ = np.minimum(mn_, np.where(v == 0, BIG, v))
+neww &= wat | (mx_ == mn_)
+# 陸になったマスは、まわりの陸のコード (多い方) にする
+landcode = A.copy()
+for _ in range(3):
+    m = landcode == 0
+    if not m.any(): break
+    p_ = np.pad(landcode, 1)
+    nb = np.stack([p_[:-2, 1:-1], p_[2:, 1:-1], p_[1:-1, :-2], p_[1:-1, 2:]])
+    landcode = np.where(m, nb.max(0), landcode)
+changed = (neww != wat).sum()
+A = np.where(neww, 0, np.where(wat, landcode, A)).astype(A.dtype)
+print('smoothed bank cells', int(changed))
 Image.fromarray(A).save(os.path.join(D, 'map.png'), optimize=True)
 # 水でないマスに端があるワープ、両端が同じ水面のワープは消す
 lab = np.zeros(A.shape, np.int32); n = 0
@@ -64,6 +130,14 @@ def comp(y, x):
     return n
 keep = []
 KEEP_SAME = [(35.6848, 139.7454)]  # 半蔵門 (細い水路でつながるが、舟では通りにくいので残す)
+def snapw(x, z):
+    y0, x0 = int(z / RES), int(x / RES)
+    for r in range(8):
+        for dy in range(-r, r + 1):
+            for dx in range(-r, r + 1):
+                if A[y0 + dy, x0 + dx] == 0: return ((x0 + dx) * RES + RES / 2, (y0 + dy) * RES + RES / 2)
+    return (x, z)
+w['warps'] = [[*snapw(k[0], k[1]), *snapw(k[2], k[3])] for k in w['warps']]
 for k in w['warps']:
     ca = comp(int(k[1] / RES), int(k[0] / RES)); cb = comp(int(k[3] / RES), int(k[2] / RES))
     la, lo = N0 - k[1] / KZ, W0 + k[0] / KX

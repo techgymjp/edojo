@@ -122,14 +122,19 @@ while q:
         # 地面 (標高) が水面より 8m 以上高い堀 (真田濠など台地の上の堀) には広げない: 別の高さの水面にする
         if 0 <= yy < h and 0 <= xx < w and water[yy, xx] and np.isnan(flat[yy, xx]) and not (SANADA[yy, xx] and Ev[yy, xx] > flat[a, b] + 8):
             flat[yy, xx] = flat[a, b]; q.append((yy, xx))
+# 戻した堀は、ひと続きの所ごとに 1 つの高さ (一番低いもの)。いくつかの今の水面から広げると、堀の中に斜めの段ができるので
+rest_all = water & ~natl & ~np.isnan(flat)
+labr0, nr0 = components(rest_all)
+for k in range(1, nr0 + 1):
+    m = labr0 == k
+    flat[m] = float(np.nanmin(flat[m]))
 # 今の水につながっていない戻した堀 (溜池など): かたまりごとに 1 つの高さ (まわりの道より 3.2m 低い所の低めの値)
 rest_m = water & np.isnan(flat)
 labr, nr = components(rest_m)
 for k in range(1, nr + 1):
     m = labr == k
     flat[m] = min(float(np.nanpercentile((bank - 3.2)[m], 20)), float(np.nanpercentile(Ev[m], 10)) - 1.0)
-WL = np.where(water, np.where(np.isnan(flat), WL, flat), np.nan)
-WL = np.where(water, np.minimum(WL, bank - 0.5), np.nan)
+WL = np.where(water, np.where(np.isnan(flat), np.minimum(WL, bank - 0.5), flat), np.nan)  # お濠ごとの水平な水面は岸で削らない
 print('flat water bodies', nl)
 WL = fill_nan(WL.astype(np.float32), 30)  # 岸の近く (陸) にも少しのばす
 WL = np.where(np.isnan(WL), bank - 3, WL)

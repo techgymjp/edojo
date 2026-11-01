@@ -1066,10 +1066,19 @@ function updateBoat(dt) {
     for (const [e, o] of [[w.a, w.b], [w.b, w.a]]) {
       const d = Math.hypot(o.x - e.x, o.z - e.z) || 1, ux = (o.x - e.x) / d, uz = (o.z - e.z) / d;
       // 渦に向かって進んでいるときだけワープ (出たあとすぐ戻ってしまわないように)
-      if (Math.hypot(P.x - e.x, P.z - e.z) < 7.5 && Math.cos(P.h) * ux + Math.sin(P.h) * uz > 0.2 && P.v > 1) {
-        P.x = o.x; P.z = o.z;
-        for (let s = 24; s > 0; s -= 2) if (isWater(o.x + ux * s, o.z + uz * s)) { P.x = o.x + ux * s; P.z = o.z + uz * s; break; }
-        P.h = Math.atan2(uz, ux);
+      // 渦に向かって進んでいるとき (または向こうの渦の方へ向いているとき) にワープ。出たあとは渦から離れる向きなので戻らない
+      const ex = e.x - P.x, ez = e.z - P.z, ed = Math.hypot(ex, ez) || 1;
+      if (ed < 7.5 && P.v > 1 && (Math.cos(P.h) * ex / ed + Math.sin(P.h) * ez / ed > 0.3 || ed < 2.5 || Math.cos(P.h) * ux + Math.sin(P.h) * uz > 0.2)) {
+        // 出口: 向こうの渦から、水が一番長く続く向き (来た向きに近い方を少し優先) に向けて出す
+        let bestA = Math.atan2(uz, ux), bestS = -1;
+        for (let k = 0; k < 24; k++) {
+          const a = k / 24 * Math.PI * 2, cx = Math.cos(a), cz = Math.sin(a);
+          let run = 0; while (run < 150 && isWater(o.x + cx * (run + 3), o.z + cz * (run + 3))) run += 3;
+          const sc = run * (1 + 0.3 * (cx * ux + cz * uz));
+          if (sc > bestS) { bestS = sc; bestA = a; }
+        }
+        P.h = bestA; P.x = o.x; P.z = o.z;
+        for (let s = 12; s > 0; s -= 2) if (isWater(o.x + Math.cos(bestA) * s, o.z + Math.sin(bestA) * s)) { P.x = o.x + Math.cos(bestA) * s; P.z = o.z + Math.sin(bestA) * s; break; }
         G.warpCd = 2; camInit = false; trail.length = 0;
         A.sfx('launch', 0.6, 1.3);
         $('flash').classList.remove('on'); void $('flash').offsetWidth; $('flash').classList.add('on');
@@ -1280,7 +1289,12 @@ function drawMinimap() {
   g.drawImage(mm.map, 0, 0); g.drawImage(mm.over, 0, 0);
   g.setTransform(1, 0, 0, 1, 0, 0);
   const X = (x, z) => { const [a, b] = xzToMap(x, z), u = (a - cx) * s, v = (b - cy) * s; return [u * rc - v * rs + c.width / 2, u * rs + v * rc + c.height / 2]; };
-  for (const w of warps) for (const e of [w.a, w.b]) { const [a, b] = X(e.x, e.z); g.fillStyle = '#0cc'; g.fillRect(a - 5, b - 5, 10, 10); }
+  // ワープ: 赤い点を 2 つ、赤い線で結ぶ (どこからどこへ飛ぶかがわかるように)
+  for (const w of warps) {
+    const [a1, b1] = X(w.a.x, w.a.z), [a2, b2] = X(w.b.x, w.b.z);
+    g.strokeStyle = '#e01818'; g.lineWidth = 3; g.setLineDash([6, 4]); g.beginPath(); g.moveTo(a1, b1); g.lineTo(a2, b2); g.stroke(); g.setLineDash([]);
+    for (const [a, b] of [[a1, b1], [a2, b2]]) { g.fillStyle = '#e01818'; g.strokeStyle = '#fff'; g.lineWidth = 2; g.beginPath(); g.arc(a, b, 6, 0, Math.PI * 2); g.fill(); g.stroke(); }
+  }
   for (const nj of G.ninjas) {
     if (['gone', 'bound', 'fall', 'sink'].includes(nj.state)) continue;
     const danger = nj.state === 'climb' || nj.state === 'emerge';

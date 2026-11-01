@@ -9,7 +9,9 @@ import { SHUTOKO } from './shutoko-data.js';
 import { RAIL } from './rail-data.js';
 import { addTokyoTower, addDiet, addTechGym, addTokyoDome, addBudokan, addSkytree, addFuji, addDistant } from './tokyo/landmarks.js';
 import { addOchanomizu, addTokyoStation, addAkasaka, addRailways, addAkibaSigns, addNewOtani, addYotsuyaKudan, addGinzaNihonbashi, addUeno, addSensoji, addAsahi, addUenoAsakusa } from './tokyo/landmarks2.js';
-import { W, codeAt, isWater, LEVEL_H, terrainH, waterY, nearWaterGrid } from './world.js';
+import { W, codeAt, isWater, LEVEL_H, waterY, nearWaterGrid, groundMeshH } from './world.js';
+// 地面の上に置くもの (線路・道・橋のたもと・ビル) は、描いている地面のメッシュ (16m 格子) と同じ高さに合わせる (細かい標高だとメッシュに潜って途切れて見える)
+const terrainH = groundMeshH;
 import { mergeStatic } from './merge.js';
 
 // 窓のテクスチャ (ターザン大東京と同じ。8×8 の窓が 1 枚。lit = 夜に明かりがつく窓)
@@ -103,6 +105,8 @@ function buildRail(root, city, OX, OZ) {
         r.y[i] = sy / sw;
       }
     }
+    // ならしたあとも、陸の所では地面より下に潜らない (お茶の水の崖ぞいの中央・総武線が途切れて見えないように)
+    for (let i = 0; i < n; i++) if (!isWater(r.x[i] + OX, r.z[i] + OZ)) r.y[i] = Math.max(r.y[i], gy(r.x[i], r.z[i]) + r.h[i] + 0.2);
   }
   const brk = { p: [], n: [], uv: [] };
   // レンガ高架の区間 (緯度経度の範囲と路線)
@@ -210,7 +214,8 @@ function buildRail(root, city, OX, OZ) {
   g.setAttribute('normal', new THREE.Float32BufferAttribute(deck.n, 3));
   g.setAttribute('color', new THREE.Float32BufferAttribute(deck.c, 3));
   g.computeBoundingSphere();
-  const mesh = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+  // 地形の上にかぶせて描く (地面と重なっても線路が上に見えるように)
+  const mesh = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }));
   mesh.frustumCulled = false; root.add(mesh);
   if (brk.p.length) {
     const c = document.createElement('canvas'); c.width = 256; c.height = 192;
@@ -490,7 +495,7 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
       let a = i, b = i; while (a > 0 && !r.g[a] && r.h[a] < 3) a--; while (b < r.h.length - 1 && !r.g[b] && r.h[b] < 3) b++;
       r.h[i] = Math.max(r.h[a], r.h[b], 3);
     }
-    for (let i = 0; i < r.h.length; i++) r.h[i] = r.g[i] ? terrainH(r.x[i] + OX, r.z[i] + OZ) + 0.08 : r.h[i] + Ts(r.x[i], r.z[i]);
+    for (let i = 0; i < r.h.length; i++) r.h[i] = r.g[i] ? terrainH(r.x[i] + OX, r.z[i] + OZ) + 0.25 : r.h[i] + Ts(r.x[i], r.z[i]);
   }  // 高架の端が宙に浮いたまま切れている所: 両端とも浮いたつなぎは消し、片端だけの所は端の 60m を地面まで下ろす
   {
     const gh = (x, z) => (isWater(x + OX, z + OZ) ? waterY(x + OX, z + OZ) : terrainH(x + OX, z + OZ));
@@ -781,7 +786,7 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
         const [x1, z1] = pts[q], [x2, z2] = pts[q + 1];
         if (isWater(x1, z1) || isWater(x2, z2) || isCastle(x1, z1) || !nearWaterGrid(x1, z1, 250)) continue;
         const L = Math.hypot(x2 - x1, z2 - z1) || 1, ux = (x2 - x1) / L, uz = (z2 - z1) / L, vx = -uz, vz = ux;
-        const h1 = terrainH(x1, z1) + 0.12, h2 = terrainH(x2, z2) + 0.12, hw = wdt / 2, iw = hw - walk;
+        const h1 = terrainH(x1, z1) + 0.25, h2 = terrainH(x2, z2) + 0.25, hw = wdt / 2, iw = hw - walk;
         const e1 = 0.3, ex = ux * e1, ez = uz * e1;
         const S = (x, z, t, h) => [x + vx * t, h, z + vz * t];
         quad(S(x1 - ex, z1 - ez, -iw, h1), S(x1 - ex, z1 - ez, iw, h1), S(x2 + ex, z2 + ez, iw, h2), S(x2 + ex, z2 + ez, -iw, h2), [0, 1, 0], ASP);
@@ -801,7 +806,7 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
     g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
     g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
     g.computeBoundingSphere();
-    const bm = new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 });
+    const bm = new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
     const mesh = new THREE.Mesh(g, bm); mesh.frustumCulled = false;
     scene.add(mesh);
     console.log('modern bridges', nb, 'road segs', nroad, 'tris', P.length / 9);
