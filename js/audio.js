@@ -71,7 +71,8 @@ export function hyoshigi(vol = 0.25) {
 // ---------- BGM: 三味線と横笛 (篠笛) を音で合成して、和の音階で鳴らす ----------
 // 陽音階 (明るい: D E G A B) と 都節 (陰音階、緊迫: D Eb G A Bb)
 const YO = [0, 2, 5, 7, 9], IN = [0, 1, 5, 7, 8];
-const hz = (scale, n, base) => base * Math.pow(2, (scale[((n % 5) + 5) % 5] + 12 * Math.floor(n / 5)) / 12);
+const hz = (scale, n, base) => { const L = scale.length; return base * Math.pow(2, (scale[((n % L) + L) % L] + 12 * Math.floor(n / L)) / 12); };
+const MINOR = [0, 2, 3, 5, 7, 8, 10], MAJOR = [0, 2, 4, 5, 7, 9, 11];
 // 三味線: 撥で弾いた音 (のこぎり波を急に減衰させ、明るさも落とす) + 撥の当たる音 + さわり (わずかに下がる)
 function shamisen(t, f, vol) {
   const o = ctx.createOscillator(), o2 = ctx.createOscillator(), lp = ctx.createBiquadFilter(), g = ctx.createGain();
@@ -137,6 +138,21 @@ function shime(t, vol) {
   hp.type = 'highpass'; hp.frequency.value = 1500; ng.gain.setValueAtTime(vol * 0.5, t); ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.03);
   n.connect(hp); hp.connect(ng); ng.connect(bgmGain); n.start(t); n.stop(t + 0.05);
 }
+// 時代劇のオーケストラふう: ブラス (のこぎり波を 3 本ずらして重ね、吹き始めに明るく開く) と弦 (ゆっくり立ち上がる)
+function brass(t, f, dur, vol) {
+  const end = t + dur, lp = ctx.createBiquadFilter(), g = ctx.createGain();
+  lp.type = 'lowpass'; lp.Q.value = 2; lp.frequency.setValueAtTime(500, t); lp.frequency.exponentialRampToValueAtTime(3200, t + 0.06); lp.frequency.exponentialRampToValueAtTime(1800, t + 0.3);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.03); g.gain.setValueAtTime(vol * 0.75, Math.max(t + 0.05, end - 0.05)); g.gain.exponentialRampToValueAtTime(0.0001, end + 0.08);
+  lp.connect(g); g.connect(bgmGain);
+  for (const d of [-6, 0, 6]) { const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f; o.detune.value = d; o.connect(lp); o.start(t); o.stop(end + 0.1); }
+}
+function strings(t, f, dur, vol) {
+  const end = t + dur, lp = ctx.createBiquadFilter(), g = ctx.createGain();
+  lp.type = 'lowpass'; lp.frequency.value = 2400;
+  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + Math.min(0.25, dur * 0.5)); g.gain.setValueAtTime(vol, Math.max(t + 0.26, end - 0.1)); g.gain.linearRampToValueAtTime(0.0001, end + 0.15);
+  lp.connect(g); g.connect(bgmGain);
+  for (const d of [-9, -3, 4, 10]) { const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f; o.detune.value = d; o.connect(lp); o.start(t); o.stop(end + 0.2); }
+}
 // 太鼓 (どん)
 function taiko(t, vol) {
   const o = ctx.createOscillator(), g = ctx.createGain();
@@ -146,33 +162,49 @@ function taiko(t, vol) {
 }
 let _noise = null;
 function noiseBuf() { if (!_noise) { _noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate); const d = _noise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; } return _noise; }
-// 曲: bpm (8 分音符 = 1 歩)、長さ (歩)、swing (跳ねるリズム)、三味線 [歩, 音], 尺八 [歩, 音, 長さ (歩)], 締太鼓 [歩], 大太鼓 [歩]
-// 音の番号: 5 = D4、6 = E4 … (5 つで 1 オクターブ)。江戸の寄席 (落語の出囃子) のイメージ
+// 曲: 時代劇の主題歌ふう (オリジナルの旋律)。8 分音符 = 1 歩。音の番号は音階の何番目か (7 つで 1 オクターブ、0 = D3)
+//   mel: ブラスの旋律 [歩, 音, 長さ]、pad: 弦の和音 [歩, [音...], 長さ]、bass: 低音 [歩, 音]、sham: 三味線 [歩, 音]、shime・taiko: 太鼓 [歩]
+const THEME = {
+  mel: [[0, 14, 3], [3, 16, 1], [4, 17, 4], [8, 18, 2], [10, 17, 2], [12, 16, 2], [14, 15, 2],
+        [16, 14, 3], [19, 11, 1], [20, 14, 4], [24, 15, 2], [26, 16, 2], [28, 13, 4],
+        [32, 16, 3], [35, 17, 1], [36, 18, 4], [40, 19, 2], [42, 18, 2], [44, 17, 2], [46, 16, 2],
+        [48, 18, 3], [51, 17, 1], [52, 16, 2], [54, 15, 2], [56, 14, 8]],
+  chords: [[7, 9, 11], [6, 8, 10], [7, 9, 11], [5, 7, 9], [9, 11, 13], [10, 12, 14], [11, 13, 15], [7, 9, 11]],
+  roots: [0, -1, 0, -2, 2, 3, 4, 0],
+};
+const padOf = (len8) => THEME.chords.map((c, k) => [k * 8, c, len8]);
+const bassOf = () => [...Array(32).keys()].map((q) => { const r = THEME.roots[q >> 2]; return [q * 2, q % 2 ? r + 7 : r]; });
 const SONGS = {
-  // 海 (外堀・川をゆく): アップテンポでノリノリの出囃子。三味線が休まず跳ね、締太鼓が刻み、大太鼓が拍を打つ
-  bgmSea: { sc: YO, bpm: 172, len: 64, swing: 0.6, shamV: 0.17, shakuV: 0.2, loop: true,
-    sham: [...Array(64).keys()].map((i) => [i, [10, 7, 8, 7, 10, 7, 9, 8, 11, 8, 9, 8, 10, 8, 7, 5][i % 16] - (i >= 32 && i < 48 ? 2 : 0)]),
-    shaku: [[0, 10, 2], [2, 11, 1], [3, 12, 3], [6, 11, 2], [8, 10, 1], [9, 9, 1], [10, 10, 4], [14, 8, 2],
-            [16, 10, 2], [18, 12, 2], [20, 13, 3], [23, 12, 1], [24, 11, 2], [26, 10, 2], [28, 9, 4],
-            [32, 8, 2], [34, 9, 1], [35, 10, 3], [38, 9, 2], [40, 8, 1], [41, 7, 1], [42, 8, 4], [46, 7, 2],
-            [48, 10, 2], [50, 11, 2], [52, 12, 2], [54, 13, 2], [56, 12, 1], [57, 11, 1], [58, 10, 6]],
-    shime: [...Array(64).keys()], taiko: [...Array(64).keys()].filter((i) => i % 4 === 0 || i % 16 === 14) },
-  // 戦 (忍者が石垣を登っている): 都節で速く、三味線が刻み、大太鼓が追い立てる
-  bgmBattle: { sc: IN, bpm: 184, len: 32, swing: 0.5, shamV: 0.17, shakuV: 0.2, loop: true,
-    sham: [...Array(32).keys()].map((i) => [i, [5, 5, 8, 5, 9, 5, 8, 6][i % 8] + (i >= 16 && i % 8 === 4 ? 1 : 0)]),
-    shaku: [[0, 10, 3], [3, 11, 1], [4, 12, 4], [8, 11, 2], [10, 10, 2], [12, 9, 4], [16, 10, 3], [19, 11, 1], [20, 13, 4], [24, 12, 2], [26, 11, 2], [28, 10, 4]],
-    shime: [...Array(32).keys()].filter((i) => i % 2 === 1), taiko: [0, 3, 6, 8, 11, 14, 16, 19, 22, 24, 26, 28, 30] },
-  // タイトル: 寄席の開演前のように、のんびり
-  bgmTitle: { sc: YO, bpm: 92, len: 32, swing: 0.64, shamV: 0.15, shakuV: 0.2, loop: true,
-    sham: [[0, 5], [2, 7], [3, 8], [4, 10], [8, 9], [10, 7], [11, 8], [12, 5], [16, 6], [18, 8], [19, 9], [20, 10], [24, 9], [26, 8], [27, 7], [28, 5]],
-    shaku: [[0, 9, 6], [6, 8, 2], [8, 7, 4], [12, 6, 4], [16, 7, 3], [19, 8, 1], [20, 9, 4], [24, 7, 8]],
-    shime: [4, 12, 20, 28], taiko: [0] },
-  // 全員御用 (クリア): にぎやかな囃子で一度だけ
-  bgmClear: { sc: YO, bpm: 140, len: 40, swing: 0.58, shamV: 0.17, shakuV: 0.22, loop: false,
-    sham: [...Array(32).keys()].map((i) => [i, [10, 8, 9, 7][i % 4] + (i >= 16 ? 1 : 0)]).concat([[32, 5], [33, 10]]),
-    shaku: [[0, 10, 2], [2, 11, 2], [4, 12, 2], [6, 11, 2], [8, 10, 4], [12, 12, 4], [16, 13, 2], [18, 12, 2], [20, 11, 2], [22, 12, 2], [24, 10, 8], [32, 10, 8]],
+  // 海 (外堀・川をゆく): 勇ましい時代劇の主題歌ふう。ブラスの旋律、弦の和音、刻む低音、三味線と太鼓
+  bgmSea: { sc: MINOR, bpm: 160, len: 64, swing: 0.5, loop: true, melV: 0.11, padV: 0.035, bassV: 0.09, shamV: 0.1,
+    mel: THEME.mel, pad: padOf(8), bass: bassOf(), sham: [...Array(32).keys()].map((q) => [q * 2 + 1, THEME.roots[q >> 2] + 14]),
+    shime: [...Array(64).keys()].filter((i) => i % 2 === 1), taiko: [...Array(64).keys()].filter((i) => i % 4 === 0) },
+  // 戦 (忍者が石垣を登っている): 速く、低音とブラスが短く打ち込む
+  bgmBattle: { sc: MINOR, bpm: 184, len: 32, swing: 0.5, loop: true, melV: 0.11, padV: 0.03, bassV: 0.1, shamV: 0.1,
+    mel: [[0, 14, 1], [2, 14, 1], [3, 15, 1], [4, 16, 2], [6, 14, 2], [8, 17, 1], [10, 17, 1], [11, 18, 1], [12, 19, 2], [14, 17, 2],
+          [16, 18, 1], [18, 18, 1], [19, 17, 1], [20, 16, 2], [22, 15, 2], [24, 14, 4], [28, 11, 2], [30, 13, 2]],
+    pad: [[0, [7, 9, 11], 8], [8, [10, 12, 14], 8], [16, [11, 13, 15], 8], [24, [7, 9, 11], 8]],
+    bass: [...Array(32).keys()].map((i) => [i, [0, 0, 7, 0, 3, 3, 4, 4][(i >> 2) % 8] + (i % 2 ? 7 : 0)]),
+    sham: [], shime: [...Array(32).keys()], taiko: [0, 3, 6, 8, 11, 14, 16, 19, 22, 24, 26, 28, 30] },
+  // タイトル: 同じ旋律を弦でゆったり
+  bgmTitle: { sc: MINOR, bpm: 100, len: 64, swing: 0.5, loop: true, melV: 0, padV: 0.04, bassV: 0.07, shamV: 0.08, strMel: 0.07,
+    mel: THEME.mel, pad: padOf(8), bass: [...Array(16).keys()].map((h) => [h * 4, THEME.roots[h >> 1]]), sham: [],
+    shime: [], taiko: [0, 16, 32, 48] },
+  // 全員御用 (クリア): 長調のファンファーレで一度だけ
+  bgmClear: { sc: MAJOR, bpm: 140, len: 40, swing: 0.5, loop: false, melV: 0.12, padV: 0.04, bassV: 0.09, shamV: 0.1,
+    mel: [[0, 11, 1], [1, 11, 1], [2, 11, 1], [3, 14, 5], [8, 13, 2], [10, 14, 2], [12, 15, 2], [14, 16, 2], [16, 18, 6], [22, 16, 2], [24, 17, 4], [28, 15, 4], [32, 14, 8]],
+    pad: [[0, [7, 9, 11], 8], [8, [10, 12, 14], 8], [16, [7, 9, 11], 8], [24, [11, 13, 15], 8], [32, [7, 9, 11], 8]],
+    bass: [...Array(17).keys()].map((q) => [q * 2, [0, 0, 0, 0, 3, 3, 3, 3, 0, 0, 0, 0, 4, 4, 4, 4, 0][q]]), sham: [],
     shime: [...Array(34).keys()], taiko: [0, 4, 8, 12, 16, 20, 24, 28, 32] },
 };
+function playStep(S, i, t, stepT) {
+  for (const e of S.mel) if (e[0] === i) { if (S.melV) brass(t, hz(S.sc, e[1], 146.83), e[2] * stepT * 0.92, S.melV); if (S.strMel) strings(t, hz(S.sc, e[1], 146.83), e[2] * stepT, S.strMel); }
+  for (const e of S.pad) if (e[0] === i) for (const n of e[1]) strings(t, hz(S.sc, n, 146.83), e[2] * stepT, S.padV);
+  for (const e of S.bass) if (e[0] === i) brass(t, hz(S.sc, e[1], 73.42), stepT * 0.8, S.bassV);
+  for (const e of S.sham) if (e[0] === i) shamisen(t, hz(S.sc, e[1], 146.83), S.shamV);
+  if (S.shime.includes(i)) shime(t, i % 4 === 0 ? 0.18 : 0.1);
+  if (S.taiko.includes(i)) taiko(t, i % 8 === 0 ? 0.55 : 0.35);
+}
 let bgmSrc = null, bgmName = null, pendingBgm = null, seq = null;
 export function playBgm(name) {
   if (bgmName === name && (bgmSrc || seq)) return;
@@ -187,16 +219,12 @@ export function playBgm(name) {
   }
   const stepT = 60 / S.bpm / 2;
   const st = { S, stepT, next: ctx.currentTime + 0.08, step: 0, loops: 0 };
-  const byStep = (arr) => { const m = new Map(); for (const e of arr) { const k = Array.isArray(e) ? e[0] : e; if (!m.has(k)) m.set(k, []); m.get(k).push(e); } return m; };
-  const shamM = byStep(S.sham), shakuM = byStep(S.shaku), shimeM = byStep(S.shime), taikoM = byStep(S.taiko);
+
   st.timer = setInterval(() => {
     while (st.next < ctx.currentTime + 0.25) {
       const i = st.step % S.len;
       if (!S.loop && st.step >= S.len) { clearInterval(st.timer); return; }
-      for (const [, n] of shamM.get(i) || []) shamisen(st.next, hz(S.sc, n, 146.83), S.shamV);
-      for (const [, n, l] of shakuM.get(i) || []) shakuhachi(st.next, hz(S.sc, n, 146.83), l * stepT * 0.95, S.shakuV);
-      if (shimeM.has(i)) shime(st.next, i % 4 === 0 ? 0.22 : 0.13);
-      if (taikoM.has(i)) taiko(st.next, i % 8 === 0 ? 0.5 : 0.3);
+      playStep(S, i, st.next, stepT);
       // 跳ねるリズム: 表の 8 分を長く、裏を短く
       st.next += stepT * 2 * (i % 2 === 0 ? S.swing : 1 - S.swing); st.step++;
     }
@@ -241,10 +269,7 @@ export async function renderSong(name, sec = 20) {
   const stepT = 60 / S.bpm / 2;
   for (let k = 0, t = 0.05; t < sec - 1; k++) {
     const i = k % S.len; if (!S.loop && k >= S.len) break;
-    for (const [j, n] of S.sham) if (j === i) shamisen(t, hz(S.sc, n, 146.83), S.shamV);
-    for (const [j, n, l] of S.shaku) if (j === i) shakuhachi(t, hz(S.sc, n, 146.83), l * stepT * 0.95, S.shakuV);
-    if (S.shime.includes(i)) shime(t, i % 4 === 0 ? 0.22 : 0.13);
-    if (S.taiko.includes(i)) taiko(t, i % 8 === 0 ? 0.5 : 0.3);
+    playStep(S, i, t, stepT);
     t += stepT * 2 * (i % 2 === 0 ? S.swing : 1 - S.swing);
   }
   const b = await off.startRendering();
