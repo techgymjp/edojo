@@ -372,6 +372,8 @@ def main():
         return False
     world['warps'] = [k for k in world['warps'] if not near_drop(k)]
     json.dump(world, open(os.path.join(D, 'world.json'), 'w'))
+    # patch_map.py の元にする
+    import shutil; shutil.copy(os.path.join(D, 'map.png'), os.path.join(D, 'src', 'map_base.png')); shutil.copy(os.path.join(D, 'world.json'), os.path.join(D, 'src', 'world_base.json'))
     # ---- 今の建物 (輪の外だけ。0.5m 単位の整数、[高さ, x0, z0, x1, z1 ...]) ----
     out = []
     for b in json.load(open(os.path.join(D, 'src', 'plateau.json'))):

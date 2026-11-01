@@ -9,8 +9,9 @@ from collections import deque
 import numpy as np
 from PIL import Image, ImageDraw
 D = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data')
-A = np.array(Image.open(os.path.join(D, 'map.png')))
-w = json.load(open(os.path.join(D, 'world.json')))
+# いつも build_map.py の結果 (data/src/map_base.png・world_base.json) から直す (何度流しても同じ結果になるように)
+A = np.array(Image.open(os.path.join(D, 'src', 'map_base.png')))
+w = json.load(open(os.path.join(D, 'src', 'world_base.json')))
 KX, KZ, RES, N0, W0 = w['KX'], w['KZ'], w['res'], w['N'], w['W']
 cell = lambda la, lo: (int((N0 - la) * KZ / RES), int((lo - W0) * KX / RES))
 CARVE = [  # (緯度, 経度) → (緯度, 経度), 幅 m
