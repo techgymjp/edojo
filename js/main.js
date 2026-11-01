@@ -1072,7 +1072,7 @@ function updateBoat(dt) {
         G.warpCd = 2; camInit = false; trail.length = 0;
         A.sfx('launch', 0.6, 1.3);
         $('flash').classList.remove('on'); void $('flash').offsetWidth; $('flash').classList.add('on');
-        floatText(P.x, 5, P.z, 'ワープ！ ' + moatName(P.x, P.z), 'cyan');
+        floatText(P.x, 5, P.z, 'ワープ！', 'cyan');
         return updateBoatMesh(dt, dash);
       }
     }

@@ -412,10 +412,7 @@ export function buildWarps(scene) {
       ends.push({ x: px, z: pz, g, disc, beam });
     }
     const pair = { a: ends[0], b: ends[1] };
-    for (const [e, o] of [[ends[0], ends[1]], [ends[1], ends[0]]]) {
-      const l = labelSprite('ワープ → ' + (moatName(o.x, o.z) || 'お濠'), '#aef6ff', 0.7);
-      l.position.set(0, 30, 0); e.g.add(l);
-    }
+    // ワープの行き先の文字は出さない (渦と光の柱だけ)
     out.push(pair);
   }
   return out;

@@ -523,6 +523,21 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
   const nRail0 = root.children.length;
   rails = buildRail(root, city, OX, OZ);
   const maru = buildMarunouchi(scene);
+  // 日枝神社の山王の丘の森 (丘の上の社殿が宙に浮いて見えないように、斜面に木を植える)
+  {
+    const [hx, hz] = [(139.7397 - W.W) * W.KX, (W.N - 35.6748) * W.KZ];
+    const geo = new THREE.ConeGeometry(3.2, 9, 7).translate(0, 4.5, 0);
+    const N = 90, im = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ color: 0x2f5a2c }), N);
+    const m4 = new THREE.Matrix4(); let k = 0, seed = 11;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    for (let t = 0; t < 600 && k < N; t++) {
+      const a = rnd() * Math.PI * 2, r = 25 + rnd() * 95, x = hx + Math.cos(a) * r, z = hz + Math.sin(a) * r;
+      if (isWater(x, z) || terrainH(x, z) < 8) continue;
+      const sc = 0.8 + rnd() * 0.7;
+      m4.makeScale(sc, sc, sc).setPosition(x, terrainH(x, z) - 0.5, z); im.setMatrixAt(k++, m4);
+    }
+    im.count = k; scene.add(im);
+  }
   if (typeof window !== "undefined") window.__maru = maru;
   const railObjs = new Set(root.children.slice(nRail0));
   // 線路の高架・首都高の高架が通る所のビルは描かない (高架がビルを突き抜けないように)

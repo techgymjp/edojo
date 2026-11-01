@@ -221,7 +221,7 @@ export function addTokyoStation(scene, city) {
 
 // ---------- 赤坂: 日枝神社 (山王鳥居) と豊川稲荷 ----------
 export function addAkasaka(scene, city) {
-  const g = new THREE.Group();
+  let g = new THREE.Group();
   const verm = M(VERM);
   // 日枝神社: 社殿と、三角の破風がのった山王鳥居
   const [HX, HZ] = ll(35.67480, 139.73970);
@@ -231,7 +231,10 @@ export function addAkasaka(scene, city) {
   gable.rotation.z = Math.PI;
   gable.rotation.y = Math.PI / 2;
   gable.scale.set(1, 1, 0.3);
-  // 豊川稲荷 東京別院: 本殿と朱色の鳥居・のぼり
+  scene.add(g);
+  // 豊川稲荷 東京別院: 本殿と朱色の鳥居・のぼり (風雲江戸城: 地形に乗せるとき 1 か所ずつ持ち上げるよう、別のまとまりに)
+  const g0 = g;
+  g = new THREE.Group();
   const [TX, TZ] = ll(35.67670, 139.73130);
   hallBuilding(g, city, TX, TZ, 0.3, 0, 0, 20, 16, 7, 6, M(0xe8e2d4), M(0x3e4448), '豊川稲荷');
   torii(g, TX + 6, TZ + 26, 0.3, 6, 6.5, verm);

@@ -363,6 +363,14 @@ def main():
         keep.append(wp)
     print('warps kept', len(keep), 'joined by water', len(short))
     world['warps'] = [k for k in keep if math.hypot(k[2] - k[0], k[3] - k[1]) > 5]
+    # 池 (吹上・北の丸・西の丸の中の池) や、もう水でつながっている所のワープは除く
+    DROP = [(35.6720, 139.7603), (35.6804, 139.7517), (35.6908, 139.7499), (35.6842, 139.7499)]
+    def near_drop(k):
+        for la, lo in DROP:
+            x, z = (lo - W) * KX, (N - la) * KZ
+            if min(math.hypot(k[0] - x, k[1] - z), math.hypot(k[2] - x, k[3] - z)) < 12: return True
+        return False
+    world['warps'] = [k for k in world['warps'] if not near_drop(k)]
     json.dump(world, open(os.path.join(D, 'world.json'), 'w'))
     # ---- 今の建物 (輪の外だけ。0.5m 単位の整数、[高さ, x0, z0, x1, z1 ...]) ----
     out = []
