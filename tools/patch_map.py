@@ -16,6 +16,7 @@ cell = lambda la, lo: (int((N0 - la) * KZ / RES), int((lo - W0) * KX / RES))
 CARVE = [  # (緯度, 経度) → (緯度, 経度), 幅 m
     ((35.6738, 139.7834), (35.6718, 139.7834), 12),  # 新川の河口 → 隅田川
     ((35.6924, 139.7363), (35.6913, 139.7349), 22),
+    ((35.67150, 139.75978), (35.67205, 139.76011), 15), ((35.67205, 139.76011), (35.67240, 139.76051), 15),  # 山下門 → 日比谷 (細くくびれた所を広げる)
     ((35.68716, 139.75361), (35.68710, 139.75361), 8),
     ((35.68412, 139.75557), (35.68375, 139.75580), 8),  # 蓮池濠 ↔ 蛤濠 (10m のすき間)  # 乾濠 ↔ 蓮池濠 (6m のすき間を水でつなぐ)  # 市ヶ谷: 新見附濠 ↔ 市ヶ谷濠 (市ヶ谷橋の下)
 ]
@@ -81,6 +82,45 @@ A = np.array(img)
 for y in range(cell(35.68405, 0)[0], cell(35.68365, 0)[0] + 1):
     for x in range(cell(0, 139.7444)[1], cell(0, 139.7463)[1] + 1):
         if A[y, x] == 0: A[y, x] = 3
+# 細すぎる水路 (幅 10m 未満。古地図の線が細い所) は、舟が通れるように両側へ 6m ずつ広げる (お城のまわりは除く)
+wat0 = A == 0
+def boxmean0(m, r):
+    c = np.cumsum(np.cumsum(np.pad(m.astype(np.float64), ((1, 0), (1, 0))), 0), 1)
+    y0 = np.clip(np.arange(h) - r, 0, h); y1 = np.clip(np.arange(h) + r + 1, 0, h)
+    x0 = np.clip(np.arange(wdt) - r, 0, wdt); x1 = np.clip(np.arange(wdt) + r + 1, 0, wdt)
+    return (c[y1][:, x1] - c[y0][:, x1] - c[y1][:, x0] + c[y0][:, x0]) / ((y1 - y0)[:, None] * (x1 - x0)[None, :])
+thin0 = wat0 & (boxmean0(wat0, 4) < 0.42)
+near_castle = boxmean0((A == 3) | (A == 4), 12) > 0
+grow = (boxmean0(thin0, 2) > 0) & ~wat0 & ~near_castle & ((A == 1) | (A == 2) | (A == 5))
+print('widen thin canals', int(thin0.sum()), '->', int(grow.sum()))
+A = np.where(grow, 0, A).astype(A.dtype)
+# 東側 (日比谷・有楽町・銀座・築地・日本橋) で、道 (30m 未満の陸) をはさんで分かれている堀どうしは、道の下をくり抜いてつなぐ
+# (今の道路の橋の下を舟で通れるように。お城のまわりの土橋・見附は除く)
+labE, sizesE = label_all(A)
+y0b, x0b = cell(35.700, 139.757); y1b, x1b = cell(35.650, 139.800)
+sub = labE[y0b:y1b, x0b:x1b]
+big = np.array([sz >= 300 for sz in sizesE])
+pairs = {}
+RR = 17
+for dy in range(-RR, RR + 1):
+    for dx in range(-RR, RR + 1):
+        d2 = dy * dy + dx * dx
+        if d2 > RR * RR or d2 == 0: continue
+        a = sub[RR:-RR, RR:-RR]; b = sub[RR + dy:sub.shape[0] - RR + dy, RR + dx:sub.shape[1] - RR + dx]
+        m = (a > 0) & (b > 0) & (a < b) & big[a] & big[b]
+        if not m.any(): continue
+        ys, xs = np.nonzero(m)
+        for y, x in zip(ys[::5], xs[::5]):
+            k = (int(a[y, x]), int(b[y, x]))
+            if k not in pairs or pairs[k][0] > d2: pairs[k] = (d2, y + RR + y0b, x + RR + x0b, y + RR + dy + y0b, x + RR + dx + x0b)
+img = Image.fromarray(A); dr = ImageDraw.Draw(img); ncut = 0
+for (ka, kb), (d2, ya, xa, yb, xb) in pairs.items():
+    yc, xc = (ya + yb) // 2, (xa + xb) // 2
+    win = A[max(0, yc - 35):yc + 35, max(0, xc - 35):xc + 35]
+    if ((win == 3) | (win == 4)).any(): continue
+    dr.line([(xa, ya), (xb, yb)], fill=0, width=max(3, int(12 / RES))); ncut += 1
+    print('cut under road', round(N0 - yc * RES / KZ, 4), round(W0 + xc * RES / KX, 4), round(d2 ** 0.5 * RES), 'm')
+A = np.array(img)
 # 丘の上を通ってしまった想像の堀 (溜池の水路が日枝神社の山王の丘を切っている所) を陸に戻す: 半径の中で岸の高さが高い水のマス
 HILL = [((35.6748, 139.7397), 110, 16)]  # (中心, 半径 m, この高さ m より高い岸)
 Tp = np.array(Image.open(os.path.join(D, 'terrain.png')).convert('RGB')).astype(float); TH = (Tp[..., 0] * 256 + Tp[..., 1]) / 200 - 20

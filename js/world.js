@@ -378,14 +378,24 @@ export function buildWalls(scene) {
     }
   };
   // 水と陸の境目だけ (陸 = 1、水 = 0 の 0.5 の線)
-  const B = new Uint8Array(w * h);
+  // 陸 = 1、水 = 0 をぼかして (3×3 の平均を 2 回)、その 0.5 の線を岸にする (3m のマスの段々・ギザギザにならず、まっすぐ・なめらかな岸に)
+  let B = new Float32Array(w * h);
   for (let k = 0; k < w * h; k++) B[k] = L[k] > 0 ? 1 : 0;
+  for (let pass = 0; pass < 2; pass++) {
+    const B2 = new Float32Array(w * h);
+    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+      let sum = 0, n = 0;
+      for (let dj = -1; dj <= 1; dj++) { const jj = j + dj; if (jj < 0 || jj >= h) continue; for (let di = -1; di <= 1; di++) { const ii = i + di; if (ii < 0 || ii >= w) continue; sum += B[jj * w + ii]; n++; } }
+      B2[j * w + i] = sum / n;
+    }
+    B = B2;
+  }
   {
     const k = 1, t = 0.5;
     for (let j = 0; j < h - 1; j++) {
       for (let i = 0; i < w - 1; i++) {
         const a = B[j * w + i], b = B[j * w + i + 1], c = B[(j + 1) * w + i + 1], d = B[(j + 1) * w + i];
-        if (a === b && b === c && c === d) continue;
+        if ((a > 0.5) === (b > 0.5) && (b > 0.5) === (c > 0.5) && (c > 0.5) === (d > 0.5)) continue;
         const ca = a > t, cb = b > t, cc = c > t, cd = d > t;
         const idx = (ca << 3) | (cb << 2) | (cc << 1) | cd;
         const E = [
