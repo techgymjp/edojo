@@ -84,10 +84,23 @@ function buildRail(root, city, OX, OZ) {
       let p = i - 1; while (p >= 0 && base[p] === null) p--;
       let q = i + 1; while (q < n && base[q] === null) q++;
       const bp = p >= 0 ? base[p] : null, bq = q < n ? base[q] : null;
-      base[i] = bp !== null && bq !== null ? bp + (bq - bp) * (s[i] - s[p]) / ((s[q] - s[p]) || 1) : (bp ?? bq ?? waterY(r.x[i] + OX, r.z[i] + OZ) + 3);
+      const runL = (q < n ? s[q] : s[n - 1]) - (p >= 0 ? s[p] : 0);
+      // 短い所 (川を渡る) は前後の岸の高さをつなぐ橋。長くお濠の中を走る所 (真田濠の中央線) は水面のすぐ上
+      if (runL > 90 || bp === null || bq === null) base[i] = waterY(r.x[i] + OX, r.z[i] + OZ) + 2.5;
+      else base[i] = bp + (bq - bp) * (s[i] - s[p]) / ((s[q] - s[p]) || 1);
       base[i] = Math.max(base[i], waterY(r.x[i] + OX, r.z[i] + OZ) + 3);
     }
     r.y = base.map((b, i) => b + r.h[i] + 0.2);
+    // 勾配は 3.5% まで (地面の凸凹で線路が段々にならないように。低い所は高架で渡る)
+    // 前後 30m の平均でならす (端の点はそのまま。ほかの線とつながる所がずれないように)
+    for (let pass = 0; pass < 3; pass++) {
+      const y0 = r.y.slice();
+      for (let i = 1; i < n - 1; i++) {
+        let sw = 0, sy = 0;
+        for (let j = 0; j < n; j++) { const d = Math.abs(s[j] - s[i]); if (d < 30) { const w = 30 - d; sw += w; sy += w * y0[j]; } }
+        r.y[i] = sy / sw;
+      }
+    }
   }
   const brk = { p: [], n: [], uv: [] };
   // レンガ高架の区間 (緯度経度の範囲と路線)
@@ -122,6 +135,8 @@ function buildRail(root, city, OX, OZ) {
             const va = (y1 + 1.5 - g1) / 9, vb = (y2 + 1.5 - g2) / 9;
             brk.uv.push(u0, 0, u1, 0, u1, vb, u0, 0, u1, vb, u0, va);
           }
+          // アーチの天井 (下から見て空が透けないように) と、アーチの奥の壁 (真ん中で仕切る)
+          quad([B[0], y1 - 1.8, B[2]], [C[0], y2 - 1.8, C[2]], [D[0], y2 - 1.8, D[2]], [A[0], y1 - 1.8, A[2]], [0, -1, 0], [0.42, 0.2, 0.15]);
           acc += L;
           continue;
         }
@@ -151,6 +166,8 @@ function buildRail(root, city, OX, OZ) {
     quad(P2(-hl, -hw, y1), P2(-hl, hw, y1), P2(hl, hw, y1), P2(hl, -hw, y1), [0, 1, 0], col);
     quad(P2(-hl, hw, y0), P2(hl, hw, y0), P2(hl, hw, y1), P2(-hl, hw, y1), [vx, 0, vz], col);
     quad(P2(hl, -hw, y0), P2(-hl, -hw, y0), P2(-hl, -hw, y1), P2(hl, -hw, y1), [-vx, 0, -vz], col);
+    // 底 (下から見て透けないように)
+    quad(P2(-hl, -hw, y0), P2(hl, -hw, y0), P2(hl, hw, y0), P2(-hl, hw, y0), [0, -1, 0], col);
   };
   let nplat = 0;
   for (const r of RAIL) {
@@ -192,7 +209,7 @@ function buildRail(root, city, OX, OZ) {
     // 白い帯 (軒の蛇腹) と、アーチ (くり抜く)
     x2d.fillStyle = '#e8e0cc'; x2d.fillRect(0, 26, 256, 5);
     x2d.globalCompositeOperation = 'destination-out';
-    x2d.beginPath(); x2d.moveTo(40, 192); x2d.lineTo(40, 110); x2d.arc(128, 110, 88, Math.PI, 0); x2d.lineTo(216, 192); x2d.fill();
+    x2d.beginPath(); x2d.moveTo(64, 192); x2d.lineTo(64, 120); x2d.arc(128, 120, 64, Math.PI, 0); x2d.lineTo(192, 192); x2d.fill();
     const tex = new THREE.CanvasTexture(c); tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.ClampToEdgeWrapping; tex.flipY = false; tex.colorSpace = THREE.SRGBColorSpace;
     const bg = new THREE.BufferGeometry();
     // v は下から上へ 0 → 1 だが、キャンバスは上が 0 (flipY=false) なので反転する
@@ -609,6 +626,7 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
         const mi = Math.floor((k + e) / 2), [qx, qz] = pts[mi], [rx, rz] = pts[Math.min(pts.length - 1, mi + 1)], rl = Math.hypot(rx - qx, rz - qz) || 1;
         const px_ = -(rz - qz) / rl, pz_ = (rx - qx) / rl;
         const across = isWater(qx + px_ * 12, qz + pz_ * 12) && isWater(qx - px_ * 12, qz - pz_ * 12);
+        if (typeof window !== 'undefined') (window.__br ||= []).push({ x: Math.round(qx), z: Math.round(qz), n: (e - k) * 4, across, ends: k > 0 && e < pts.length, castle: k > 0 && e < pts.length && (isCastle(...pts[k - 1]) || isCastle(...pts[e])), ya: k > 1 ? +terrainH(...pts[Math.max(0, k - 2)]).toFixed(1) : null, yb: e + 1 < pts.length ? +terrainH(...pts[Math.min(pts.length - 1, e + 1)]).toFixed(1) : null, w: +waterY(qx, qz).toFixed(1), wdt });
         if (across && k > 0 && e < pts.length && (e - k) * 4 >= 8 && (e - k) * 4 < 400 && !isCastle(...pts[k - 1]) && !isCastle(...pts[e])) {
           const a = Math.max(0, k - 2), b = Math.min(pts.length - 1, e + 1);
           const ya = terrainH(...pts[a]), yb = terrainH(...pts[b]);
@@ -629,6 +647,20 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
               bridge[Math.min(q, q + dir)] = 1;
               h = h2; q += dir;
             }
+            // 道の線がここで終わっているときは、同じ向きにまっすぐ延ばして地面まで下ろす
+            if ((q + dir < 0 || q + dir >= pts.length) && h - terrainH(...pts[q]) > 0.25 && q - dir >= 0 && q - dir < pts.length) {
+              const [px, pz] = pts[q - dir], [cx0, cz0] = pts[q];
+              const dl = Math.hypot(cx0 - px, cz0 - pz) || 1, ux = (cx0 - px) / dl, uz = (cz0 - pz) / dl;
+              let x1 = cx0, z1 = cz0;
+              for (let g = 0; g < 25 && h - terrainH(x1, z1) > 0.25; g++) {
+                const x2 = x1 + ux * 4, z2 = z1 + uz * 4;
+                if (isWater(x2, z2)) break;
+                const h2 = Math.max(terrainH(x2, z2) + 0.12, h - 0.24);
+                boxU((x1 + x2) / 2, (z1 + z2) / 2, ux, uz, 4.2, wdt, Math.min(terrainH(x1, z1), terrainH(x2, z2)) - 1, (h + h2) / 2, CON, ASP);
+                h = h2; x1 = x2; z1 = z2;
+              }
+            }
+            if (typeof window !== 'undefined') (window.__ramp ||= []).push({ x: Math.round(pts[q][0]), z: Math.round(pts[q][1]), gap: +(h - terrainH(...pts[q])).toFixed(1), deck: +deck.toFixed(1), w: +wmax.toFixed(1), span: spanL, end: q + dir < 0 || q + dir >= pts.length, wet: q + dir >= 0 && q + dir < pts.length && isWater(...pts[q + dir]) });
           }
           for (let q = a; q < b; q++) {
             bridge[q] = 1;
@@ -650,11 +682,8 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
                 boxU(cx + rx2 * 0.9, cz + rz2 * 0.9, ux, uz, 0.6, 1.2, deck + 6.8, deck + 7.1, DARK, LAMP);
               }
             }
-            // 桁 (薄い鋼の桁)
-            for (const sd of [-1, 1]) {
-              const ox = vx * sd * (wdt / 2 - 0.6), oz = vz * sd * (wdt / 2 - 0.6);
-              boxU(cx + ox, cz + oz, ux, uz, L + 0.2, 0.4, deck - 1.2, deck - 0.3, GIRDER);
-            }
+            // 桁: 橋の幅いっぱいの厚い桁 (下から見て空が透けないように)
+            boxU(cx, cz, ux, uz, L + 0.2, wdt - 0.2, deck - 1.8, deck - 0.45, GIRDER);
           }
           // 深い谷 (お茶の水) の橋: 谷底からのアーチ (聖橋)
           if (deck - wmax > 10 && spanL > 30) {

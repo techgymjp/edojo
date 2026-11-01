@@ -41,7 +41,7 @@ export const CFG = {
   throwArc: 70,       // 前に投げられる範囲 (舳先から左右の角度、度)
   maxEscape: 5,       // 外堀を渡り切られて取り逃がすと負けになる人数
   boatJumpSpeed: 18,  // これより速いと舟ごと跳ぶ (m/s)
-  ninjaScale: 4,    // 忍者を大きめに (遠くからでも見えるように)
+  ninjaScale: 0.95, // 忍者は実寸 (身長 約 1.7m)
 };
 
 // ---------- 描画の準備 ----------
@@ -74,7 +74,7 @@ scene.add(moon);
 const G = {
   state: 'loading', t: 0, captured: 0, spawned: 0, nextSpawn: 0, st: 100, stDelay: 0,
   name: '平次', ninjas: [], coins: [], lassos: [], fx: [], floats: [], coinCd: 0, lassoCd: 0, throwT: 0,
-  warpCd: 0, camYaw: 0, camDist: 12, lastMouse: -99, mouseDir: null, endT: 0, result: null, intruder: null,
+  warpCd: 0, camYaw: 0, camDist: 7, lastMouse: -99, mouseDir: null, endT: 0, result: null, intruder: null,
 };
 const P = { x: 0, z: 0, h: 0, v: 0, gear: 1, roll: 0, dashT: 0 };
 let boat, water, modern, castle, warps = [], balloon, navi, fw, tokyo;
@@ -175,7 +175,8 @@ async function boot() {
     navi = buildNav();
     fw = new Fireworks(scene, 1.6, true); // 昼でも見えるように普通に重ねて描く
     boat = makeBoat();
-    boat.scale.setScalar(1.5);
+    // 実寸: 舟は長さ約 6m、お侍は身長約 1.7m
+    boat.scale.setScalar(0.75);
     scene.add(boat);
     buildMinimap();
     console.log('town', town, 'boxes', modern.list.length, 'targets', navi.targets, 'landing', navi.landing.length, 'warps', warps.length);
@@ -343,7 +344,7 @@ function spawnNinja(plan) {
   m.position.set(roof.x, y0, roof.z);
   m.rotation.y = Math.atan2(lx - roof.x, lz - roof.z);
   scene.add(m);
-  const bam = makeBamboo(); bam.visible = false; bam.scale.setScalar(CFG.ninjaScale); scene.add(bam);
+  const bam = makeBamboo(); bam.visible = false; bam.scale.setScalar(Math.max(1.5, CFG.ninjaScale)); scene.add(bam); // 竹筒は見えるように少し大きめ
   const marker = document.createElement('div'); marker.className = 'nmark down'; marker.innerHTML = '▼';
   $('marks').appendChild(marker);
   const nj = {
@@ -1121,13 +1122,13 @@ const camHeading = () => P.h + G.camYaw;
 function updateCamera(dt) {
   if (down('KeyQ')) G.camYaw -= dt * 1.5;
   if (down('KeyE')) G.camYaw += dt * 1.5;
-  if (I.wheel) { G.camDist = clamp(G.camDist * (1 + I.wheel * 0.001), 8, 80); I.wheel = 0; }
+  if (I.wheel) { G.camDist = clamp(G.camDist * (1 + I.wheel * 0.001), 4, 80); I.wheel = 0; }
   if (!I.joy && lookId === null) G.camYaw *= Math.exp(-dt * 0.5);
   const ch = camHeading();
   // カメラは小舟が通ってきた水の上の道筋をたどって後ろにつく (ビルや石垣にめり込んで迷子にならないように)
   const obst = (x, z) => Math.max(groundH(x, z), navi.roofAt(x, z));
   // ローアングル (水面から 7m ほど。首都高の高架の下から小舟を見る)
-  let dist = G.camDist, ty = waterY(P.x, P.z) + 4.2, blockF = -1;
+  let dist = G.camDist, ty = waterY(P.x, P.z) + 2.6, blockF = -1;
   let tx, tz;
   // 小舟の真後ろにつく (速くても置いていかれないように)
   if (tx === undefined || Math.hypot(tx - P.x, tz - P.z) < G.camDist * 0.5) {
@@ -1137,17 +1138,17 @@ function updateCamera(dt) {
       const f = i / 16, sx = P.x - Math.cos(ch) * G.camDist * f, sz = P.z - Math.sin(ch) * G.camDist * f;
       if (obst(sx, sz) + 1.2 > wy0 + 3 + (ty - wy0 - 3) * f) { blockF = (i - 1) / 16; break; }
     }
-    if (blockF >= 0) dist = Math.max(8, G.camDist * blockF - 1.5);
+    if (blockF >= 0) dist = Math.max(4, G.camDist * blockF - 1.5);
     tx = P.x - Math.cos(ch) * dist; tz = P.z - Math.sin(ch) * dist;
   }
-  ty = Math.max(ty, groundH(tx, tz) + 4);
+  ty = Math.max(ty, groundH(tx, tz) + 2.5);
   const k = camInit ? 1 - Math.exp(-dt * 14) : 1;
   camInit = true;
   camera.position.x += (tx - camera.position.x) * k;
   camera.position.z += (tz - camera.position.z) * k;
   camera.position.y += (ty - camera.position.y) * k;
   if (G.shake > 0) { G.shake -= dt; camera.position.x += rand(-0.3, 0.3); camera.position.y += rand(-0.2, 0.2); }
-  camera.lookAt(P.x + Math.cos(P.h) * 60, waterY(P.x, P.z) + 8, P.z + Math.sin(P.h) * 60);
+  camera.lookAt(P.x + Math.cos(P.h) * 60, waterY(P.x, P.z) + 5, P.z + Math.sin(P.h) * 60);
 }
 
 // ---------- 空の色: 明け六つ (朝) から始まり、10 分で 1 日 (昼 → 夕方 → 夜) ----------
@@ -1580,7 +1581,28 @@ function loop(now) {
   if ((G.frame = (G.frame || 0) + 1) % 3 === 0) water.reflect(renderer, scene, camera, (G.state === 'play' || G.state === 'ending') ? waterY(P.x, P.z) : undefined);
   CUT.boat.value.y = cb;
   renderer.render(scene, camera);
+  // ワイプ (右上): プレイヤーの後ろ 50m・高さ 50m から見下ろす (地形などの確かめ用。V で消す・出す)
+  const wf = document.getElementById('wipe');
+  if (wf) wf.style.display = (G.state === 'play' && wipeOn) ? 'block' : 'none';
+  if (G.state === 'play' && wipeOn && wf) {
+    const r = wf.getBoundingClientRect(), H = innerHeight;
+    const wy0 = waterY(P.x, P.z);
+    wipeCam.position.set(P.x - Math.cos(P.h) * 50, wy0 + 50, P.z - Math.sin(P.h) * 50);
+    wipeCam.lookAt(P.x + Math.cos(P.h) * 40, wy0, P.z + Math.sin(P.h) * 40);
+    wipeCam.aspect = r.width / r.height; wipeCam.updateProjectionMatrix();
+    renderer.setScissorTest(true);
+    renderer.setViewport(r.left, H - r.bottom, r.width, r.height);
+    renderer.setScissor(r.left, H - r.bottom, r.width, r.height);
+    const ac = renderer.autoClear; renderer.autoClear = true;
+    renderer.render(scene, wipeCam);
+    renderer.autoClear = ac;
+    renderer.setScissorTest(false);
+    renderer.setViewport(0, 0, innerWidth, innerHeight);
+  }
 }
+const wipeCam = new THREE.PerspectiveCamera(55, 16 / 9, 1, 6000);
+let wipeOn = true;
+addEventListener('keydown', (e) => { if (e.code === 'KeyV') wipeOn = !wipeOn; });
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
 requestAnimationFrame(loop);
 boot();

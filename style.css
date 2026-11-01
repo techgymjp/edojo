@@ -115,3 +115,6 @@ h1 { font-family: "Yuji Syuku", serif; font-size: clamp(52px, 13vw, 96px); line-
 @keyframes bob { to { margin-top: 8px; } }
 #ninjaNav { position: absolute; top: max(62px, calc(env(safe-area-inset-top) + 54px)); right: 12px; background: rgba(110, 20, 20, 0.78); border: 1px solid rgba(255, 170, 150, 0.7); border-radius: 22px; padding: 4px 14px; font-size: 20px; font-weight: 800; color: #ffd8c8; white-space: nowrap; text-shadow: 0 1px 2px #000; display: none; }
 #ninjaArrow { display: inline-block; color: #ff6a50; font-size: 24px; }
+
+/* ワイプ (右上): 後ろ 50m・高さ 50m からの視点。枠だけ (中身は 3D の描画) */
+#wipe { position: absolute; top: max(112px, calc(env(safe-area-inset-top) + 104px)); right: 12px; width: 30vw; max-width: 420px; aspect-ratio: 16 / 9; border: 2px solid rgba(255,255,255,0.7); border-radius: 6px; pointer-events: none; display: none; box-shadow: 0 2px 8px rgba(0,0,0,0.5); }

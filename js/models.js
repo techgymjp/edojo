@@ -72,7 +72,7 @@ export function makeBoat() {
   g.add(floor);
   // 主人公のお侍 (ひとりで乗る。動力は謎)。遠くからでも分かるよう少し大きめ
   const hero = makeSamurai('hero');
-  hero.position.set(0, 0.45, -0.4); hero.scale.setScalar(1.35);
+  hero.position.set(0, 0.45, -0.4); hero.scale.setScalar(1.2); // 舟 0.75 倍の中で身長 約 1.7m
   g.add(hero);
   // 艫の謎の渦 (ダッシュのとき光る)
   const glow = new THREE.Mesh(new THREE.RingGeometry(0.3, 0.9, 16), new THREE.MeshBasicMaterial({ color: 0x9fe8ff, transparent: true, opacity: 0, side: THREE.DoubleSide }));
