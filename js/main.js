@@ -1068,13 +1068,15 @@ function drawMinimap() {
     const [a, b] = X(nj.x, nj.z);
     g.fillStyle = danger ? '#ff2020' : (nj.state === 'bamboo' || nj.state === 'swim1') ? '#1fa810' : nj.state === 'run' ? '#e0a000' : '#ff7a20';
     g.strokeStyle = '#fff'; g.lineWidth = 1.5;
-    g.lineWidth = 3; g.beginPath(); g.arc(clamp(a, 14, c.width - 14), clamp(b, 14, c.height - 14), danger ? 18 : 13, 0, Math.PI * 2); g.fill(); g.stroke();
+    const r = danger ? 30 : 24, qx = clamp(a, r, c.width - r), qy = clamp(b, r, c.height - r);
+    g.lineWidth = 4; g.beginPath(); g.arc(qx, qy, r, 0, Math.PI * 2); g.fill(); g.stroke();
+    g.fillStyle = '#fff'; g.font = `900 ${r * 1.2}px serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('忍', qx, qy + 2);
   }
   const [a, b] = X(P.x, P.z);
   g.save(); g.translate(a, b); g.rotate(P.h);
   g.fillStyle = '#ffd400'; g.strokeStyle = '#000'; g.lineWidth = 3;
-  g.beginPath(); g.arc(0, 0, 17, 0, Math.PI * 2); g.fill(); g.stroke();
-  g.fillStyle = '#000'; g.beginPath(); g.moveTo(15, 0); g.lineTo(-7, 9); g.lineTo(-2, 0); g.lineTo(-7, -9); g.closePath(); g.fill();
+  g.beginPath(); g.arc(0, 0, 24, 0, Math.PI * 2); g.fill(); g.stroke();
+  g.fillStyle = '#000'; g.beginPath(); g.moveTo(21, 0); g.lineTo(-10, 13); g.lineTo(-3, 0); g.lineTo(-10, -13); g.closePath(); g.fill();
   g.restore();
 }
 // カメラから見て石垣・岸の陰か
@@ -1114,8 +1116,8 @@ function updateMarkers() {
     $('dangerInfo').textContent = `${moatName(worst.x, worst.z)} ${Math.round(Math.hypot(worst.x - P.x, worst.z - P.z))}m　あと${Math.max(0, Math.round((1 - worst.prog) * worst.H / (worst.dote ? CFG.climbDote : CFG.climbStone)))}秒`;
   } else { ar.style.display = 'none'; $('dangerInfo').textContent = ''; }
 }
-// 道案内: 最初は外堀をぐるっと回って (神田川 → 飯田橋 → 牛込 → 市ヶ谷 → 四谷 → 赤坂 → 溜池 → 虎ノ門 → 新橋 → 山下 → 日比谷) 内堀へ。
-// 内堀に着いたら、あとは近くの忍者へ
+// 道案内: 忍者が出ていれば一番近い忍者へ。いなければ外堀をぐるっと回る道
+// (神田川 → 飯田橋 → 牛込 → 市ヶ谷 → 四谷 → 赤坂 → 溜池 → 虎ノ門 → 新橋 → 山下 → 日比谷) の次の地点へ
 const ROUTE = [
   ['神田川', 35.6966, 139.7800], ['秋葉原', 35.6977, 139.7700], ['お茶の水', 35.7008, 139.7650], ['水道橋', 35.7024, 139.7550],
   ['飯田橋', 35.7027, 139.7450], ['牛込', 35.7000, 139.7428], ['新見附', 35.6964, 139.7399], ['市ヶ谷', 35.6935, 139.7360],
@@ -1149,7 +1151,16 @@ function routePoints() {
 function updateNav() {
   const el = $('nav');
   const c = cellOf(P.x, P.z), d0 = c >= 0 ? navi.dist[c] : -1;
-  if (G.navStage !== 'ninja' && d0 >= 0 && d0 < 67) { G.navStage = 'ninja'; alertMsg('内堀に着いた！ 忍者を探せ'); }
+  // 忍者が出ていれば一番近い忍者を、いなければ外堀を回る道の次の地点を指す
+  let ninja = null, nd = 1e18;
+  for (const nj of G.ninjas) {
+    if (['gone', 'bound', 'in', 'fall'].includes(nj.state)) continue;
+    const d = Math.hypot(nj.x - P.x, nj.z - P.z) * (nj.state === 'climb' || nj.state === 'emerge' ? 0.4 : 1);
+    if (d < nd) { nd = d; ninja = nj; }
+  }
+  G.navStage = ninja ? 'ninja' : 'route';
+  const R0 = routePoints();
+  if (!ninja && (G.wpi || 0) >= R0.length - 1 && Math.hypot(R0[R0.length - 1].x - P.x, R0[R0.length - 1].z - P.z) < 120) { el.style.display = 'none'; G.navT = null; return; }
   let tx, tz, label;
   if (G.navStage !== 'ninja') {
     const R = routePoints();
@@ -1175,18 +1186,10 @@ function updateNav() {
       const clear = (x, z) => { const l = Math.hypot(x - P.x, z - P.z); for (let s2 = 0; s2 < l; s2 += 2) if (!isWater(P.x + (x - P.x) * s2 / l, P.z + (z - P.z) * s2 / l)) return false; return true; };
       for (const q of path) if (clear(cellX(q), cellZ(q))) { tx = cellX(q); tz = cellZ(q); }
     }
-    let rest = Math.hypot(tx - P.x, tz - P.z);
-    for (let k = i; k < R.length - 1; k++) rest += Math.hypot(R[k + 1].x - R[k].x, R[k + 1].z - R[k].z);
-    label = `内堀へ　次は${R[i].n}　あと約${Math.round(rest / 100) / 10}km`;
+    const dn = Math.hypot(R[i].x - P.x, R[i].z - P.z);
+    label = `外堀を進め　次は${R[i].n}（約${dn >= 1000 ? (Math.round(dn / 100) / 10) + 'km' : Math.round(dn / 10) * 10 + 'm'}）`;
   } else {
-    // 一番近い忍者 (石垣を登っている忍者は危ないので先に)
-    let best = null, bd = 1e18;
-    for (const nj of G.ninjas) {
-      if (['gone', 'bound', 'in', 'fall'].includes(nj.state)) continue;
-      const d = Math.hypot(nj.x - P.x, nj.z - P.z) * (nj.state === 'climb' || nj.state === 'emerge' ? 0.4 : 1);
-      if (d < bd) { bd = d; best = nj; }
-    }
-    if (!best) { el.style.display = 'none'; G.navT = null; return; }
+    const best = ninja;
     tx = best.x; tz = best.z;
     const what = { roof: '屋上の忍者', glide: '飛んでいる忍者', dive: '水に潜った忍者', swim1: '竹筒の忍者', bamboo: '竹筒の忍者', emerge1: '岸を登る忍者', climbOut: '岸を登る忍者', run: '屋根を走る忍者', emerge: '石垣を登る忍者', climb: '石垣を登る忍者' }[best.state] || '忍者';
     label = `${what}　${Math.round(Math.hypot(tx - P.x, tz - P.z))}m`;
@@ -1246,7 +1249,7 @@ function startGame() {
   $('title').classList.add('hidden'); $('result').classList.add('hidden'); $('pause').classList.add('hidden');
   $('hud').classList.remove('hidden');
   G.state = 'play';
-  alertMsg('内堀へ向かえ！ 江戸城に忍び寄る忍者を、投げ銭と投げ輪で召し捕れ');
+  alertMsg('外堀を回って、江戸城に忍び寄る忍者を投げ銭と投げ輪で召し捕れ！');
 }
 function pause(on) {
   if (on && G.state === 'play') { G.state = 'pause'; $('pause').classList.remove('hidden'); }
