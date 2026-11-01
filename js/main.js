@@ -1220,7 +1220,8 @@ function drawMinimap() {
     const danger = nj.state === 'climb' || nj.state === 'emerge';
     if (danger && Math.floor(G.t * 4) % 2) continue;
     const [a, b] = X(nj.x, nj.z);
-    g.fillStyle = danger ? '#ff2020' : (nj.state === 'bamboo' || nj.state === 'swim1') ? '#1fa810' : nj.state === 'run' ? '#e0a000' : '#ff7a20';
+    // 外堀を越えた (上陸した) 忍者は黄緑、水の中は青、待ち伏せ・飛んでいるのは橙
+    g.fillStyle = danger ? '#ff2020' : ['climbOut', 'emerge1', 'walk', 'run'].includes(nj.state) ? '#9acd32' : (nj.state === 'bamboo' || nj.state === 'swim1' || nj.state === 'dive') ? '#2a8cf0' : '#ff7a20';
     g.strokeStyle = '#fff'; g.lineWidth = 1.5;
     const r = danger ? 30 : 24, qx = clamp(a, r, c.width - r), qy = clamp(b, r, c.height - r);
     g.lineWidth = 4; g.beginPath(); g.arc(qx, qy, r, 0, Math.PI * 2); g.fill(); g.stroke();
