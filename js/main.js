@@ -1258,6 +1258,17 @@ function buildMinimap() {
   mm.ringC = [(x0 + x1) / 2, (y0 + y1) / 2];
   Object.assign(mm, { c, map, over, zoom: mm.fit * 2 });
 }
+// 本丸の区域 (地図のコード 4) までの距離 (m)。区域の点を間引いて持ち、10m ごとに覚えておく
+let honPts = null; const honMemo = new Map();
+window.__honDist = (x, z) => honDist(x, z);
+window.__mmGet = () => mm;
+function honDist(x, z) {
+  if (!honPts) { honPts = []; for (let j = 0; j < W.h; j += 4) for (let i = 0; i < W.w; i += 4) if (W.code[j * W.w + i] === 4) honPts.push((i + 0.5) * W.res, (j + 0.5) * W.res); }
+  const k = Math.floor(x / 10) * 100000 + Math.floor(z / 10);
+  let d = honMemo.get(k);
+  if (d === undefined) { d = Infinity; for (let i = 0; i < honPts.length; i += 2) { const dd = (honPts[i] - x) ** 2 + (honPts[i + 1] - z) ** 2; if (dd < d) d = dd; } d = Math.sqrt(d); if (honMemo.size > 50000) honMemo.clear(); honMemo.set(k, d); }
+  return d;
+}
 function drawMinimap() {
   const { c } = mm, g = c.getContext('2d');
   // 内堀 (お城の石垣から 200m 以内のお濠) にいるときは 2 倍
@@ -1273,7 +1284,9 @@ function drawMinimap() {
   const mn = moatName(P.x, P.z), lonP = W.W + P.x / W.KX;
   const west = ['弁慶濠', '溜池', '外濠', '道三濠'].includes(mn) || (mn === '日本橋川' && lonP < 139.7715);
   // 全体の地図はやめて、いつも 2 倍 (自分が真ん中・向いている方が上)。江戸城の近く (内堀) では 4 倍
-  const want = mm.fit * (inner || nearHon ? 4 : 2);
+  // 本丸 (本丸・二の丸・三の丸の区域) からの距離で決める: 100m 未満 (本丸のまわりのお濠) は 8 倍、2km 未満 (弁慶濠まで) は 4 倍、その先は 2 倍
+  const dh = honDist(P.x, P.z);
+  const want = mm.fit * (dh < 95 ? 8 : dh < 2000 ? 4 : 2);
   mm.zoom += (want - mm.zoom) * 0.08;
   const t = 1; // いつも自分が真ん中
   const [pmx, pmy] = xzToMap(P.x, P.z);
