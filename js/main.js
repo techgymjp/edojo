@@ -737,6 +737,8 @@ function hitNinja(nj, byLasso) {
   const c = ninjaCenter(nj);
   G.captured++;
   A.hyoshigi(); A.sfx('kill', 0.5);
+  // 仕留められた忍者の「オーー」という嘆きの叫び (少し遅れて)
+  setTimeout(() => A.ooh(0.6), 150);
   // 仕留めたら花火 (小舟の前の空に)
   { const d = 200, wy = waterY(P.x, P.z); fw.show(P.x + Math.cos(P.h) * d, wy - 50, P.z + Math.sin(P.h) * d, 3, false, 0.35, 90); }
   nj.m.visible = true; nj.bam.visible = false; nj.marker.style.display = 'none';
@@ -1613,6 +1615,7 @@ function updateHud(dt) {
   $('hTime').textContent = KOKU[Math.floor(((hourNow() + 1) % 24) / 2)];
   $('hPlace').textContent = moatName(P.x, P.z);
   $('gear').textContent = `時速${Math.round(Math.abs(P.v) * 3.6)}km`;
+  { const e = Math.floor(G.t); $('hElapsed').textContent = `経過 ${Math.floor(e / 60)}:${String(e % 60).padStart(2, '0')}`; }
   if (alertTimer > 0) { alertTimer -= dt; if (alertTimer <= 0) $('alert').classList.remove('show'); }
   drawMinimap();
   updateMarkers();

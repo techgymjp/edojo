@@ -85,3 +85,20 @@ export function buzzer() {
     o.connect(g); o2.connect(g); g.connect(master); o.start(t); o2.start(t); o.stop(t + 0.45); o2.stop(t + 0.45);
   }
 }
+
+// 仕留められた忍者の嘆きの叫び「オーー」: のどの音 (のこぎり波) を「オ」の響き (500Hz・850Hz あたり) に通し、下がりながら消える
+export function ooh(vol = 0.5) {
+  if (!ctx) return;
+  const t = ctx.currentTime, T = 1.1, f0 = 150 + Math.random() * 40;
+  const o = ctx.createOscillator(); o.type = 'sawtooth';
+  o.frequency.setValueAtTime(f0, t); o.frequency.linearRampToValueAtTime(f0 * 1.08, t + 0.15); o.frequency.exponentialRampToValueAtTime(f0 * 0.6, t + T);
+  const vib = ctx.createOscillator(), vg = ctx.createGain(); vib.frequency.value = 5.5; vg.gain.value = 4; vib.connect(vg); vg.connect(o.frequency);
+  const out = ctx.createGain();
+  out.gain.setValueAtTime(0, t); out.gain.linearRampToValueAtTime(vol, t + 0.08); out.gain.setValueAtTime(vol, t + 0.5); out.gain.exponentialRampToValueAtTime(0.001, t + T);
+  for (const [f, q, g] of [[480, 6, 1], [850, 8, 0.55], [2600, 10, 0.12]]) {
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = q;
+    const gg = ctx.createGain(); gg.gain.value = g; o.connect(bp); bp.connect(gg); gg.connect(out);
+  }
+  out.connect(master);
+  o.start(t); vib.start(t); o.stop(t + T + 0.05); vib.stop(t + T + 0.05);
+}
