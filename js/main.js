@@ -962,14 +962,24 @@ function updateBoat(dt) {
     else P.v *= Math.exp(-dt * CFG.drag);
   }
   // ジャンプ (Space・ジャンプボタン)。長押しするほど高く
-  const jumpKey = down('Space') || I.tJump;
+  const jumpKey = down('Space') || I.tJump || !!window.__jump;
   if (jumpKey && !P.air && !P.jumpHeld) {
     // 速いときは舟ごと、遅いときはお侍だけが跳ぶ (着地すると舟が下に来る)
-    P.air = true; P.boatAir = Math.abs(P.v) >= CFG.boatJumpSpeed; P.vy = CFG.jump0; P.jt = 0; P.alt = waterY(P.x, P.z);
+    P.air = true; P.boatAir = Math.abs(P.v) >= CFG.boatJumpSpeed; P.vy = CFG.jump0; P.jt = 0; P.alt = waterY(P.x, P.z); P.jw = null;
+    // 速いジャンプでワープの所 (土橋・見附) を跳び越える: 渦の 60m 以内で向こう側へ向かっていれば、向こうの渦まで飛ぶ
+    if (P.boatAir) jwSearch: for (const w of warps) for (const [e, o] of [[w.a, w.b], [w.b, w.a]]) {
+      const dx = o.x - P.x, dz = o.z - P.z, d = Math.hypot(dx, dz);
+      if (Math.hypot(e.x - P.x, e.z - P.z) < 60 && Math.hypot(e.x - P.x, e.z - P.z) < d && d < 520 && (dx * Math.cos(P.h) + dz * Math.sin(P.h)) / d > 0.7) {
+        let peak = -1e9; for (let k = 0; k <= 20; k++) { const x = P.x + dx * k / 20, z = P.z + dz * k / 20; peak = Math.max(peak, groundH(x, z), navi.roofAt(x, z)); }
+        P.jw = { o, sx: P.x, sz: P.z, T: Math.max(1.2, d / Math.max(18, P.v)), t: 0, y0: waterY(P.x, P.z), y1: waterY(o.x, o.z), peak: peak + 8 };
+        P.vy = CFG.gravity * P.jw.T / 2; P.jt = 1e9; P.h = Math.atan2(dz, dx);
+        break jwSearch;
+      }
+    }
     A.sfx('whoosh', 0.5, 0.8); if (P.boatAir) splash(P.x, P.z, 0.6);
   }
   P.jumpHeld = jumpKey;
-  if (P.air) {
+  if (P.air && !P.jw) {
     if (jumpKey && P.jt < CFG.jumpHold) { P.vy += CFG.jumpBoost * dt; P.jt += dt; } else P.jt = 1e9;
     P.vy -= CFG.gravity * dt;
     P.alt += P.vy * dt;
@@ -983,8 +993,14 @@ function updateBoat(dt) {
   // 進む向きの先 (舳先) と真ん中が水なら進める (艫が岸にふれていても引っかからない)
   const ok = (x, z, h) => isWater(x, z) && isWater(x + Math.cos(h) * 5 * sg, z + Math.sin(h) * 5 * sg) && isWater(x + Math.cos(h) * 2.5 * sg, z + Math.sin(h) * 2.5 * sg);
   let slid = false, moved = false;
-  // 宙に浮いているときも、お濠の幅の中だけ (陸の上へは出られない)
-  if (ok(nx, nz, P.h)) { P.x = nx; P.z = nz; moved = true; }
+  // 宙に浮いているときも、お濠の幅の中だけ (陸の上へは出られない)。ワープの所を跳び越えるときだけ陸の上を飛ぶ
+  if (P.air && P.jw) {
+    P.jw.t += dt; const f = Math.min(1, P.jw.t / P.jw.T);
+    P.x = P.jw.sx + (P.jw.o.x - P.jw.sx) * f; P.z = P.jw.sz + (P.jw.o.z - P.jw.sz) * f; moved = true;
+    const base = P.jw.y0 + (P.jw.y1 - P.jw.y0) * f;
+    P.alt = base + Math.sin(Math.PI * f) * Math.max(6, P.jw.peak - Math.min(P.jw.y0, P.jw.y1)); P.vy = Math.cos(Math.PI * f) * 10;
+    if (f >= 1) { P.jw = null; G.warpCd = 1.5; P.air = false; P.alt = waterY(P.x, P.z); splash(P.x, P.z, 1.4); A.sfx('splash1', 0.6); }
+  } else if (ok(nx, nz, P.h)) { P.x = nx; P.z = nz; moved = true; }
   else {
     // 岸に沿ってすべる (斜めにぶつかったとき)
     for (const da of [0.35, -0.35, 0.7, -0.7]) {
@@ -1010,7 +1026,7 @@ function updateBoat(dt) {
     const k = nearestWater(P.x, P.z); if (k) { P.x = k[0]; P.z = k[1]; }
   }
   if (P.air) {
-    const surf = waterY(P.x, P.z);
+    const surf = P.jw ? -1e9 : waterY(P.x, P.z);
     if (P.alt <= surf && P.vy < 0) {
       P.air = false; P.vy = 0;
       if (P.boatAir) { splash(P.x, P.z, 1.2); A.sfx('splash1', 0.6); } else A.sfx('hit', 0.3, 0.7);
@@ -1526,4 +1542,4 @@ requestAnimationFrame(loop);
 boot();
 window.__G = G; window.__P = P; window.__CFG = CFG; window.__ll = ll; window.__gh = groundH;
 window.__tokyo = () => tokyo; window.__W = W; window.__renderer = renderer; window.__scene = scene;
-window.__dbg = { hitNinja, spawnNinja, throwCoins, throwLasso, startGame, navi: () => navi, isWater, cellOf, step, updateNav };
+window.__dbg = { warps: () => warps, hitNinja, spawnNinja, throwCoins, throwLasso, startGame, navi: () => navi, isWater, cellOf, step, updateNav };

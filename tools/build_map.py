@@ -330,10 +330,17 @@ def main():
             _, ya, xa, yb, xb = best
             warps.append([round(xa * RES + RES / 2, 1), round(ya * RES + RES / 2, 1), round(xb * RES + RES / 2, 1), round(yb * RES + RES / 2, 1)])
             print('outer warp', (la0, lo0), '->', (la1, lo1), round(best[0] ** 0.5 * RES), 'm')
+    # 実際はつながっていない外堀どうし (真田濠 ↔ 弁慶濠・赤坂見附) には必ずワープを置く
+    for (la0, lo0), (la1, lo1) in [((35.6818, 139.7322), (35.6790, 139.7352))]:
+        a, b = snapc(la0, lo0), snapc(la1, lo1)
+        if a and b and a != b:
+            warps.append([round(a[1] * RES + RES / 2, 1), round(a[0] * RES + RES / 2, 1), round(b[1] * RES + RES / 2, 1), round(b[0] * RES + RES / 2, 1)])
+            print('forced warp', (la0, lo0), (la1, lo1))
     print('warps', len(warps), 'unjoined', [(c['id'], c['n']) for c in moats if c['id'] not in joined])
     Image.fromarray(A).save(os.path.join(D, 'map.png'), optimize=True)
     world = {'W': W, 'E': E, 'S': S, 'N': N, 'KX': KX, 'KZ': KZ, 'res': RES, 'w': w, 'h': h,
              'ring': [[round(v, 1) for v in xz(*p)] for p in RING], 'warps': warps}
+    world['warps'] = [wp for wp in warps if math.hypot(wp[2] - wp[0], wp[3] - wp[1]) > 5]
     json.dump(world, open(os.path.join(D, 'world.json'), 'w'))
     # ---- 今の建物 (輪の外だけ。0.5m 単位の整数、[高さ, x0, z0, x1, z1 ...]) ----
     out = []

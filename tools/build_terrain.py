@@ -73,6 +73,20 @@ def box(a, r, mask):
     s = cs(a); n = cs(m)
     return np.where(n > 0, s / np.maximum(n, 1e-9), np.nan)
 
+# ---- 水面の高さ: つながった水 (今の川・お濠) ごとに水平。戻した堀は一番近い今の水の高さ ----
+def components(mask):
+    lab = np.zeros(mask.shape, np.int32); n = 0
+    from collections import deque
+    ys, xs = np.nonzero(mask)
+    for y, x in zip(ys, xs):
+        if lab[y, x]: continue
+        n += 1; q = deque([(y, x)]); lab[y, x] = n
+        while q:
+            a, b = q.popleft()
+            for yy, xx in ((a + 1, b), (a - 1, b), (a, b + 1), (a, b - 1)):
+                if 0 <= yy < h and 0 <= xx < w and mask[yy, xx] and not lab[yy, xx]:
+                    lab[yy, xx] = n; q.append((yy, xx))
+    return lab, n
 # ---- 水面の高さ ----
 nat = water & NAT; rest = water & ~NAT
 WL = np.where(nat, Ev, np.where(rest, bank - 3.2, np.nan)).astype(np.float32)
@@ -88,6 +102,26 @@ for r in (6, 6, 10):
     WL = np.where(water, box(np.nan_to_num(WL), r, water), np.nan)
 WL = np.where(water, np.minimum(WL, bank - 0.8), np.nan)
 WL = np.maximum(WL, -1.0)
+natl = water & NAT
+lab, nl = components(natl)
+flat = np.full((h, w), np.nan, np.float32)
+for k in range(1, nl + 1):
+    m = lab == k
+    v = Ev[m]; v = v[~np.isnan(v)]
+    lv = float(np.percentile(v, 30)) if len(v) else 0.0
+    lv = min(lv, float(np.nanpercentile(bank[m], 10)) - 0.8)
+    flat[m] = max(lv, -1.0)
+# 戻した堀: 一番近い今の水の高さ (水の中だけで広げる)
+from collections import deque
+q = deque(zip(*np.nonzero(natl)))
+while q:
+    a, b = q.popleft()
+    for yy, xx in ((a + 1, b), (a - 1, b), (a, b + 1), (a, b - 1)):
+        if 0 <= yy < h and 0 <= xx < w and water[yy, xx] and np.isnan(flat[yy, xx]):
+            flat[yy, xx] = flat[a, b]; q.append((yy, xx))
+WL = np.where(water, np.where(np.isnan(flat), WL, flat), np.nan)
+WL = np.where(water, np.minimum(WL, bank - 0.5), np.nan)
+print('flat water bodies', nl)
 WL = fill_nan(WL.astype(np.float32), 30)  # 岸の近く (陸) にも少しのばす
 WL = np.where(np.isnan(WL), bank - 3, WL)
 

@@ -188,7 +188,8 @@ export function buildGround(scene) {
         if (lvv < 0.5) discard;
         #include <map_fragment>
         // お城の急な斜面 (石垣) は石の色、まちの急な斜面 (崖・土手) は草の色
-        float steep = smoothstep(0.82, 0.6, vUp);
+        // 斜面: お城は石垣の色、まちの斜面 (土手・崖) は草の緑
+        float steep = lvv > 2.5 ? smoothstep(0.82, 0.6, vUp) : smoothstep(0.985, 0.9, vUp);
         vec3 stoneC = vec3(0.52, 0.5, 0.46) * (0.85 + 0.15 * fract(sin(dot(floor(vMapUv * 4000.0), vec2(12.9898, 78.233))) * 43758.5453));
         diffuseColor.rgb = mix(diffuseColor.rgb, lvv > 2.5 ? stoneC : vec3(0.32, 0.45, 0.25), steep);`);
   };
