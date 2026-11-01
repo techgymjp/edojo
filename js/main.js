@@ -53,7 +53,7 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.5, 11000);
 scene.fog = new THREE.Fog(0x8090a8, 250, 1400);
-const hemi = new THREE.HemisphereLight(0xdfe8ff, 0x50483c, 1.1);
+const hemi = new THREE.HemisphereLight(0xdfe8ff, 0x7a7468, 1.1); // 下からの光は水の照り返しで少し明るめ (橋や高架の裏が真っ黒にならないように)
 scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xffd0a0, 1.6);
 sun.position.set(-600, 500, 300);

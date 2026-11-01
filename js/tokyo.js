@@ -108,7 +108,9 @@ function buildRail(root, city, OX, OZ) {
   // レンガ高架の区間 (緯度経度の範囲と路線)
   const llx = (la, lo) => [(lo - 139.745) * 111320 * Math.cos(35.674 * Math.PI / 180), -(la - 35.674) * 110574];
   const [, zChuoS] = llx(35.6815, 0), [, zChuoN] = llx(35.6990, 0), [, zYamaS] = llx(35.6660, 0), [, zYamaN] = llx(35.6805, 0);
-  const isBrick = (r, x, z) => (r.ln === 'c' && z < zChuoS && z > zChuoN) || (r.ln === 'y' && z < zYamaS && z > zYamaN);
+  // (中央線は東京〜神田〜万世橋だけ。四ツ谷・市ケ谷の中央線はレンガにしない)
+  const [xChuoW] = llx(0, 139.7655), [xYamaW] = llx(0, 139.7560);
+  const isBrick = (r, x, z) => (r.ln === 'c' && z < zChuoS && z > zChuoN && x > xChuoW) || (r.ln === 'y' && z < zYamaS && z > zYamaN && x > xYamaW);
   for (const r of RAIL) {
     if (r.t) continue;
     const Wd = r.n >= 4 ? 10 : 5.5;
@@ -648,7 +650,7 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
       // 底の面 (橋をくぐるとき、下から見て天井が透けないように)
       quad(pt(-hl, -hw, y0), pt(hl, -hw, y0), pt(hl, hw, y0), pt(-hl, hw, y0), [0, -1, 0], col);
     };
-    const RAIL = [0.35, 0.4, 0.45], ASP = [0.24, 0.24, 0.26], WALK = [0.62, 0.6, 0.56], WHITE = [0.92, 0.92, 0.88], CON = [0.66, 0.66, 0.64], GIRDER = [0.42, 0.5, 0.58], DARK = [0.25, 0.26, 0.28], LAMP = [1.0, 0.95, 0.75];
+    const RAIL = [0.35, 0.4, 0.45], ASP = [0.24, 0.24, 0.26], WALK = [0.62, 0.6, 0.56], WHITE = [0.92, 0.92, 0.88], CON = [0.66, 0.66, 0.64], GIRDER = [0.62, 0.66, 0.7], DARK = [0.25, 0.26, 0.28], LAMP = [1.0, 0.95, 0.75];
     const isCastle = (x, z) => { const c = codeAt(x, z); return c === 3 || c === 4; };
     let nb = 0, nroad = 0;
     for (const r of ROADS) {
