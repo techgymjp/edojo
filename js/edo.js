@@ -23,10 +23,56 @@ export const MOAT_NAMES = [
   ['日本橋川', 35.6842, 139.7745], ['日本橋川', 35.6828, 139.7800], ['日本橋川', 35.6800, 139.7850],
   ['隅田川', 35.6990, 139.7930], ['隅田川', 35.6930, 139.7900], ['隅田川', 35.6860, 139.7905], ['隅田川', 35.6790, 139.7890], ['隅田川', 35.6720, 139.7860], ['隅田川', 35.6650, 139.7790],
   ['汐留川', 35.6650, 139.7620], ['京橋川', 35.6765, 139.7720], ['楓川', 35.6800, 139.7763], ['三十間堀', 35.6710, 139.7680], ['八丁堀', 35.6745, 139.7800],
-  ['築地川', 35.6690, 139.7740], ['龍閑川', 35.6905, 139.7720], ['浜町川', 35.6880, 139.7815], ['亀島川', 35.6770, 139.7835],
+  ['築地川', 35.6690, 139.7740], ['龍閑川', 35.6905, 139.7720], ['浜町川', 35.6880, 139.7815], ['亀島川', 35.6770, 139.7835], ['亀島川', 35.6732, 139.7835],
+  // 水のつながりで名前を広げるときの境目を正しくするための点
+  ['桜田濠', 35.6828, 139.7452], ['蛤濠', 35.6838, 139.7556],
 ];
+// お濠の名前の地図: 名前の点から水の中だけを広げて (幅優先)、水面の各マスに「水の中を通って一番近い名前」を付ける
+// (ワープでしか行けない別のお濠の名前や、陸をはさんだ隣のお濠の名前にならないように)
+let nameMap = null;
+function buildNameMap() {
+  const w = W.w, h = W.h, code = W.code, R = W.res;
+  nameMap = new Int16Array(w * h).fill(-1);
+  const q = new Int32Array(w * h); let qh = 0, qt = 0;
+  MOAT_NAMES.forEach(([, la, lo], k) => {
+    const [x, z] = ll(la, lo), i0 = Math.floor(x / R), j0 = Math.floor(z / R);
+    // 点が陸にあるときは近くの水へ寄せる
+    for (let r = 0; r < 25; r++) {
+      let hit = -1;
+      for (let dj = -r; dj <= r && hit < 0; dj++) for (let di = -r; di <= r; di++) {
+        if (Math.max(Math.abs(di), Math.abs(dj)) !== r) continue;
+        const i = i0 + di, j = j0 + dj;
+        if (i >= 0 && j >= 0 && i < w && j < h && code[j * w + i] === 0) { hit = j * w + i; break; }
+      }
+      if (hit >= 0) { if (nameMap[hit] < 0) { nameMap[hit] = k; q[qt++] = hit; } break; }
+    }
+  });
+  while (qh < qt) {
+    const c = q[qh++], i = c % w, j = (c - i) / w, k = nameMap[c];
+    if (i > 0 && code[c - 1] === 0 && nameMap[c - 1] < 0) { nameMap[c - 1] = k; q[qt++] = c - 1; }
+    if (i < w - 1 && code[c + 1] === 0 && nameMap[c + 1] < 0) { nameMap[c + 1] = k; q[qt++] = c + 1; }
+    if (j > 0 && code[c - w] === 0 && nameMap[c - w] < 0) { nameMap[c - w] = k; q[qt++] = c - w; }
+    if (j < h - 1 && code[c + w] === 0 && nameMap[c + w] < 0) { nameMap[c + w] = k; q[qt++] = c + w; }
+  }
+}
 let moatXZ = null;
 export function moatName(x, z) {
+  if (!nameMap) buildNameMap();
+  {
+    const w = W.w, h = W.h, R = W.res, i0 = Math.floor(x / R), j0 = Math.floor(z / R);
+    // 水の上ならそのマスの名前。岸の近く (陸) なら 30m 以内の一番近い水のマスの名前
+    for (let r = 0; r <= 10; r++) {
+      let best = -1, bd = 1e9;
+      for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) {
+        if (Math.max(Math.abs(di), Math.abs(dj)) !== r) continue;
+        const i = i0 + di, j = j0 + dj;
+        if (i < 0 || j < 0 || i >= w || j >= h) continue;
+        const k = nameMap[j * w + i];
+        if (k >= 0 && di * di + dj * dj < bd) { bd = di * di + dj * dj; best = k; }
+      }
+      if (best >= 0) return MOAT_NAMES[best][0];
+    }
+  }
   if (!moatXZ) moatXZ = MOAT_NAMES.map(([n, la, lo]) => [n, ...ll(la, lo)]);
   let best = null, bd = 1e18;
   for (const [n, mx, mz] of moatXZ) { const d = (mx - x) ** 2 + (mz - z) ** 2; if (d < bd) { bd = d; best = n; } }
