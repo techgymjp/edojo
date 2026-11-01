@@ -1232,7 +1232,7 @@ function updateNav() {
     const best = ninja;
     tx = best.x; tz = best.z;
     const what = { roof: '屋上の忍者', glide: '飛んでいる忍者', dive: '水に潜った忍者', swim1: '竹筒の忍者', bamboo: '竹筒の忍者', emerge1: '岸を登る忍者', climbOut: '岸を登る忍者', run: '屋根を走る忍者', emerge: '石垣を登る忍者', climb: '石垣を登る忍者' }[best.state] || '忍者';
-    label = `${what}　${Math.round(Math.hypot(tx - P.x, tz - P.z))}m`;
+    label = `忍者（約${Math.round(Math.hypot(tx - P.x, tz - P.z) / 10) * 10}m）`;
   }
   G.navT = [tx, tz];
   const a = Math.atan2(tz - P.z, tx - P.x) - camHeading();
