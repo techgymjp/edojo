@@ -930,11 +930,13 @@ function preferDir() {
   return P.h;
 }
 // 一番近い忍者 (minR〜maxR m の中)
-function pickTarget(maxR, minR = 0) {
+// 投げ銭で狙えるのは、水遁の術で水の中を渡っている忍者 (竹筒) だけ
+const WATER_STATES = ['bamboo', 'swim1'];
+function pickTarget(maxR, minR = 0, states = null) {
   const hp = heroPos();
   let best = null, bd = 1e9;
   for (const nj of G.ninjas) {
-    if (!['roof', 'glide', 'bamboo', 'emerge', 'climb', 'swim1', 'emerge1', 'climbOut', 'run', 'walk', 'walkin'].includes(nj.state)) continue;
+    if (!(states || ['roof', 'glide', 'bamboo', 'emerge', 'climb', 'swim1', 'emerge1', 'climbOut', 'run', 'walk', 'walkin']).includes(nj.state)) continue;
     const c = ninjaCenter(nj), d = c.distanceTo(hp);
     // 前にしか投げられない: 舳先の向きから左右 CFG.throwArc (度) の中にいる忍者だけ
     const ang = Math.abs(angDiff(Math.atan2(c.z - P.z, c.x - P.x), P.h));
@@ -946,7 +948,7 @@ function pickTarget(maxR, minR = 0) {
 function throwCoins() {
   if (G.coinCd > 0) return;
   G.coinCd = CFG.coinCd; G.throwT = 1;
-  const tg = pickTarget(CFG.coinRange);
+  const tg = pickTarget(CFG.coinRange, 0, WATER_STATES);
   // 5 連射: 瀬戸内の海賊王の鉄砲そのまま (光る弾と後ろに伸びる軌跡、秒速 150m、わずかに落ちる)。忍者の動きを読んで撃つ
   for (let k = 0; k < 5; k++) {
     setTimeout(() => {
@@ -1019,7 +1021,7 @@ function updateWeapons(dt) {
     if (c.tail && c.p0) c.tail.scale.z = Math.max(0.001, Math.min(1, c.p.distanceTo(c.p0) / (26 * 0.4)));
     // 速いので、このフレームで進んだ線分と忍者の近さで当たりを見る
     for (const nj of (c.tg ? [c.tg] : G.ninjas)) {
-      if (!['roof', 'glide', 'bamboo', 'emerge', 'climb', 'swim1', 'emerge1', 'climbOut', 'run', 'walk', 'walkin'].includes(nj.state)) continue;
+      if (!WATER_STATES.includes(nj.state)) continue; // 投げ銭は水の中の忍者だけ
       const q = ninjaCenter(nj), d = c.p.clone().sub(p0), L2 = d.lengthSq() || 1, t = clamp(q.clone().sub(p0).dot(d) / L2, 0, 1);
       if (p0.clone().addScaledVector(d, t).distanceTo(q) < 2.2) { hitNinja(nj, false); spark(q); c.life = 0; break; }
     }
