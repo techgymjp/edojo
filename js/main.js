@@ -680,12 +680,12 @@ function hitNinja(nj, byLasso) {
   poseNinja(nj.m, 'stun', G.t);
   if (['bamboo', 'swim1', 'dive'].includes(nj.state)) {
     // 水の中: 水しぶきを上げて浮かび、沈む
-    nj.x = c.x; nj.z = c.z; nj.y = waterY(c.x, c.z) + 1; nj.vy = byLasso ? 21 : 7; nj.vx = nj.vz = 0; nj.tx = c.x; nj.tz = c.z;
+    nj.x = c.x; nj.z = c.z; nj.y = waterY(c.x, c.z) + 1; nj.vy = byLasso ? 21 : 17; nj.vx = nj.vz = 0; nj.tx = c.x; nj.tz = c.z;
     splash(c.x, c.z, 1.4);
   } else {
     // 一番近い水へ放物線で落ちる
     let [tx, tz] = isWater(c.x, c.z) ? [c.x, c.z] : (nearestWater(c.x, c.z) || [c.x, c.z]);
-    const T = byLasso ? 2.2 : clamp(Math.hypot(tx - c.x, tz - c.z) / 25, 0.6, 1.6);
+    const T = byLasso ? 2.2 : 1.8; // なわ・ぜに、どちらでも忍者を空へ浮かせてからドボン
     nj.x = c.x; nj.y = c.y; nj.z = c.z; nj.tx = tx; nj.tz = tz;
     nj.vx = (tx - c.x) / T; nj.vz = (tz - c.z) / T;
     nj.vy = (waterY(tx, tz) - c.y + 0.5 * 20 * T * T) / T;
