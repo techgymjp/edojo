@@ -404,10 +404,11 @@ export function buildWarps(scene) {
       disc.rotation.x = -Math.PI / 2; g.add(disc);
       const ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: 0x9ff4ff, transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false }));
       ring.rotation.x = -Math.PI / 2; g.add(ring);
-      const beam = new THREE.Mesh(new THREE.CylinderGeometry(4, 5.5, 26, 20, 1, true), new THREE.MeshBasicMaterial({ color: 0x7fdcff, transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
-      beam.position.y = 13; g.add(beam);
+      // 細い光の柱 (近くでは消す。main.js でカメラとの距離を見る)
+      const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 1.2, 14, 10, 1, true), new THREE.MeshBasicMaterial({ color: 0x7fdcff, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
+      beam.position.y = 7; g.add(beam);
       scene.add(g);
-      ends.push({ x: px, z: pz, g, disc });
+      ends.push({ x: px, z: pz, g, disc, beam });
     }
     const pair = { a: ends[0], b: ends[1] };
     for (const [e, o] of [[ends[0], ends[1]], [ends[1], ends[0]]]) {

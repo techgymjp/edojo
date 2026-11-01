@@ -347,7 +347,21 @@ def main():
     Image.fromarray(A).save(os.path.join(D, 'map.png'), optimize=True)
     world = {'W': W, 'E': E, 'S': S, 'N': N, 'KX': KX, 'KZ': KZ, 'res': RES, 'w': w, 'h': h,
              'ring': [[round(v, 1) for v in xz(*p)] for p in RING], 'warps': warps}
-    world['warps'] = [wp for wp in warps if math.hypot(wp[2] - wp[0], wp[3] - wp[1]) > 5]
+    # ワープの整理: 25m 未満のすき間は水でつなぐ (ワープにしない)。ほぼ同じ所の重なったワープは短い方だけ残す
+    short = [wp for wp in warps if math.hypot(wp[2] - wp[0], wp[3] - wp[1]) < 25]
+    if short:
+        img4 = Image.fromarray(A); d4 = ImageDraw.Draw(img4)
+        for x1, z1, x2, z2 in short:
+            d4.line([(x1 / RES, z1 / RES), (x2 / RES, z2 / RES)], fill=0, width=int(14 / RES))
+        A = np.array(img4)
+        Image.fromarray(A).save(os.path.join(D, 'map.png'), optimize=True)
+    keep = []
+    for wp in sorted([wp for wp in warps if math.hypot(wp[2] - wp[0], wp[3] - wp[1]) >= 25], key=lambda w: math.hypot(w[2] - w[0], w[3] - w[1])):
+        mx, mz = (wp[0] + wp[2]) / 2, (wp[1] + wp[3]) / 2
+        if any(math.hypot(mx - (k[0] + k[2]) / 2, mz - (k[1] + k[3]) / 2) < 80 for k in keep): continue
+        keep.append(wp)
+    print('warps kept', len(keep), 'joined by water', len(short))
+    world['warps'] = keep
     json.dump(world, open(os.path.join(D, 'world.json'), 'w'))
     # ---- 今の建物 (輪の外だけ。0.5m 単位の整数、[高さ, x0, z0, x1, z1 ...]) ----
     out = []

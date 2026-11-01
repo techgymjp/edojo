@@ -1240,11 +1240,15 @@ function buildMinimap() {
 function drawMinimap() {
   const { c } = mm, g = c.getContext('2d');
   // 内堀 (お城の石垣から 200m 以内のお濠) にいるときは 2 倍
-  const pc = cellOf(P.x, P.z), d = pc >= 0 ? navi.dist[pc] : -1;
-  const inner = d >= 0 && d < 67;
-  const want = mm.fit * (inner ? 2 : 1);
+  // 内堀: お城の区域 (内郭・本丸) から 150m 以内の水
+  let inner = false;
+  for (const r of [20, 60, 110, 150]) { for (let a = 0; a < 12 && !inner; a++) { const c = codeAt(P.x + Math.cos(a * Math.PI / 6) * r, P.z + Math.sin(a * Math.PI / 6) * r); if (c === 3 || c === 4) inner = true; } if (inner) break; }
+  // 本丸の近くのお濠では、さらに倍 (4 倍)
+  const HONMARU_MOATS = ['平川濠', '大手濠', '桔梗濠', '蓮池濠', '乾濠', '天神濠', '白鳥濠', '和田倉濠', '二重橋濠', '蛤濠', '清水濠', '道灌濠'];
+  const nearHon = inner && HONMARU_MOATS.includes(moatName(P.x, P.z));
+  const want = mm.fit * (nearHon ? 4 : inner ? 2 : 1);
   mm.zoom += (want - mm.zoom) * 0.08;
-  const t = (mm.zoom - mm.fit) / mm.fit; // 0: 全体 1: 拡大
+  const t = Math.min(1, (mm.zoom - mm.fit) / mm.fit); // 0: 全体 1: 拡大
   const [pmx, pmy] = xzToMap(P.x, P.z);
   // 中心: 全体のときは外堀の輪の中心、拡大したら自分
   const cx = mm.ringC[0] + (pmx - mm.ringC[0]) * clamp(t, 0, 1), cy = mm.ringC[1] + (pmy - mm.ringC[1]) * clamp(t, 0, 1);
@@ -1540,7 +1544,7 @@ function loop(now) {
   tokyo.update(dt, now / 1000, modern.mat.userData.night.value, scene.fog.color, camera);
   // 見える範囲の街のタイルを組み立てる
   { const t0 = performance.now(); while (tokyo.stream(camera.position, 1200, 1) > 0 && performance.now() - t0 < 4); }
-  for (const w of warps) for (const e of [w.a, w.b]) e.disc.rotation.z = now / 400;
+  for (const w of warps) for (const e of [w.a, w.b]) { e.disc.rotation.z = now / 400; e.beam.visible = Math.hypot(camera.position.x - e.x, camera.position.z - e.z) > 25; }
   I.pressed.clear();
   // 建物の透かし: 遊んでいるときだけ (カメラ → 小舟の主人公)
   // 建物の透かしは使わない (カメラを近づけたので)
