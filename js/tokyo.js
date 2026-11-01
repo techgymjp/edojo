@@ -64,7 +64,7 @@ export function addCutaway(mat) {
   mat.needsUpdate = true;
 }
 
-export function buildTokyo(scene, renderer) {
+export function buildTokyo(scene, renderer, bankSegs = []) {
   const OX = (139.745 - W.W) * W.KX, OZ = (W.N - 35.674) * W.KZ;
   const root = new THREE.Group();
   root.position.set(OX, 0, OZ);
@@ -78,20 +78,30 @@ export function buildTokyo(scene, renderer) {
   for (const m of Object.values(mats)) addCutaway(m);
   // 水 (戻した江戸の堀を含む) と皇居ゾーン (江戸城) に建つビルは描かない
   const bad = (x, z) => { const c = codeAt(x + OX, z + OZ); return c === 0 || c === 3 || c === 4; };
+  // ビルの高さの格子 (10m 角、この地図の座標)。川沿いの壁の高さに使う
+  const TALL = 60, HG = 10, hw = Math.ceil(W.sizeX / HG), hh = Math.ceil(W.sizeZ / HG), hgt = new Float32Array(hw * hh), hcol = new Uint32Array(hw * hh);
+  const hgrid = { add(bd) {
+    for (let x = bd.minx; x <= bd.maxx; x += HG / 2) for (let z = bd.minz; z <= bd.maxz; z += HG / 2) {
+      if (!city.inside(bd, x, z)) continue;
+      const i = Math.floor((x + OX) / HG), j = Math.floor((z + OZ) / HG);
+      if (i >= 0 && j >= 0 && i < hw && j < hh && hgt[j * hw + i] < bd.h) { hgt[j * hw + i] = bd.h; hcol[j * hw + i] = (bd.cx * 7 + bd.cz * 13) & 0xffff; }
+    }
+  } };
   let dropped = 0;
   for (const bd of city.bld) {
     if (!bd.plateau) continue;
     const pts = [[bd.cx, bd.cz], [(bd.minx + bd.cx) / 2, bd.cz], [(bd.maxx + bd.cx) / 2, bd.cz], [bd.cx, (bd.minz + bd.cz) / 2], [bd.cx, (bd.maxz + bd.cz) / 2]];
     if (bad(bd.cx, bd.cz) || pts.filter(([x, z]) => bad(x, z)).length >= 2) { bd.plateau = false; dropped++; continue; }
-    // 小舟から見えるのは川・お濠に面した街と高いビルだけ。水から 200m より奥の低いビルは描かない (軽くする)
-    if (bd.h < 45 && !nearWaterGrid(bd.cx + OX, bd.cz + OZ, 200)) { bd.plateau = false; bd.far = true; }
+    // 川沿いの建物は「壁」(下の buildFacades) で描くので、立体で描くのは高層ビル (60m 以上) だけ
+    hgrid.add(bd);
+    if (bd.h < TALL) { bd.plateau = false; bd.far = true; }
   }
   city.skipGround = (x, z) => isWater(x + OX, z + OZ);
   // 地形 (国土地理院の標高)。ビルは輪郭の一番低い所に建てる。道路・高架・名所は 60m 四方でならした地面の高さに乗せる
   const Ts = (x, z) => { let s = 0; for (const dz of [-30, 0, 30]) for (const dx of [-30, 0, 30]) s += terrainH(x + OX + dx, z + OZ + dz); return s / 9; };
   city.groundAt = Ts;
   for (const bd of city.bld) {
-    if (!bd.plateau) continue;
+    if (!bd.plateau && !bd.far) continue;
     let mn = 1e9;
     for (let i = 0; i < bd.n; i++) mn = Math.min(mn, terrainH(bd.pts[i * 2] + OX, bd.pts[i * 2 + 1] + OZ));
     bd.base = mn - 0.3;
@@ -152,6 +162,58 @@ export function buildTokyo(scene, renderer) {
       pa.needsUpdate = true; o.geometry.computeBoundingSphere();
     });
   }
+  // ---- 川沿いの建物の壁: 岸から 7m 内側に、その場所のビルの高さで、窓の模様の壁を立てる ----
+  {
+    const B = { glass: { p: [], n: [], uv: [], c: [] }, office: { p: [], n: [], uv: [], c: [] } };
+    const OFFICE = [[1.0, 0.6, 0.55], [1.0, 0.82, 0.45], [0.6, 0.85, 0.6], [0.55, 0.75, 1.0], [0.85, 0.65, 1.0], [1.0, 0.7, 0.85], [0.5, 0.9, 0.85], [1.0, 0.95, 0.6], [0.95, 0.55, 0.35], [0.7, 0.95, 0.45], [0.95, 0.95, 0.95]];
+    const GLASS = [[0.35, 0.65, 1.0], [0.2, 0.85, 0.85], [0.6, 0.45, 1.0], [1.0, 0.45, 0.7], [0.4, 0.95, 0.55], [1.0, 0.75, 0.3], [0.55, 0.8, 1.0], [0.3, 0.5, 0.95]];
+    // 内側 (陸の方) の 6〜50m で一番高いビル
+    const skyline = (x, z, ix, iz) => {
+      let h = 0, c = 0;
+      for (let d = 6; d <= 50; d += 5) {
+        const i = Math.floor((x + ix * d) / HG), j = Math.floor((z + iz * d) / HG);
+        if (i < 0 || j < 0 || i >= hw || j >= hh) continue;
+        if (hgt[j * hw + i] > h) { h = hgt[j * hw + i]; c = hcol[j * hw + i]; }
+      }
+      return [Math.min(h, TALL), c];
+    };
+    const IN = 7;
+    for (const sg of bankSegs) {
+      const ix = -sg.nx, iz = -sg.nz;
+      const ax = sg.ax + ix * IN, az = sg.az + iz * IN, bx = sg.bx + ix * IN, bz = sg.bz + iz * IN;
+      const mx = (ax + bx) / 2, mz = (az + bz) / 2;
+      if (codeAt(mx, mz) !== 5) continue;
+      const [H, cid] = skyline(mx, mz, ix, iz);
+      if (H < 5) continue;
+      const ya = terrainH(ax, az) - 0.5, yb = terrainH(bx, bz) - 0.5, top = Math.max(ya, yb) + H;
+      const glass = H > 40 && (cid % 3 === 0);
+      const T = glass ? B.glass : B.office, pal = glass ? GLASS : OFFICE, col = pal[cid % pal.length], sh = 0.85 + ((cid >> 4) % 5) * 0.05;
+      // 窓の模様が隣とつながるよう、u は世界座標
+      const tu = Math.abs(bx - ax) > Math.abs(bz - az), UW = glass ? 20.8 : 27.2, VH = glass ? 28.8 : 27.2;
+      const u0 = (tu ? ax : az) / UW, u1 = (tu ? bx : bz) / UW;
+      // 表が水の方を向くように
+      let A0 = [ax, ya, az], B0 = [bx, yb, bz];
+      if (-(bz - az) * sg.nx + (bx - ax) * sg.nz < 0) [A0, B0] = [B0, A0];
+      const A1 = [A0[0], top, A0[2]], B1 = [B0[0], top, B0[2]];
+      T.p.push(...A0, ...B0, ...B1, ...A0, ...B1, ...A1);
+      for (let k = 0; k < 6; k++) { T.n.push(sg.nx, 0, sg.nz); T.c.push(col[0] * sh, col[1] * sh, col[2] * sh); }
+      const ua = tu === (A0[0] === ax) ? u0 : u1, ub = ua === u0 ? u1 : u0;
+      T.uv.push(ua, A0[1] / VH, ub, B0[1] / VH, ub, top / VH, ua, A0[1] / VH, ub, top / VH, ua, top / VH);
+    }
+    let nf = 0;
+    for (const k of ['glass', 'office']) {
+      const T = B[k]; if (!T.p.length) continue;
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(T.p, 3));
+      g.setAttribute('normal', new THREE.Float32BufferAttribute(T.n, 3));
+      g.setAttribute('uv', new THREE.Float32BufferAttribute(T.uv, 2));
+      g.setAttribute('color', new THREE.Float32BufferAttribute(T.c, 3));
+      g.computeBoundingSphere();
+      const m = new THREE.Mesh(g, mats[k]); m.frustumCulled = false; scene.add(m);
+      nf += T.p.length / 18;
+    }
+    console.log('facade quads', nf);
+  }
   // 今の橋: 国土地理院の道路の線 (ターザン大東京の road-data) が水を渡る所に、道の幅のコンクリートの橋
   {
     const P = [], N = [], add = (a, b, c, n) => { P.push(...a, ...b, ...c); for (let k = 0; k < 3; k++) N.push(...n); };
@@ -201,7 +263,7 @@ export function buildTokyo(scene, renderer) {
   }
   // ニンジャが飛び立つビル (この地図の座標)
   const roofs = [];
-  for (const bd of city.bld) if (bd.plateau && bd.h >= 14) roofs.push({ x: bd.cx + OX, z: bd.cz + OZ, y: bd.base || 0, sy: bd.h, bd });
+  for (const bd of city.bld) if ((bd.plateau && bd.h >= 14) || (bd.far && bd.h >= 14 && bd.h < TALL && nearWaterGrid(bd.cx + OX, bd.cz + OZ, 50))) roofs.push({ x: bd.cx + OX, z: bd.cz + OZ, y: bd.base || 0, sy: bd.h, bd });
   root.traverse((o) => { const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : []; for (const m of ms) if (!seen.has(m) && m.isMaterial && !m.isSpriteMaterial) { seen.add(m); addCutaway(m); } });
   // 名所・高架の線路などの動かないものを、材質ごとに 1 つにまとめる (電車・遠景・アドバルーンは除く)
   {
@@ -222,7 +284,7 @@ export function buildTokyo(scene, renderer) {
     // ある所のビルの屋上の高さ (なければ 0)
     roofAt(x, z) {
       const f = city.floorAt(x - OX, z - OZ, 1e5);
-      return f.what === 'roof' && f.bd ? f.y + (f.bd.base || 0) : 0;
+      return f.what === 'roof' && f.bd && f.bd.plateau ? f.y + (f.bd.base || 0) : 0;
     },
     stream(cam, R, budget) { return city.streamTiles(cam.x - OX, cam.z - OZ, R, budget); },
     update(dt, t, night, fogColor, camera) {

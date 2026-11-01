@@ -67,7 +67,7 @@ scene.add(moon);
 const G = {
   state: 'loading', t: 0, captured: 0, spawned: 0, nextSpawn: 0, st: 100, stDelay: 0,
   name: '平次', ninjas: [], coins: [], lassos: [], fx: [], floats: [], coinCd: 0, lassoCd: 0, throwT: 0,
-  warpCd: 0, camYaw: 0, camDist: 30, lastMouse: -99, mouseDir: null, endT: 0, result: null, intruder: null,
+  warpCd: 0, camYaw: 0, camDist: 12, lastMouse: -99, mouseDir: null, endT: 0, result: null, intruder: null,
 };
 const P = { x: 0, z: 0, h: 0, v: 0, gear: 1, roll: 0, dashT: 0 };
 let boat, water, modern, castle, warps = [], balloon, navi, fw, tokyo;
@@ -150,13 +150,13 @@ async function boot() {
     const town = buildTown(scene);
     $('loadtext').textContent = '今の東京を建てています……';
     await frame();
-    tokyo = buildTokyo(scene, renderer);
+    tokyo = buildTokyo(scene, renderer, segs.bankSegs);
     // ターザン大東京の街がない所だけ、PLATEAU の箱のビルで埋める
     const bld = await fetch('data/bld.json').then((r) => r.json());
     const covered = new Set();
     for (const r of tokyo.roofs) covered.add(Math.floor(r.x / 120) * 1000 + Math.floor(r.z / 120));
     for (const bd of tokyo.city.bld) if (bd.plateau || bd.far) covered.add(Math.floor((bd.cx + tokyo.OX) / 120) * 1000 + Math.floor((bd.cz + tokyo.OZ) / 120));
-    modern = buildModern(scene, bld.filter(([h, cx, cz]) => !covered.has(Math.floor(cx / 120) * 1000 + Math.floor(cz / 120)) && (h >= 45 || nearWaterGrid(cx, cz, 200))));
+    modern = buildModern(scene, bld.filter(([h, cx, cz]) => !covered.has(Math.floor(cx / 120) * 1000 + Math.floor(cz / 120)) && h >= 60));
     addCutaway(modern.mat);
     $('loadtext').textContent = '江戸城を建てています……';
     await frame();
@@ -959,13 +959,13 @@ const camHeading = () => P.h + G.camYaw;
 function updateCamera(dt) {
   if (down('KeyQ')) G.camYaw -= dt * 1.5;
   if (down('KeyE')) G.camYaw += dt * 1.5;
-  if (I.wheel) { G.camDist = clamp(G.camDist * (1 + I.wheel * 0.001), 14, 120); I.wheel = 0; }
+  if (I.wheel) { G.camDist = clamp(G.camDist * (1 + I.wheel * 0.001), 8, 80); I.wheel = 0; }
   if (!I.joy && lookId === null) G.camYaw *= Math.exp(-dt * 0.5);
   const ch = camHeading();
   // カメラは小舟が通ってきた水の上の道筋をたどって後ろにつく (ビルや石垣にめり込んで迷子にならないように)
   const obst = (x, z) => Math.max(groundH(x, z), navi.roofAt(x, z));
   // ローアングル (水面から 7m ほど。首都高の高架の下から小舟を見る)
-  let dist = G.camDist, ty = waterY(P.x, P.z) + 4.5 + G.camDist * 0.1, blockF = -1;
+  let dist = G.camDist, ty = waterY(P.x, P.z) + 4.2, blockF = -1;
   let tx, tz;
   if (Math.abs(G.camYaw) < 0.25 && trail.length > 3) {
     let need = dist, cx = P.x, cz = P.z;
@@ -996,7 +996,7 @@ function updateCamera(dt) {
   camera.position.z += (tz - camera.position.z) * k;
   camera.position.y += (ty - camera.position.y) * k;
   if (G.shake > 0) { G.shake -= dt; camera.position.x += rand(-0.3, 0.3); camera.position.y += rand(-0.2, 0.2); }
-  camera.lookAt(P.x + Math.cos(P.h) * 55, waterY(P.x, P.z) + 3, P.z + Math.sin(P.h) * 55);
+  camera.lookAt(P.x + Math.cos(P.h) * 60, waterY(P.x, P.z) + 8, P.z + Math.sin(P.h) * 60);
 }
 
 // ---------- 空の色: 暮れ六つから始まり、10 分で 1 日 (夜 → 朝 → 昼 → 夕方) ----------
@@ -1409,8 +1409,8 @@ function loop(now) {
   for (const w of warps) for (const e of [w.a, w.b]) e.disc.rotation.z = now / 400;
   I.pressed.clear();
   // 建物の透かし: 遊んでいるときだけ (カメラ → 小舟の主人公)
-  if (G.state === 'play' || G.state === 'ending') { CUT.cam.value.copy(camera.position); CUT.boat.value.set(P.x, (P.air ? P.alt : waterY(P.x, P.z)) + 3, P.z); }
-  else CUT.boat.value.set(0, -1e5, 0);
+  // 建物の透かしは使わない (カメラを近づけたので)
+  CUT.boat.value.set(0, -1e5, 0);
   // 水面の映り込みには透かしを使わない
   const cb = CUT.boat.value.y; CUT.boat.value.y = -1e5;
   // 映り込みは 2 フレームに 1 回 (軽くする)

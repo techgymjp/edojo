@@ -283,7 +283,7 @@ function nearCastle(x, z) {
 export function buildWalls(scene) {
   const w = W.w, h = W.h, L = W.lv, R = W.res;
   const grass = { p: [], n: [], uv: [] }, stone = { p: [], n: [], uv: [] }, conc = { p: [], n: [], uv: [] }, wallTop = { p: [], n: [], uv: [] }, cap = { p: [], n: [], uv: [] };
-  const castleSegs = [], doteSegs = [], gorgeTrees = [];
+  const castleSegs = [], doteSegs = [], gorgeTrees = [], bankSegs = [];
   const P = (i, j) => [(i + 0.5) * R, (j + 0.5) * R];
   const lerpPt = (i0, j0, v0, i1, j1, v1, t) => {
     const a = (t - v0) / (v1 - v0);
@@ -316,6 +316,8 @@ export function buildWalls(scene) {
     const tu = Math.abs(dx) > Math.abs(dz) ? 1 : 0;
     const u0 = (tu ? ax : az) / 4, u1 = (tu ? bx : bz) / 4;
     const lvHigh = L[cellOf(hx, hz)] ?? 0;
+    // 今の街の岸 (川沿いの建物の壁を立てるのに使う)
+    if (hc === 5) bankSegs.push({ ax, az, bx, bz, nx, nz });
     const dote = isDote(mx, mz);
     if (dote) {
       // 土手: 下を外 (水の方) へずらした斜面。水から一番上まで 1 枚で (途中の段は作らない)
@@ -415,7 +417,7 @@ export function buildWalls(scene) {
     for (let i = 0; i < gorgeTrees.length; i += 7) { const [x, y, z] = gorgeTrees[i]; const k = 0.45 + ((i * 37) % 10) / 30; m4.makeScale(k, k, k).setPosition(x, y + 1.5, z); im.setMatrixAt(n++, m4); }
     im.count = n; scene.add(im);
   }
-  return { castleSegs, doteSegs };
+  return { castleSegs, doteSegs, bankSegs };
 }
 
 // ---------- 水面 ----------
