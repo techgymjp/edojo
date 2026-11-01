@@ -265,7 +265,7 @@ function railLine(scene, city, pts, h, deckMat, sideMat, brickTex, name) {
       const t = brickTex.clone();
       t.needsUpdate = true;
       t.repeat.set(s.len / 12, 1);
-      const wall = mesh(new THREE.BoxGeometry(10, h - 1.6, s.len + 0.5), new THREE.MeshLambertMaterial({ map: t }), cx, (h - 1.6) / 2, cz, g);
+      const wall = mesh(new THREE.BoxGeometry(10, h - 1.6, s.len + 0.5), new THREE.MeshLambertMaterial({ map: t, alphaTest: 0.5, side: THREE.DoubleSide }), cx, (h - 1.6) / 2, cz, g);
       wall.rotation.y = s.rot;
       city.addPrism(rectPts(cx, cz, s.rot, 0, 0, 10, s.len), 0, h, name).roof = true;
     } else {
@@ -311,10 +311,12 @@ export function addRailways(scene, city) {
     c.fillRect(0, 0, w, h);
     c.strokeStyle = 'rgba(60,20,10,0.35)';
     for (let y = 0; y < h; y += 8) { c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
-    c.fillStyle = '#2b2522';
+    // 風雲江戸城: アーチの所はくり抜く (透明にして向こうが見える)
+    c.globalCompositeOperation = 'destination-out';
     c.beginPath();
     c.moveTo(w * 0.2, h); c.lineTo(w * 0.2, h * 0.45); c.arc(w * 0.5, h * 0.45, w * 0.3, Math.PI, 0); c.lineTo(w * 0.8, h);
     c.fill();
+    c.globalCompositeOperation = 'source-over';
   });
   brick.wrapS = THREE.RepeatWrapping;
   // 総武線: お茶の水 → 秋葉原 (山手線の上の3階) → 浅草橋
