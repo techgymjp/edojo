@@ -276,3 +276,12 @@ export async function renderSong(name, sec = 20) {
   [ctx, bgmGain] = keep; _noise = null;
   return b.getChannelData(0);
 }
+
+// 鉄砲の音 (瀬戸内の海賊王と同じ: 低い「ドン」と短い「パン」)
+function noiseHit(dur, freq, q, vol, type) {
+  const t = ctx.currentTime, src = ctx.createBufferSource(); src.buffer = noiseBuf();
+  const f = ctx.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
+  const g = ctx.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  src.connect(f); f.connect(g); g.connect(master); src.start(t, Math.random() * 0.5); src.stop(t + dur + 0.05);
+}
+export function gun(vol = 0.5) { if (!ctx) return; noiseHit(0.35, 500, 0.6, vol, 'lowpass'); noiseHit(0.05, 3000, 1, vol * 0.6, 'bandpass'); }
