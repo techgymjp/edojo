@@ -762,8 +762,7 @@ function hitNinja(nj, byLasso) {
     nj.vy = (waterY(tx, tz) - c.y + 0.5 * 20 * T * T) / T;
   }
   nj.state = 'fall';
-  // 仕留めた場所 (落ちる先の水の上) に「御用」の提灯を灯し、ミニマップに ✕ を出す
-  goyoLantern(nj, c);
+  // 仕留めた場所 (落ちる先の水の上) を、ミニマップに ✕ で出す
   G.kills.push({ x: nj.tx ?? c.x, z: nj.tz ?? c.z, t: G.t });
   if (G.captured + (G.escaped || 0) >= CFG.total) finish(true);
 }
