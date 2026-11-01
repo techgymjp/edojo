@@ -5,6 +5,7 @@ const FILES = {
   drum: 'sfx-drum-0', splash0: 'sfx-splash-0', splash1: 'sfx-splash-1', splash2: 'sfx-splash-2', coin: 'sfx-coin-0',
   whoosh: 'sfx-whoosh-0', kill: 'sfx-kill-0', bell: 'sfx-bell-0', fanfare: 'sfx-fanfare-0', dirge: 'sfx-dirge-0',
   oar: 'sfx-oar-0', hit: 'sfx-hit-0', clang: 'sfx-clang-0', boom: 'sfx-boom-0', launch: 'sfx-launch-0',
+  gun0: 'sfx-gun-0', gun1: 'sfx-gun-1', gun2: 'sfx-gun-2', gun3: 'sfx-gun-3', gun4: 'sfx-gun-4', // 瀬戸内の海賊王の鉄砲の音
   // (BGM は三味線と横笛を合成して鳴らすので、mp3 は読まない)
 };
 export function initAudio() {
@@ -284,4 +285,10 @@ function noiseHit(dur, freq, q, vol, type) {
   const g = ctx.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
   src.connect(f); f.connect(g); g.connect(master); src.start(t, Math.random() * 0.5); src.stop(t + dur + 0.05);
 }
-export function gun(vol = 0.5) { if (!ctx) return; noiseHit(0.35, 500, 0.6, vol, 'lowpass'); noiseHit(0.05, 3000, 1, vol * 0.6, 'bandpass'); }
+export function gun(vol = 0.5) {
+  if (!ctx) return;
+  // 海賊王の鉄砲の音 (5 種類から選ぶ)。読み込み前は合成の音
+  const k = 'gun' + ((Math.random() * 5) | 0);
+  if (buf.has(k)) { sfx(k, vol * 1.6, 0.95 + Math.random() * 0.1); return; }
+  noiseHit(0.35, 500, 0.6, vol, 'lowpass'); noiseHit(0.05, 3000, 1, vol * 0.6, 'bandpass');
+}
