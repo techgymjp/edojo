@@ -445,13 +445,13 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
     }
   } };
   let dropped = 0;
-  const GHX = (139.72810 - 139.745) * KXT, GHZ = -(35.68030 - 35.674) * KZT;
+  const GHX = (139.72810 - 139.745) * KXT, GHZ = -(35.68030 - 35.674) * KZT, DTX = (139.74480 - 139.745) * KXT, DTZ = -(35.67590 - 35.674) * KZT;
   for (const bd of city.bld) {
     if (!bd.plateau) continue;
     const pts = [[bd.cx, bd.cz], [(bd.minx + bd.cx) / 2, bd.cz], [(bd.maxx + bd.cx) / 2, bd.cz], [bd.cx, (bd.minz + bd.cz) / 2], [bd.cx, (bd.maxz + bd.cz) / 2]];
     if (bad(bd.cx, bd.cz) || pts.filter(([x, z]) => bad(x, z)).length >= 2) { bd.plateau = false; dropped++; continue; }
     // 手で作る名所 (迎賓館) の所の PLATEAU のビルは描かない
-    if (Math.hypot(bd.cx - GHX, bd.cz - GHZ) < 95) { bd.plateau = false; dropped++; continue; }
+    if (Math.hypot(bd.cx - GHX, bd.cz - GHZ) < 95 || Math.hypot(bd.cx - DTX, bd.cz - DTZ) < 175) { bd.plateau = false; dropped++; continue; }
     // 小舟から見えるのは川・お濠に面した街と高いビルだけ。水から 200m より奥の低いビルは描かない (軽くする)
     if (bd.h < 45 && !nearWaterGrid(bd.cx + OX, bd.cz + OZ, 200)) { bd.plateau = false; bd.far = true; }
   }
@@ -558,6 +558,7 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
   addCutaway(city.boxMat);
   const nBefore = root.children.length;
   city.roadHalfWidth = 4.6;
+  if (typeof window !== 'undefined') window.__roads = CITY.roads; window.__OXZ = [OX, OZ];
   city.buildRoads(root);
   const roadObjs = new Set(root.children.slice(nBefore));
   // 名所 (皇居・武道館・皇居の門は江戸城にするので入れない)
@@ -686,6 +687,7 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
     // 国土地理院の道路データに無い橋を手で足す: [幅, [緯度, 経度], [緯度, 経度]]
     const MANUAL = [
       [22, [35.70182, 139.74395], [35.70142, 139.74535]], // 牛込橋 (神楽坂下 ↔ 飯田橋駅西口、牛込見附)
+      [24, [35.68875, 139.78930], [35.68835, 139.79350]], // 新大橋 (隅田川)
     ];
     const tz2 = (la, lo) => [((lo - 139.745) * KXT) * 2, (-(la - 35.674) * KZT) * 2];
     const ROADS2 = ROADS.concat(MANUAL.map(([wd, a, b]) => [wd, ...tz2(...a), ...tz2(...b)]));

@@ -375,6 +375,8 @@ export function buildCastle(scene, castleSegs) {
   // 門と橋
   const [cx, cz] = [tx, tz];
   for (const [name, la, lo, kind, big] of GATES) {
+    // 外桜田門 (桜田門) は皇居ランナーと同じ枡形 (土橋の先の高麗門と、右奥の石垣の上の渡櫓門) で作る
+    if (name === '外桜田門') { const r = buildMasugata(scene, 35.67756, 139.75223); const l = labelSprite(name, '#ffe9b0', 0.9); l.position.set(r[0], r[2] + 22, r[1]); scene.add(l); labels.push(l); if (typeof window !== 'undefined') (window.__gates ||= []).push([name, Math.round(r[0]), Math.round(r[1])]); continue; }
     let [x, z] = ll(la, lo);
     let gx, gz, rot;
     // 橋の門で、今の水面に渡る所が見つからない (埋め立てられた堀) ときは、その場所に土橋の門として置く
@@ -409,7 +411,7 @@ export function buildCastle(scene, castleSegs) {
     }
     const g = makeGate(!!big);
     // 門番のお侍 (両わき)
-    for (const sx of [-1, 1]) { const gd = makeSamurai('guard'); gd.position.set(sx * 4.6, 0, 2.2); gd.scale.setScalar(1.3); g.add(gd); }
+    for (const sx of [-1, 1]) { const gd = makeSamurai('guard'); gd.position.set(sx * 4.6, 0, 2.2); gd.scale.setScalar(0.9); g.add(gd); }
     g.position.set(gx, groundH(gx, gz), gz);
     g.rotation.y = rot;
     scene.add(g);
@@ -471,4 +473,34 @@ export function buildWarps(scene) {
     out.push(pair);
   }
   return out;
+}
+
+// ---------- 枡形の城門 (皇居ランナーの外桜田門と同じ形) ----------
+// 高麗門は南 (桜田通り・警視庁の方) を向き、土橋は南へのびる。枡形の右 (東) の辺が石垣の上の渡櫓門
+const masuHip = new THREE.ConeGeometry(Math.SQRT1_2, 1, 4, 1).rotateY(Math.PI / 4);
+function buildMasugata(scene, lat, lon) {
+  const [gx, gz] = ll(lat, lon);
+  const base = groundH(gx, gz);
+  const g = new THREE.Group();
+  g.position.set(gx, base, gz);
+  const stone = M(0x8f8a80), white = M(0xf3f1ea), roofM = M(0x4a5054), dark = M(0x2b2e2c), cap = M(0x5a6064), path = M(0x9a9894), wood = M(0x8a7a64);
+  const BL = 28;
+  box(g, 11, 0.6, BL, 0, -0.3, BL / 2 + 2, path);
+  for (const sx of [-1, 1]) box(g, 0.15, 0.9, BL, sx * 5.3, 0, BL / 2 + 2, wood);
+  for (const sx of [-1, 1]) box(g, 1.1, 6.2, 1.1, sx * 3.2, 0, 0, dark);
+  box(g, 8.4, 0.9, 1.3, 0, 6.2, 0, dark);
+  const kr = new THREE.Mesh(masuHip, roofM); kr.scale.set(11, 2.4, 5.2); kr.position.set(0, 8.3, 0); g.add(kr);
+  const wall = (x0, x1, h) => { const w = Math.abs(x1 - x0), cx = (x0 + x1) / 2; box(g, w, h, 3.2, cx, -0.5, -0.8, stone); box(g, w, 3, 0.8, cx, h - 0.5, -0.8, white); box(g, w + 0.4, 0.5, 1.8, cx, h + 2.5, -0.8, cap); };
+  wall(-48, -4, 3.5); wall(4, 13, 3.5);
+  box(g, 3.2, 3.5, 32, -14, -0.5, -16, stone); box(g, 0.8, 3, 32, -14, 3, -16, white); box(g, 1.8, 0.5, 32.4, -14, 6, -16, cap);
+  box(g, 28, 3.5, 3.2, 0, -0.5, -32, stone); box(g, 28, 3, 0.8, 0, 3, -32, white); box(g, 28.4, 0.5, 1.8, 0, 6, -32, cap);
+  box(g, 26, 0.2, 30, 0, -0.1, -16, path);
+  box(g, 22, 8, 40, 24, -0.5, -16, stone);
+  box(g, 20, 8.5, 37, 24, 7.5, -16, white);
+  for (let z = -30; z <= -2; z += 7) box(g, 20.2, 1.2, 1.4, 24, 12, z, dark);
+  const yr = new THREE.Mesh(masuHip, roofM); yr.scale.set(25, 6.5, 43); yr.position.set(24, 19.2, -16); g.add(yr);
+  box(g, 30, 6.5, 4, 50, -0.5, 2, stone);
+  for (const sx of [-1, 1]) { const gd = makeSamurai('guard'); gd.position.set(sx * 4.6, 0, 2.2); gd.scale.setScalar(0.9); g.add(gd); }
+  scene.add(g);
+  return [gx, gz, base];
 }

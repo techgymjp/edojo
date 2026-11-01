@@ -115,23 +115,43 @@ export function addTokyoTower(scene, city) {
   return { light, mats: [glassMat], glow: [beamMat, beamWhite, mat], pos: [X, Z] };
 }
 
-// 国会議事堂: 左右対称の本体 + 中央塔 (ピラミッド屋根)
+// 国会議事堂 (千代田区永田町1-7-1): 正面は東 (国会前庭・桜田門の方)。南北に長い (206m) 左右対称の本体、
+// 中央の塔 (高さ 65m、階段状のピラミッドの屋根)、左右 (衆議院・参議院) の中央の張り出しと屋根。白い花崗岩
 export function addDiet(scene, city) {
   const [X, Z] = ll(35.67590, 139.74480);
   const g = new THREE.Group();
   g.position.set(X, 0, Z);
+  const winTex = canvasTex(256, 64, (c, w, h) => {
+    c.fillStyle = '#e8e2d2'; c.fillRect(0, 0, w, h);
+    c.fillStyle = '#d2cab6'; c.fillRect(0, h * 0.92, w, h * 0.08); c.fillRect(0, 0, w, 3);
+    for (let x = 0; x < w; x += 16) { c.fillStyle = '#5a6068'; c.fillRect(x + 5, 10, 6, 16); c.fillRect(x + 5, 36, 6, 16); c.fillStyle = '#f2ede2'; c.fillRect(x, 0, 2, h); }
+  });
+  winTex.wrapS = THREE.RepeatWrapping;
+  const wall = (len) => { const t = winTex.clone(); t.needsUpdate = true; t.repeat.set(len / 12, 1); return new THREE.MeshLambertMaterial({ map: t }); };
   const stone = new THREE.MeshLambertMaterial({ color: 0xe6dfcf });
-  const roof = new THREE.MeshLambertMaterial({ color: 0x7f9a86 });
+  const roofG = new THREE.MeshLambertMaterial({ color: 0x7f9a86 });
   const add = (geo, m, x, y, z) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); g.add(o); return o; };
-  add(new THREE.BoxGeometry(206, 21, 70), stone, 0, 10.5, 0);
-  add(new THREE.BoxGeometry(60, 6, 88), stone, -70, 24, 0);
-  add(new THREE.BoxGeometry(60, 6, 88), stone, 70, 24, 0);
-  add(new THREE.BoxGeometry(34, 26, 34), stone, 0, 34, 0);
-  add(new THREE.BoxGeometry(26, 10, 26), stone, 0, 52, 0);
-  const pyr = add(new THREE.ConeGeometry(17, 14, 4), roof, 0, 64, 0);
-  pyr.rotation.y = Math.PI / 4;
+  // 本体 (東西 70m・南北 206m)。+z が南、-x が西、+x が東 (正面)
+  add(new THREE.BoxGeometry(70, 21, 206), [wall(206), wall(206), stone, stone, wall(70), wall(70)], 0, 10.5, 0);
+  // 左右の院の中央の張り出し (正面玄関) と、その上の低い屋根
+  for (const sz of [-1, 1]) {
+    add(new THREE.BoxGeometry(84, 26, 50), [wall(50), wall(50), stone, stone, wall(84), wall(84)], 4, 13, sz * 62);
+    const r = add(new THREE.CylinderGeometry(Math.SQRT1_2 * 0.6, Math.SQRT1_2, 1, 4, 1), roofG, 4, 29, sz * 62); r.rotation.y = Math.PI / 4; r.scale.set(80, 6, 46);
+  }
+  // 中央の玄関 (東) の柱廊
+  add(new THREE.BoxGeometry(14, 18, 40), stone, 40, 9, 0);
+  for (let k = -3; k <= 3; k++) add(new THREE.CylinderGeometry(0.9, 0.9, 16, 10), stone, 47.5, 8, k * 5.5);
+  // 中央塔: 四角い塔、列柱の段、階段状のピラミッド屋根
+  add(new THREE.BoxGeometry(34, 26, 34), wall(34), 0, 34, 0);
+  add(new THREE.BoxGeometry(28, 9, 28), stone, 0, 51.5, 0);
+  for (let i = 0; i < 4; i++) for (let k = -2; k <= 2; k++) { const a = i * Math.PI / 2; add(new THREE.CylinderGeometry(0.7, 0.7, 8, 8), stone, Math.cos(a) * 14.5 + Math.sin(a) * k * 5, 51.5, Math.sin(a) * 14.5 + Math.cos(a) * k * 5); }
+  for (let i = 0; i < 5; i++) { const w = 24 - i * 4.4; add(new THREE.BoxGeometry(w, 1.8, w), stone, 0, 56.9 + i * 1.8, 0); }
+  const pyr = add(new THREE.ConeGeometry(3.2, 3, 4), stone, 0, 66.5, 0); pyr.rotation.y = Math.PI / 4;
+  // 前庭 (正面の広い道と芝生)
+  const lawn = new THREE.Mesh(new THREE.PlaneGeometry(120, 140), new THREE.MeshLambertMaterial({ color: 0x6f9a52 }));
+  lawn.rotation.x = -Math.PI / 2; lawn.position.set(120, 0.2, 0); g.add(lawn);
   scene.add(g);
-  city.addBox(X, Z, 206, 70, 0, 21, '国会議事堂').roof = true;
+  city.addBox(X, Z, 70, 206, 0, 21, '国会議事堂').roof = true;
   city.addBox(X, Z, 34, 34, 0, 47, '国会議事堂 中央塔');
   city.addBox(X, Z, 26, 26, 47, 57, '国会議事堂 中央塔');
   city.addBox(X, Z, 12, 12, 57, 70, '国会議事堂 中央塔');

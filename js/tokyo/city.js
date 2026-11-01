@@ -593,6 +593,25 @@ export class City {
     // 風雲江戸城: 国土地理院の首都高は上り・下りが別の線なので、片側 9m 幅 (半幅 4.6m)
     const W = this.roadHalfWidth || 8.5;
     const piers = [];
+    // 風雲江戸城: トンネルが別の線になっている所 (道の端がトンネルの線の端に接する) も坑口を描く
+    const tunPts = [], openPts = [];
+    for (const r of CITY.roads) for (let i = 0; i < r.x.length; i++) (r.t[i] ? tunPts : openPts).push([r.x[i], r.z[i], r]);
+    const portalAt = (r, j, j2) => {
+      const x = r.x[j], z = r.z[j];
+      if (!tunPts.some(([a, b, q]) => q !== r && Math.hypot(a - x, b - z) < 14)) return;
+      if (openPts.some(([a, b, q]) => q !== r && Math.hypot(a - x, b - z) < 14)) return;
+      const dx = x - r.x[j2], dz = z - r.z[j2], dl = Math.hypot(dx, dz) || 1, ux = dx / dl, uz = dz / dl, vx = -uz, vz = ux, h = r.h[j];
+      const P = (a, b, y) => [x + ux * a + vx * b, y, z + uz * a + vz * b];
+      const CON = [0.66, 0.66, 0.63], BLK = [0.04, 0.04, 0.05], hw = W + 1.5;
+      quad(deck, P(0, -hw, h - 3), P(0, hw, h - 3), P(0, hw, h + 9), P(0, -hw, h + 9), [-ux, 0, -uz], CON);
+      quad(deck, P(0, -hw, h + 9), P(0, hw, h + 9), P(14, hw, h + 9), P(14, -hw, h + 9), [0, 1, 0], CON);
+      for (const sd of [-1, 1]) quad(deck, P(0, sd * hw, h - 3), P(14, sd * hw, h - 3), P(14, sd * hw, h + 9), P(0, sd * hw, h + 9), [vx * sd, 0, vz * sd], CON);
+      quad(deck, P(-0.1, -W + 0.3, h), P(-0.1, W - 0.3, h), P(-0.1, W - 0.3, h + 6), P(-0.1, -W + 0.3, h + 6), [-ux, 0, -uz], BLK);
+    };
+    for (const r of CITY.roads) {
+      if (r.x.length >= 2 && !r.t[0]) portalAt(r, 0, 1);
+      if (r.x.length >= 2 && !r.t[r.x.length - 1]) portalAt(r, r.x.length - 1, r.x.length - 2);
+    }
     for (const r of CITY.roads) {
       let acc = 0;
       for (let i = 0; i + 1 < r.x.length; i++) {

@@ -42,7 +42,7 @@ for la, lo in FILL:
     if len(seen) >= 20000: print('too big, skip', la, lo); continue
     for y, x in seen: A[y, x] = 5
     print('filled', la, lo, len(seen))
-# 隅田川のすぐそばで行き止まりになっている堀・運河 (40m 以内) は、隅田川につなぐ (江戸の堀は川へ抜けていた)
+# 隅田川・汐留川など本流から 110m 以内で行き止まりになっている堀・運河 (築地・浜町・深川など) は、隅田川につなぐ (江戸の堀は川へ抜けていた)
 def label_all(A):
     lab = np.zeros(A.shape, np.int32); sizes = [0]; n = 0
     for y0, x0 in zip(*np.nonzero(A == 0)):
@@ -56,7 +56,7 @@ def label_all(A):
     return lab, sizes
 labA, sizes = label_all(A)
 my, mx = cell(35.6880, 139.7905); main = labA[my, mx]
-xE = int((139.7740 - W0) * KX / RES)
+xE = int((139.7555 - W0) * KX / RES)
 img = Image.fromarray(A); d = ImageDraw.Draw(img); nj = 0
 mainpts = np.argwhere(labA == main)
 mainpts = mainpts[::3]
@@ -64,13 +64,15 @@ for k in range(1, len(sizes)):
     if k == main or sizes[k] < 150: continue
     pts = np.argwhere(labA == k)
     if pts[:, 1].max() < xE: continue
+    cy, cx = pts.mean(0).astype(int)
+    if ((A[max(0, cy - 50):cy + 50, max(0, cx - 50):cx + 50] == 3) | (A[max(0, cy - 50):cy + 50, max(0, cx - 50):cx + 50] == 4)).any(): continue  # お城の中の池は除く
     pts = pts[::2]
     best = None
     for py, px in pts:
         dd = (mainpts[:, 0] - py) ** 2 + (mainpts[:, 1] - px) ** 2
         i = int(dd.argmin())
         if best is None or dd[i] < best[0]: best = (dd[i], py, px, mainpts[i][0], mainpts[i][1])
-    if best and best[0] ** 0.5 * RES < 40:
+    if best and best[0] ** 0.5 * RES < 110:
         _, ya, xa, yb, xb = best
         d.line([(xa, ya), (xb, yb)], fill=0, width=max(3, int(10 / RES))); nj += 1
         print('joined to 隅田川', round(N0 - ya * RES / KZ, 4), round(W0 + xa * RES / KX, 4), round(best[0] ** 0.5 * RES), 'm')
