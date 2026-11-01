@@ -1074,11 +1074,13 @@ function updateBoat(dt) {
         for (let k = 0; k < 24; k++) {
           const a = k / 24 * Math.PI * 2, cx = Math.cos(a), cz = Math.sin(a);
           let run = 0; while (run < 150 && isWater(o.x + cx * (run + 3), o.z + cz * (run + 3))) run += 3;
-          const dot = cx * ux + cz * uz;
-          if (dot < -0.2) continue; // 来た向きの逆 (後ろ向き) には出さない
-          const sc = Math.min(run, 60) * (1 + 1.5 * dot);
+          // 舟が進んでいた向き (と、渦から渦への向き) に一番近く、水が 20m 以上続く向きに出す
+          const dot = 0.6 * (cx * Math.cos(P.h) + cz * Math.sin(P.h)) + 0.4 * (cx * ux + cz * uz);
+          if (cx * ux + cz * uz < 0.05 || dot < -0.1) continue; // 土橋の方 (後ろ向き) には出さない
+          const sc = (run >= 20 ? 100 : run) + 80 * dot;
           if (sc > bestS) { bestS = sc; bestA = a; }
         }
+        if (bestS < 0) { let br = -1; for (let k = 0; k < 24; k++) { const a = k / 24 * Math.PI * 2; let run = 0; while (run < 150 && isWater(o.x + Math.cos(a) * (run + 3), o.z + Math.sin(a) * (run + 3))) run += 3; if (run > br) { br = run; bestA = a; } } }
         P.h = bestA; P.x = o.x; P.z = o.z;
         for (let s = 12; s > 0; s -= 2) if (isWater(o.x + Math.cos(bestA) * s, o.z + Math.sin(bestA) * s)) { P.x = o.x + Math.cos(bestA) * s; P.z = o.z + Math.sin(bestA) * s; break; }
         G.warpCd = 2; camInit = false; trail.length = 0;
@@ -1421,19 +1423,110 @@ function aheadPick(list, maxAng, minD, maxD) {
   }
   return best;
 }
+// 御門までの水の上の道のり (9m のマス、ワープもつなぐ)。御門ごとに幅優先で距離を求め、最近の 6 つを覚えておく
+const GROUTE = { C: 9, cache: new Map() };
+function gateField(g) {
+  let f = GROUTE.cache.get(g.n);
+  if (f) return f;
+  const C = GROUTE.C, gw = Math.ceil(W.sizeX / C), gh = Math.ceil(W.sizeZ / C);
+  if (!GROUTE.wet) {
+    GROUTE.wet = new Uint8Array(gw * gh);
+    for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) GROUTE.wet[j * gw + i] = isWater((i + 0.5) * C, (j + 0.5) * C) ? 1 : 0;
+    GROUTE.warp = new Map();
+    const ci = (x, z) => Math.floor(z / C) * gw + Math.floor(x / C);
+    for (const w of warps) { const a = ci(w.a.x, w.a.z), b = ci(w.b.x, w.b.z); GROUTE.warp.set(a, b); GROUTE.warp.set(b, a); GROUTE.wet[a] = GROUTE.wet[b] = 1; }
+    Object.assign(GROUTE, { gw, gh });
+  }
+  const wet = GROUTE.wet;
+  f = new Float32Array(gw * gh).fill(Infinity);
+  const q = [];
+  const gi = Math.floor(g.x / C), gj = Math.floor(g.z / C);
+  for (let dj = -6; dj <= 6; dj++) for (let di = -6; di <= 6; di++) { const i = gi + di, j = gj + dj; if (i < 0 || j < 0 || i >= gw || j >= gh || !wet[j * gw + i]) continue; const d = Math.hypot(di, dj) * C; if (d > 55) continue; const k = j * gw + i; if (d < f[k]) { f[k] = d; q.push(k); } }
+  // 距離の近い順に広げる (8 方向、簡単な Dijkstra をバケットで)
+  q.sort((a, b) => f[a] - f[b]);
+  const heap = q.slice();
+  let head = 0;
+  const NB = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.414], [1, -1, 1.414], [-1, 1, 1.414], [-1, -1, 1.414]];
+  while (head < heap.length) {
+    const k = heap[head++], i = k % gw, j = (k - i) / gw, d = f[k];
+    for (const [di, dj, c] of NB) {
+      const ii = i + di, jj = j + dj; if (ii < 0 || jj < 0 || ii >= gw || jj >= gh) continue;
+      const kk = jj * gw + ii; if (!wet[kk]) continue;
+      const nd = d + c * C; if (nd < f[kk]) { f[kk] = nd; heap.push(kk); }
+    }
+    const wk = GROUTE.warp.get(k); if (wk !== undefined && d + 20 < f[wk]) { f[wk] = d + 20; heap.push(wk); }
+  }
+  GROUTE.cache.set(g.n, f);
+  if (GROUTE.cache.size > 6) GROUTE.cache.delete(GROUTE.cache.keys().next().value);
+  return f;
+}
+// 今いる所から、道のりの坂を 60m ほど下った先の点と、道のり
+function gateRoute(g) {
+  const f = gateField(g), C = GROUTE.C, gw = GROUTE.gw, gh = GROUTE.gh;
+  let i = Math.floor(P.x / C), j = Math.floor(P.z / C);
+  // 自分のマスが陸 (岸ぎわ) なら近くの水のマスから
+  let k = j * gw + i;
+  if (!(f[k] < Infinity)) { let bd = Infinity; for (let dj = -3; dj <= 3; dj++) for (let di = -3; di <= 3; di++) { const kk = (j + dj) * gw + i + di; if (f[kk] < bd) { bd = f[kk]; k = kk; } } if (!(bd < Infinity)) return null; i = k % gw; j = (k - i) / gw; }
+  const total = f[k];
+  for (let s = 0; s < 7; s++) {
+    let bk = k;
+    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { const ii = (k % gw) + di, jj = Math.floor(k / gw) + dj; if (ii < 0 || jj < 0 || ii >= gw || jj >= gh) continue; const kk = jj * gw + ii; if (f[kk] < f[bk]) bk = kk; }
+    if (bk === k) break;
+    k = bk;
+  }
+  const x = (k % gw + 0.5) * C, z = (Math.floor(k / gw) + 0.5) * C;
+  if (Math.hypot(x - P.x, z - P.z) < 5) return [g.x, g.z, total];
+  return [x, z, total];
+}
 function updateNav() {
   const el = $('nav');
   // 案内するのは御門 (見附) と、両国橋・永代橋
   if (!G.gatePts) G.gatePts = [...GATES, ['両国橋', 35.69402, 139.78794], ['永代橋', 35.67688, 139.78688]].map(([n, la, lo]) => { const [x, z] = ll(la, lo); return { n, x, z }; });
   if (!G.waterPts) G.waterPts = MOAT_NAMES.map(([n, la, lo]) => { const [x, z] = ll(la, lo); return { n, x, z }; });
   const here = moatName(P.x, P.z);
-  let best = aheadPick(G.gatePts, 60, 40, 2500);
+  // 路線図のように、隣り合う御門をつないだ図をたどる: 一番近い御門 (内堀にいるときは内堀の御門) とその隣の御門のうち、
+  // 進んでいる向きに一番近いものを案内する
+  if (!G.gateMap) {
+    const byN = new Map(G.gatePts.map((g) => [g.n, g]));
+    const LINES = [
+      ['和田倉門', '大手門', '平川門', '竹橋門', '清水門', '田安門', '半蔵門', '外桜田門', '日比谷門', '馬場先門', '和田倉門'], // 内堀
+      ['小石川門', '牛込門', '市ヶ谷門', '四谷門', '喰違見附', '赤坂門', '虎ノ門', '幸橋門', '芝口見附', '山下門', '数寄屋橋門', '鍛冶橋門', '呉服橋門', '常盤橋門', '神田橋門', '一ツ橋門', '雉子橋門', '小石川門'], // 外堀・日本橋川
+      ['小石川門', '筋違橋門', '浅草橋門', '両国橋', '永代橋', '常盤橋門'], // 神田川・隅田川・日本橋川
+      ['平川門', '北桔橋門'], ['大手門', '内桜田門', '坂下門', '西の丸大手門', '外桜田門'], // 本丸のまわり
+      ['清水門', '雉子橋門'], ['日比谷門', '山下門'], // 内堀と外堀のつなぎ (ワープ・水路)
+    ];
+    const adj = new Map();
+    for (const L of LINES) for (let i = 0; i + 1 < L.length; i++) for (const [a, b] of [[L[i], L[i + 1]], [L[i + 1], L[i]]]) { if (!byN.has(a) || !byN.has(b)) continue; if (!adj.has(a)) adj.set(a, new Set()); adj.get(a).add(b); }
+    const INNER = new Set(['和田倉門', '大手門', '平川門', '竹橋門', '清水門', '田安門', '半蔵門', '外桜田門', '日比谷門', '馬場先門', '北桔橋門', '内桜田門', '坂下門', '西の丸大手門']);
+    G.gateMap = { byN, adj, INNER };
+  }
+  let best = null;
+  {
+    const { byN, adj, INNER } = G.gateMap;
+    let inner = false;
+    for (const r of [20, 60, 110, 150]) { for (let a = 0; a < 12 && !inner; a++) { const c = codeAt(P.x + Math.cos(a * Math.PI / 6) * r, P.z + Math.sin(a * Math.PI / 6) * r); if (c === 3 || c === 4) inner = true; } if (inner) break; }
+    let st = null, sd = 1e18;
+    for (const g of G.gatePts) { if (!adj.has(g.n) || INNER.has(g.n) !== inner) continue; const d = Math.hypot(g.x - P.x, g.z - P.z); if (d < sd) { sd = d; st = g; } }
+    if (st) {
+      const hx = Math.cos(P.h), hz = Math.sin(P.h);
+      // 向きは、水の上の近道の最初の向き (陸をはさんだ御門を直線で見ない)
+      const cosTo = (g) => { const r = gateRoute(g) || [g.x, g.z]; const dx = r[0] - P.x, dz = r[1] - P.z, d = Math.hypot(dx, dz) || 1; return (dx * hx + dz * hz) / d; };
+      // 一番近い御門がまだ前にあって 50m より遠ければそれ、通り過ぎたら隣の御門 (向きに近い方)
+      if (sd > 50 && cosTo(st) > 0.2) best = st;
+      else { let bc = -2; for (const n of adj.get(st.n)) { const g = byN.get(n), c = cosTo(g); if (c > bc) { bc = c; best = g; } } }
+    }
+  }
+  if (!best) best = aheadPick(G.gatePts, 60, 40, 2500);
   if (!best) best = aheadPick(G.waterPts.filter((q) => q.n !== here), 60, 120, 2500);
   if (best) {
-    const a = Math.atan2(best.z - P.z, best.x - P.x) - camHeading();
+    // 矢印は、水の上の一番の近道 (ワープも使う) で、その御門へ向かう向き。距離も水の上の道のり
+    const route = gateRoute(best);
+    let tx = best.x, tz = best.z, rd = Math.hypot(best.x - P.x, best.z - P.z);
+    if (route) { [tx, tz, rd] = route; }
+    const a = Math.atan2(tz - P.z, tx - P.x) - camHeading();
     el.style.display = ''; el.classList.remove('ninja');
     $('navArrow').style.transform = `rotate(${a}rad)`;
-    $('navInfo').textContent = `${best.n}（約${fmtD(Math.hypot(best.x - P.x, best.z - P.z))}）`;
+    $('navInfo').textContent = `${best.n}（約${fmtD(rd)}）`;
     G.navT = [best.x, best.z];
   } else { el.style.display = 'none'; G.navT = null; }
   // 近くの忍者
