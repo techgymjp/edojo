@@ -21,8 +21,8 @@ export const CFG = {
   wakeDist: 330,      // 小舟がこれだけ近づくと、潜伏していた忍者が現れる (m)
   idleSpawn: 35,      // 誰も出ていないまま、これだけたつと一番近い忍者が現れる (秒)
   gap0: 17, gap1: 9,  // 出てくる間隔 (最初 → 最後)
-  roofTime: [2.5, 4], // ビルの上で構える時間
-  glideSpeed: 26,     // ムササビの術の速さ (m/s)
+  roofTime: [0.8, 1.5], // ビルの上で構える時間
+  glideSpeed: 90,     // ムササビの術の速さ (m/s)
   swim: 2.3,          // 竹筒 (水遁の術) の速さ
   climbStone: 0.55,   // 石垣を登る速さ (m/s)
   climbDote: 0.8,     // 土手を這い上がる速さ
@@ -156,7 +156,7 @@ async function boot() {
     const covered = new Set();
     for (const r of tokyo.roofs) covered.add(Math.floor(r.x / 120) * 1000 + Math.floor(r.z / 120));
     for (const bd of tokyo.city.bld) if (bd.plateau || bd.far) covered.add(Math.floor((bd.cx + tokyo.OX) / 120) * 1000 + Math.floor((bd.cz + tokyo.OZ) / 120));
-    modern = buildModern(scene, bld.filter(([h, cx, cz]) => !covered.has(Math.floor(cx / 120) * 1000 + Math.floor(cz / 120)) && h >= 60));
+    modern = buildModern(scene, bld.filter(([h, cx, cz]) => !covered.has(Math.floor(cx / 120) * 1000 + Math.floor(cz / 120)) && (h >= 45 || nearWaterGrid(cx, cz, 200))));
     addCutaway(modern.mat);
     $('loadtext').textContent = '江戸城を建てています……';
     await frame();
@@ -359,7 +359,7 @@ function updateNinja(nj, dt) {
       if (nj.t <= 0) {
         nj.state = 'glide'; nj.hp = 1;
         const d = Math.hypot(nj.lx - nj.sx, nj.lz - nj.sz);
-        nj.T = Math.max(4, d / CFG.glideSpeed); nj.t = nj.T;
+        nj.T = clamp(d / CFG.glideSpeed, 1.4, 3.2); nj.t = nj.T;
         floatText(nj.x, nj.y + 3, nj.z, 'ムササビの術！', 'purple');
         A.sfx('whoosh', 0.5, 0.8);
       }
@@ -368,7 +368,7 @@ function updateNinja(nj, dt) {
     case 'glide': {
       const s = 1 - nj.t / nj.T, px = nj.x, pz = nj.z;
       nj.x = nj.sx + (nj.lx - nj.sx) * s; nj.z = nj.sz + (nj.lz - nj.sz) * s;
-      nj.y = waterY(nj.lx, nj.lz) + (nj.sy - waterY(nj.lx, nj.lz)) * (1 - Math.pow(s, 1.4)) + Math.sin(s * Math.PI) * 10 + 1;
+      nj.y = waterY(nj.lx, nj.lz) + (nj.sy - waterY(nj.lx, nj.lz)) * (1 - s * s) + Math.sin(s * Math.PI) * 4;
       nj.vx = (nj.x - px) / dt; nj.vz = (nj.z - pz) / dt;
       nj.m.position.set(nj.x, nj.y, nj.z);
       nj.m.rotation.y = Math.atan2(nj.lx - nj.sx, nj.lz - nj.sz);
@@ -999,9 +999,9 @@ function updateCamera(dt) {
   camera.lookAt(P.x + Math.cos(P.h) * 60, waterY(P.x, P.z) + 8, P.z + Math.sin(P.h) * 60);
 }
 
-// ---------- 空の色: 暮れ六つから始まり、10 分で 1 日 (夜 → 朝 → 昼 → 夕方) ----------
+// ---------- 空の色: 明け六つ (朝) から始まり、10 分で 1 日 (昼 → 夕方 → 夜) ----------
 const DAY_SEC = 600;
-const hourNow = () => (18 + (G.state === 'title' || G.state === 'debug' && G.t === 0 ? 0.3 : G.t) / DAY_SEC * 24) % 24;
+const hourNow = () => (6.5 + (G.state === 'title' || G.state === 'debug' && G.t === 0 ? 0.3 : G.t) / DAY_SEC * 24) % 24;
 // [時, 空の上, 地平線, 環境光, 日差し, 日差しの色, 夜の度合い]
 const SKY = [
   [0, 0x0a1430, 0x26365a, 0.55, 0.6, 0xb8c8ff, 1],
@@ -1414,7 +1414,8 @@ function loop(now) {
   // 水面の映り込みには透かしを使わない
   const cb = CUT.boat.value.y; CUT.boat.value.y = -1e5;
   // 映り込みは 2 フレームに 1 回 (軽くする)
-  // 水面の映り込みは切る (重いので)。水面には空の色を映す
+  // 水面の映り込み (3 フレームに 1 回、低い解像度で)
+  if ((G.frame = (G.frame || 0) + 1) % 3 === 0) water.reflect(renderer, scene, camera, (G.state === 'play' || G.state === 'ending') ? waterY(P.x, P.z) : undefined);
   CUT.boat.value.y = cb;
   renderer.render(scene, camera);
 }

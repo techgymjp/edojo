@@ -453,7 +453,7 @@ export function buildWater(scene) {
     uniforms: {
       tReflect: { value: rt.texture }, texMat: { value: new THREE.Matrix4() }, time: { value: 0 },
       color: { value: new THREE.Color(0x24525e) }, fogColor: { value: new THREE.Color() }, fogNear: { value: 300 }, fogFar: { value: 2000 },
-      camPos: { value: new THREE.Vector3() }, strength: { value: 0.55 }, useRefl: { value: 0 }, skyCol: { value: new THREE.Color(0x8090a8) },
+      camPos: { value: new THREE.Vector3() }, strength: { value: 0.75 }, useRefl: { value: 1 }, skyCol: { value: new THREE.Color(0x8090a8) },
       gz: { value: new THREE.Vector4() }, gx: { value: new THREE.Vector4() }, isGorge: { value: 0 },
     },
     vertexShader: `uniform mat4 texMat; varying vec4 vR; varying vec3 vW; varying float vDepth;
@@ -471,7 +471,7 @@ export function buildWater(scene) {
         vec3 refl = useRefl > 0.5 ? texture2DProj(tReflect, r).rgb : skyCol * (0.85 + 0.15 * (w1 * 0.25 + 0.5));
         vec3 v = normalize(camPos - vW);
         float fres = 0.25 + 0.75 * pow(1.0 - max(v.y, 0.0), 3.0);
-        vec3 c = mix(color, refl, clamp(fres * strength + 0.05, 0.0, 0.35));
+        vec3 c = mix(color, refl, clamp(fres * strength + 0.15, 0.0, 0.9));
         c += vec3(0.04) * (w1 * 0.5 + 0.5) * (1.0 - fres);
         float f = smoothstep(fogNear, fogFar, vDepth);
         gl_FragColor = vec4(mix(c, fogColor, f), 1.0);
@@ -510,7 +510,7 @@ export function buildWater(scene) {
   const gmesh = { visible: true };
   const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
   const mirrorCam = new THREE.PerspectiveCamera();
-  const rScale = isTouch ? 0.25 : 0.35;
+  const rScale = isTouch ? 0.2 : 0.3;
   const _v = new THREE.Vector3(), _t = new THREE.Vector3(), _n = new THREE.Vector3(0, 1, 0), _rm = new THREE.Matrix4(), _la = new THREE.Vector3();
   const _plane = new THREE.Plane(), _clip = new THREE.Vector4(), _q = new THREE.Vector4(), P = new THREE.Vector3(0, 0, 0);
   let mirrorY = null;
