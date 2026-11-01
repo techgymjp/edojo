@@ -343,7 +343,7 @@ export function buildWalls(scene) {
       return;
     }
     // 石垣でない岸 (今の街の護岸) は緑の草
-    if (modern) quad(grass, ax, az, bx, bz, y0 - 0.01, y1, nx, nz, u0, u1, 4);
+    if (modern) quad(stone, ax, az, bx, bz, y0 - 0.01, y1, nx, nz, u0, u1, 3.2); // 水面に接する岸 (区画整理された川・堀) は石垣の灰色。土手 (斜面) は緑
     else quad(stone, ax, az, bx, bz, y0, y1, nx, nz, u0, u1, 3.2);
     // 城 (内郭・本丸) の石垣の上には白い土塀
     if (!modern && (hc === 3 || hc === 4)) {
