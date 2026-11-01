@@ -362,6 +362,7 @@ function spawnNinja(plan) {
 function ninjaCenter(nj) {
   if (nj.state === 'bamboo' || nj.state === 'dive' || nj.state === 'swim1') return new THREE.Vector3(nj.x, waterY(nj.x, nj.z) + 0.8, nj.z);
   if (nj.state === 'glide') return new THREE.Vector3(nj.x, nj.y, nj.z);
+  if (nj.state === 'emerge' || nj.state === 'emerge1') { const x = nj.bx ?? nj.x, z = nj.bz ?? nj.z; return new THREE.Vector3(x, (nj.wy ?? waterY(x, z)) + 0.6, z); }
   return new THREE.Vector3(nj.x, nj.y + 1 * CFG.ninjaScale, nj.z);
 }
 
@@ -734,7 +735,7 @@ function startRun(nj) {
 
 // 投げ銭か投げ輪が当たれば、それで終わり: お濠へドボン
 function hitNinja(nj, byLasso) {
-  if (!['roof', 'glide', 'bamboo', 'emerge', 'climb', 'swim1', 'emerge1', 'climbOut', 'run', 'walk', 'walkin'].includes(nj.state)) return;
+  if (!['roof', 'glide', 'dive', 'bamboo', 'emerge', 'climb', 'swim1', 'emerge1', 'climbOut', 'run', 'walk', 'walkin'].includes(nj.state)) return;
   A.sfx('hit', 0.6, 1.3);
   const c = ninjaCenter(nj);
   G.captured++;
@@ -758,7 +759,7 @@ function hitNinja(nj, byLasso) {
   }
   nj.halo.visible = true; nj.haloT = 0;
 
-  if (['bamboo', 'swim1', 'dive'].includes(nj.state)) {
+  if (['bamboo', 'swim1', 'dive', 'emerge', 'emerge1'].includes(nj.state)) {
     // 水の中: 水しぶきを上げて浮かび、沈む
     nj.x = c.x; nj.z = c.z; nj.y = waterY(c.x, c.z) + 1; nj.vy = byLasso ? 21 : 17; nj.vx = nj.vz = 0; nj.tx = c.x; nj.tz = c.z;
     splash(c.x, c.z, 1.4);
@@ -930,13 +931,19 @@ function preferDir() {
   return P.h;
 }
 // 一番近い忍者 (minR〜maxR m の中)
-// 投げ銭で狙えるのは、水遁の術で水の中を渡っている忍者 (竹筒) だけ
-const WATER_STATES = ['bamboo', 'swim1'];
+// 投げ銭で狙えるのは、水面にいる忍者: 水遁の術 (竹筒)、飛び込んだところ、水から上がりかけ、ほか水の上で水面近くにいる忍者
+const WATER_STATES = ['bamboo', 'swim1', 'dive', 'emerge', 'emerge1'];
+const ALIVE = ['roof', 'glide', 'dive', 'bamboo', 'emerge', 'climb', 'swim1', 'emerge1', 'climbOut', 'run', 'walk', 'walkin'];
+function onWater(nj) {
+  if (WATER_STATES.includes(nj.state)) return true;
+  if (!ALIVE.includes(nj.state) || !isWater(nj.x, nj.z)) return false;
+  return (nj.y ?? 0) - waterY(nj.x, nj.z) < 2.5;
+}
 function pickTarget(maxR, minR = 0, states = null) {
   const hp = heroPos();
   let best = null, bd = 1e9;
   for (const nj of G.ninjas) {
-    if (!(states || ['roof', 'glide', 'bamboo', 'emerge', 'climb', 'swim1', 'emerge1', 'climbOut', 'run', 'walk', 'walkin']).includes(nj.state)) continue;
+    if (states === 'water' ? !onWater(nj) : !(states || ['roof', 'glide', 'bamboo', 'emerge', 'climb', 'swim1', 'emerge1', 'climbOut', 'run', 'walk', 'walkin']).includes(nj.state)) continue;
     const c = ninjaCenter(nj), d = c.distanceTo(hp);
     // 前にしか投げられない: 舳先の向きから左右 CFG.throwArc (度) の中にいる忍者だけ
     const ang = Math.abs(angDiff(Math.atan2(c.z - P.z, c.x - P.x), P.h));
@@ -948,7 +955,7 @@ function pickTarget(maxR, minR = 0, states = null) {
 function throwCoins() {
   if (G.coinCd > 0) return;
   G.coinCd = CFG.coinCd; G.throwT = 1;
-  const tg = pickTarget(CFG.coinRange, 0, WATER_STATES);
+  const tg = pickTarget(CFG.coinRange, 0, 'water');
   // 5 連射: 瀬戸内の海賊王の鉄砲そのまま (光る弾と後ろに伸びる軌跡、秒速 150m、わずかに落ちる)。忍者の動きを読んで撃つ
   for (let k = 0; k < 5; k++) {
     setTimeout(() => {
@@ -1021,7 +1028,7 @@ function updateWeapons(dt) {
     if (c.tail && c.p0) c.tail.scale.z = Math.max(0.001, Math.min(1, c.p.distanceTo(c.p0) / (26 * 0.4)));
     // 速いので、このフレームで進んだ線分と忍者の近さで当たりを見る
     for (const nj of (c.tg ? [c.tg] : G.ninjas)) {
-      if (!WATER_STATES.includes(nj.state)) continue; // 投げ銭は水の中の忍者だけ
+      if (!onWater(nj)) continue; // 投げ銭は水面にいる忍者だけ
       const q = ninjaCenter(nj), d = c.p.clone().sub(p0), L2 = d.lengthSq() || 1, t = clamp(q.clone().sub(p0).dot(d) / L2, 0, 1);
       if (p0.clone().addScaledVector(d, t).distanceTo(q) < 2.2) { hitNinja(nj, false); spark(q); c.life = 0; break; }
     }
