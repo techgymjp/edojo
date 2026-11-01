@@ -746,7 +746,9 @@ function hitNinja(nj, byLasso) {
   // 仕留めたら花火 (小舟の前の空に)
   { const d = 200, wy = waterY(P.x, P.z); fw.show(P.x + Math.cos(P.h) * d, wy - 50, P.z + Math.sin(P.h) * d, 3, false, 0.35, 90); }
   nj.m.visible = true; nj.bam.visible = false; nj.marker.style.display = 'none';
-  poseNinja(nj.m, 'stun', G.t);
+  // 縄が巻き付いた姿で浮かんで落ちる
+  poseNinja(nj.m, 'bound', G.t);
+
   if (['bamboo', 'swim1', 'dive'].includes(nj.state)) {
     // 水の中: 水しぶきを上げて浮かび、沈む
     nj.x = c.x; nj.z = c.z; nj.y = waterY(c.x, c.z) + 1; nj.vy = byLasso ? 21 : 17; nj.vx = nj.vz = 0; nj.tx = c.x; nj.tz = c.z;
@@ -760,9 +762,51 @@ function hitNinja(nj, byLasso) {
     nj.vy = (waterY(tx, tz) - c.y + 0.5 * 20 * T * T) / T;
   }
   nj.state = 'fall';
+  // 仕留めた場所 (落ちる先の水の上) に「御用」の提灯を灯し、ミニマップに ✕ を出す
+  goyoLantern(nj, c);
+  G.kills.push({ x: nj.tx ?? c.x, z: nj.tz ?? c.z, t: G.t });
   if (G.captured + (G.escaped || 0) >= CFG.total) finish(true);
 }
 function capture(nj) { hitNinja(nj, true); }
+// 「御用」の提灯: 仕留めた忍者が落ちる水の上に灯る (遠くからも見えるよう光の輪をつける)。15 秒で消える
+let lanternTex = null, glowTex = null;
+function goyoLantern(nj, c) {
+  if (!lanternTex) {
+    const cv = document.createElement('canvas'); cv.width = 256; cv.height = 128; const g = cv.getContext('2d');
+    const gr = g.createLinearGradient(0, 0, 256, 0); gr.addColorStop(0, '#d8701c'); gr.addColorStop(0.5, '#ffd27a'); gr.addColorStop(1, '#d8701c');
+    g.fillStyle = gr; g.fillRect(0, 0, 256, 128);
+    g.strokeStyle = 'rgba(120,50,10,0.5)'; g.lineWidth = 2; for (let y = 10; y < 128; y += 14) { g.beginPath(); g.moveTo(0, y); g.lineTo(256, y); g.stroke(); }
+    g.fillStyle = '#c0150f'; g.font = '700 70px "Shippori Mincho", serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText('御用', 64, 66); g.fillText('御用', 192, 66);
+    lanternTex = new THREE.CanvasTexture(cv); lanternTex.colorSpace = THREE.SRGBColorSpace;
+    const cg = document.createElement('canvas'); cg.width = cg.height = 64; const q = cg.getContext('2d');
+    const rg = q.createRadialGradient(32, 32, 2, 32, 32, 32); rg.addColorStop(0, 'rgba(255,200,110,0.9)'); rg.addColorStop(1, 'rgba(255,160,60,0)');
+    q.fillStyle = rg; q.fillRect(0, 0, 64, 64); glowTex = new THREE.CanvasTexture(cg);
+  }
+  const grp = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.75, 1.6, 16, 1, true), new THREE.MeshBasicMaterial({ map: lanternTex, side: THREE.DoubleSide }));
+  body.position.y = 2.6; grp.add(body);
+  const capM = new THREE.MeshBasicMaterial({ color: 0x1a1a1a });
+  for (const y of [1.75, 3.45]) { const cp = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.18, 12), capM); cp.position.y = y; grp.add(cp); }
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.2, 6), new THREE.MeshLambertMaterial({ color: 0x5a4028 })); pole.position.y = 0.6; grp.add(pole);
+  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+  halo.scale.set(9, 9, 1); halo.position.y = 2.6; grp.add(halo);
+  const [x, z] = [nj.tx ?? c.x, nj.tz ?? c.z];
+  grp.position.set(x, waterY(x, z), z);
+  scene.add(grp);
+  G.lanterns.push({ g: grp, body, halo, x, z, t: 0 });
+}
+function updateLanterns(dt) {
+  for (const L of G.lanterns) {
+    L.t += dt;
+    const lx = L.x, lz = L.z;
+    L.g.position.y = waterY(lx, lz) + Math.sin(L.t * 2) * 0.15; L.g.rotation.y += dt * 0.3;
+    L.halo.material.opacity = 0.7 + Math.sin(L.t * 9) * 0.15;
+    if (L.t > 13) { const k = Math.max(0, 1 - (L.t - 13) / 2); L.g.scale.setScalar(Math.max(0.01, k)); }
+    if (L.t > 15) { scene.remove(L.g); L.dead = true; }
+  }
+  G.lanterns = G.lanterns.filter((L) => !L.dead);
+}
 
 // 外堀を渡り切ったら消える (取り逃し)。CFG.maxEscape 人取り逃したら負け
 // 歩く道: 8m のます目で、描いているビルの中と水は通れない。内堀の岸からの距離 (歩いた道のり) の地図を一度だけ作る
@@ -1392,6 +1436,14 @@ function drawMinimap() {
     g.lineWidth = 4; g.beginPath(); g.arc(qx, qy, r, 0, Math.PI * 2); g.fill(); g.stroke();
     g.fillStyle = '#fff'; g.font = `900 ${r * 1.2}px serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('忍', qx, qy + 2);
   }
+  // 仕留めた場所の ✕ (4 秒)
+  for (const k of G.kills || []) {
+    const age = G.t - k.t; if (age > 4) continue;
+    const [kx, ky] = X(k.x, k.z), r = 13 * (age < 0.3 ? 1.6 - age * 2 : 1);
+    g.globalAlpha = age > 3 ? 4 - age : 1; g.strokeStyle = '#fff'; g.lineWidth = 9; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(kx - r, ky - r); g.lineTo(kx + r, ky + r); g.moveTo(kx + r, ky - r); g.lineTo(kx - r, ky + r); g.stroke();
+    g.strokeStyle = '#e01818'; g.lineWidth = 5; g.stroke(); g.globalAlpha = 1;
+  }
   const [a, b] = X(P.x, P.z);
   g.save(); g.translate(a, b); g.rotate(P.h + rot);
   g.fillStyle = '#ffd400'; g.strokeStyle = '#000'; g.lineWidth = 3;
@@ -1642,7 +1694,8 @@ function startGame() {
   for (const nj of G.ninjas) { scene.remove(nj.m); scene.remove(nj.bam); nj.marker.remove(); }
   for (const c of G.coins) scene.remove(c.m);
   for (const l of G.lassos) { scene.remove(l.line); scene.remove(l.loop); }
-  Object.assign(G, { escaped: 0, lastSpawn: 0, forceSpawn: 120, t: 0, captured: 0, spawned: 0, nextSpawn: CFG.firstAt, st: 100, ninjas: [], coins: [], lassos: [], coinCd: 0, lassoCd: 0, warpCd: 0, camYaw: 0, intruder: null, result: null, alarmT: 0, alarmBeep: 0 });
+  Object.assign(G, { escaped: 0, lastSpawn: 0, forceSpawn: 120, t: 0, captured: 0, spawned: 0, nextSpawn: CFG.firstAt, st: 100, ninjas: [], coins: [], lassos: [], coinCd: 0, lassoCd: 0, warpCd: 0, camYaw: 0, intruder: null, result: null, alarmT: 0, alarmBeep: 0, kills: [], lanterns: G.lanterns || [] });
+  for (const L of G.lanterns) scene.remove(L.g); G.lanterns = [];
   G.name = ($('nameInput').value || '平次').slice(0, 10);
   $('hudName').textContent = G.name;
   // 浅草橋の手前 (神田川) から、外堀・内堀の方 (西) へ向いて
@@ -1726,7 +1779,7 @@ function step(dt) {
   }
   for (const nj of G.ninjas) updateNinja(nj, dt);
   updateWeapons(dt);
-  updateFx(dt); updateWakes(dt); fw.update(dt);
+  updateFx(dt); updateWakes(dt); fw.update(dt); updateLanterns(dt);
 }
 
 // ---------- ループ ----------
