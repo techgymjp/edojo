@@ -192,6 +192,80 @@ function buildRail(root, city, OX, OZ) {
     },
   };
 }
+// ---- 丸ノ内線: 御茶ノ水 (神田川の谷を横穴から出て鉄橋で渡る) と 四ツ谷 (外濠の谷の上の駅) を手で作る ----
+function buildMarunouchi(scene) {
+  const ll2 = (la, lo) => [(lo - W.W) * W.KX, (W.N - la) * W.KZ];
+  const RED = new THREE.MeshLambertMaterial({ color: 0xe60012 }), WHITE = new THREE.MeshLambertMaterial({ color: 0xf2f2ee }), WIN = new THREE.MeshLambertMaterial({ color: 0x24303c });
+  const STEEL = new THREE.MeshLambertMaterial({ color: 0x5e6670 }), DARK = new THREE.MeshBasicMaterial({ color: 0x0a0a0c }), CON = new THREE.MeshLambertMaterial({ color: 0x9a9a96 });
+  const PLAT = new THREE.MeshLambertMaterial({ color: 0xc8c4bb }), ROOF = new THREE.MeshLambertMaterial({ color: 0x6a737c });
+  const sites = [];
+  const site = (A, B, extend, deckY, opt = {}) => {
+    const [ax, az] = A, [bx, bz] = B, L = Math.hypot(bx - ax, bz - az), ux = (bx - ax) / L, uz = (bz - az) / L, rot = Math.atan2(ux, uz);
+    const g = new THREE.Group(); scene.add(g);
+    const mk = (geo, m, x, y, z) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.y = rot; g.add(o); return o; };
+    const cx = (ax + bx) / 2, cz = (az + bz) / 2;
+    // 鉄橋 (床と両側の鋼の桁・トラス)
+    mk(new THREE.BoxGeometry(6, 0.8, L + 2), STEEL, cx, deckY - 0.4, cz);
+    for (const sd of [-1, 1]) {
+      mk(new THREE.BoxGeometry(0.4, 2.2, L + 2), STEEL, cx - uz * sd * 3.1, deckY + 0.3, cz + ux * sd * 3.1);
+      for (let d = -L / 2; d <= L / 2; d += 4) { const o = mk(new THREE.BoxGeometry(0.25, 2.6, 0.25), STEEL, cx + ux * d - uz * sd * 3.1, deckY + 0.5, cz + uz * d + ux * sd * 3.1); o.rotation.x = 0.6 * (Math.round(d / 4) % 2 ? 1 : -1); }
+    }
+    // 横穴 (岸の壁の黒い口と枠)
+    for (const [px, pz, s] of [[ax, az, -1], [bx, bz, 1]]) {
+      mk(new THREE.BoxGeometry(7.5, 6.5, 1.5), CON, px + ux * s * 0.8, deckY + 2.4, pz + uz * s * 0.8);
+      mk(new THREE.BoxGeometry(5.6, 4.8, 1.6), DARK, px + ux * s * 0.6, deckY + 2.0, pz + uz * s * 0.6);
+    }
+    // 駅のホーム
+    if (opt.station) for (const sd of [-1, 1]) {
+      mk(new THREE.BoxGeometry(3.5, 1.1, L), PLAT, cx - uz * sd * 4.8, deckY + 0.55, cz + ux * sd * 4.8);
+      mk(new THREE.BoxGeometry(4.5, 0.25, L), ROOF, cx - uz * sd * 4.8, deckY + 4.6, cz + ux * sd * 4.8);
+      for (let d = -L / 2 + 3; d < L / 2; d += 8) mk(new THREE.BoxGeometry(0.3, 3.5, 0.3), ROOF, cx + ux * d - uz * sd * 4.8, deckY + 2.9, cz + uz * d + ux * sd * 4.8);
+    }
+    // 電車 (6 両)。トンネルの中は見えない所まで走る
+    const cars = [];
+    for (let i = 0; i < 6; i++) {
+      const c = new THREE.Group();
+      const m1 = new THREE.Mesh(new THREE.BoxGeometry(2.8, 3.3, 17.5).translate(0, 1.85, 0), RED);
+      const m2 = new THREE.Mesh(new THREE.BoxGeometry(2.9, 0.35, 17.6).translate(0, 2.6, 0), WHITE);
+      const m3 = new THREE.Mesh(new THREE.BoxGeometry(2.9, 0.9, 16).translate(0, 3.0, 0), WIN);
+      c.add(m1, m2, m3); c.visible = false; scene.add(c); cars.push(c);
+    }
+    sites.push({ ax, az, ux, uz, L, rot, deckY, extend, cars, d: Math.random() * (L + 2 * extend), dir: 1, wait: 0, station: !!opt.station });
+  };
+  // 御茶ノ水: 神田川の谷の北岸の横穴から出て、鉄橋で南岸の横穴へ (聖橋のすぐ東)
+  {
+    const A = ll2(35.69988, 139.76585), B = ll2(35.69905, 139.76695);
+    site(A, B, 160, waterY(...ll2(35.6996, 139.7663)) + 6.5);
+  }
+  // 四ツ谷: 外濠 (真田濠) の谷の上の駅。西の四谷側の横穴から出て、駅を通って東の麹町側の横穴へ
+  {
+    const A = ll2(35.68545, 139.72905), B = ll2(35.68525, 139.73215);
+    const bank = Math.min(terrainH(...A), terrainH(...B));
+    site(A, B, 160, Math.max(waterY(...ll2(35.6853, 139.7306)) + 5, bank - 4), { station: true });
+  }
+  return {
+    sites,
+    update(dt) {
+      for (const s of sites) {
+        // 駅では 15 秒止まる。横穴の奥 (extend m) で折り返す
+        const total = s.L + 2 * s.extend, mid = s.extend + s.L / 2;
+        if (s.wait > 0) s.wait -= dt;
+        else {
+          const prev = s.d; s.d += 12 * s.dir * dt;
+          if (s.station && (prev - mid) * (s.d - mid) <= 0) { s.d = mid; s.wait = 15; }
+          if (s.d > total + 60) { s.dir = -1; } if (s.d < -60) { s.dir = 1; }
+        }
+        s.cars.forEach((c, i) => {
+          const dd = s.d - s.extend - i * 18 * s.dir; // 鉄橋の始まり (A) からの道のり
+          const x = s.ax + s.ux * dd, z = s.az + s.uz * dd;
+          // 横穴より奥 (地面の中) は見せない
+          c.visible = dd > -4 && dd < s.L + 4;
+          c.position.set(x, s.deckY, z); c.rotation.y = s.rot;
+        });
+      }
+    },
+  };
+}
 const KXT = 111320 * Math.cos(35.674 * Math.PI / 180), KZT = 110574;
 export function buildTokyo(scene, renderer, bankSegs = []) {
   const OX = (139.745 - W.W) * W.KX, OZ = (W.N - 35.674) * W.KZ;
@@ -350,6 +424,8 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
   // 線路: 国土地理院の鉄道データ (JR、地上・高架) から描き、電車を走らせる (ターザン大東京の手で引いた線路は使わない)
   const nRail0 = root.children.length;
   rails = buildRail(root, city, OX, OZ);
+  const maru = buildMarunouchi(scene);
+  if (typeof window !== "undefined") window.__maru = maru;
   const railObjs = new Set(root.children.slice(nRail0));
   // 線路の高架・首都高の高架が通る所のビルは描かない (高架がビルを突き抜けないように)
   {
@@ -567,6 +643,7 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
     stream(cam, R, budget) { return city.streamTiles(cam.x - OX, cam.z - OZ, R, budget); },
     update(dt, t, night, fogColor, camera) {
       if (rails && rails.update) rails.update(dt);
+      maru.update(dt);
       if (techgym.update) techgym.update(t);
       const k = night > 0.6 ? 'night' : 'dusk';
       mats.glass.emissiveIntensity = night * 1.0;
