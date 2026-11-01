@@ -149,6 +149,24 @@ for y in range(cell(35.6870, 0)[0], cell(35.6812, 0)[0] + 1):
         if inside and A[y, x] != 0: A[y, x] = 0; ns += 1
         elif not inside and A[y, x] == 0 and la_ < 35.68560: A[y, x] = 5; ns += 1
 print('真田濠を新宿通りの南・外堀通りとソフィア通りのあいだに', ns)
+# 虎ノ門〜幸橋: 外濠は一本 (北へ回る方)。まっすぐ東へのびる南の枝 (行き止まり) は陸に戻す
+_T = A.copy()
+for y in range(cell(35.67030, 0)[0], cell(35.66950, 0)[0] + 1):
+    for x in range(cell(0, 139.74880)[1], cell(0, 139.74905)[1] + 1): _T[y, x] = 5
+sy_, sx_ = cell(35.66930, 139.75200)
+if _T[sy_, sx_] == 0:
+    seen_ = {(sy_, sx_)}; q_ = deque([(sy_, sx_)])
+    while q_ and len(seen_) < 20000:
+        y, x = q_.popleft()
+        for yy, xx in ((y + 1, x), (y - 1, x), (y, x + 1), (y, x - 1)):
+            if _T[yy, xx] == 0 and (yy, xx) not in seen_: seen_.add((yy, xx)); q_.append((yy, xx))
+    if len(seen_) < 20000:
+        for y, x in seen_: A[y, x] = 5
+        for y in range(cell(35.67030, 0)[0], cell(35.66950, 0)[0] + 1):
+            for x in range(cell(0, 139.74880)[1], cell(0, 139.74905)[1] + 1):
+                if A[y, x] == 0 and y > cell(35.67000, 0)[0]: A[y, x] = 5
+        print('虎ノ門〜幸橋の南の枝を陸に', len(seen_))
+    else: print('虎ノ門〜幸橋: 南の枝が本流とつながっていて消せない')
 # 溜池は一つの広い池 (赤坂見附から虎ノ門の方へ)。二手に分かれた細い水路と中島・横の切れ端を直す
 def box_set(la0, la1, lo0, lo1, frm, to, cond=None):
     n_ = 0
