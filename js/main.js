@@ -1311,8 +1311,8 @@ function updateMarkers() {
   for (const nj of G.ninjas) {
     const el = nj.marker;
     if ((nj.state === 'climb' || nj.state === 'emerge') && (!worst || nj.prog > (worst.prog || 0))) worst = nj;
-    // 印は水遁の術 (水の中で竹筒だけ) のときの ▼ だけ。ほかはキャラの動きを見る
-    if (nj.state !== 'bamboo' && nj.state !== 'swim1') { el.style.display = 'none'; continue; }
+    // 印は出さない (竹筒の ▼ もやめる。キャラの動きだけで見せる)
+    el.style.display = 'none'; continue;
     const c = ninjaCenter(nj); c.y += 3;
     tmpV.copy(c).project(camera);
     // 竹筒が見えていて (石垣・建物・橋脚の陰でない)、300m 以内のときだけ
