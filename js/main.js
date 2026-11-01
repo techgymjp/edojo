@@ -612,6 +612,7 @@ function updateNinja(nj, dt) {
       break;
     }
     case 'fall': {
+      if (nj.halo) { nj.haloT += dt; const k = 3.2 + Math.sin(nj.haloT * 14) * 0.5; nj.halo.scale.set(k, k, 1); nj.halo.material.opacity = 1; }
       nj.vy -= 20 * dt;
       nj.y += nj.vy * dt; nj.x += nj.vx * dt; nj.z += nj.vz * dt;
       nj.m.position.set(nj.x, nj.y, nj.z);
@@ -626,6 +627,7 @@ function updateNinja(nj, dt) {
       break;
     }
     case 'sink': {
+      if (nj.halo) { nj.halo.material.opacity = Math.max(0, nj.t / 1.2); }
       nj.y -= dt * 3;
       nj.m.position.set(nj.x, nj.y, nj.z);
       nj.m.rotation.x += dt * 2;
@@ -748,6 +750,13 @@ function hitNinja(nj, byLasso) {
   nj.m.visible = true; nj.bam.visible = false; nj.marker.style.display = 'none';
   // 縄が巻き付いた姿で浮かんで落ちる
   poseNinja(nj.m, 'bound', G.t);
+  // 黒い忍者の裏で光らせる (後光)。忍者の形が光の中に黒く浮かぶ
+  if (!nj.halo) {
+    if (!glowTex) glowTex = makeGlowTex();
+    nj.halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0xffe9a0, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+    nj.halo.position.y = 1.0; nj.m.add(nj.halo);
+  }
+  nj.halo.visible = true; nj.haloT = 0;
 
   if (['bamboo', 'swim1', 'dive'].includes(nj.state)) {
     // 水の中: 水しぶきを上げて浮かび、沈む
@@ -769,6 +778,7 @@ function hitNinja(nj, byLasso) {
 function capture(nj) { hitNinja(nj, true); }
 // 「御用」の提灯: 仕留めた忍者が落ちる水の上に灯る (遠くからも見えるよう光の輪をつける)。15 秒で消える
 let lanternTex = null, glowTex = null;
+function makeGlowTex() { const cg = document.createElement('canvas'); cg.width = cg.height = 128; const q = cg.getContext('2d'); const rg = q.createRadialGradient(64, 64, 4, 64, 64, 64); rg.addColorStop(0, 'rgba(255,255,240,1)'); rg.addColorStop(0.35, 'rgba(255,220,120,0.75)'); rg.addColorStop(1, 'rgba(255,170,60,0)'); q.fillStyle = rg; q.fillRect(0, 0, 128, 128); return new THREE.CanvasTexture(cg); }
 function goyoLantern(nj, c) {
   if (!lanternTex) {
     const cv = document.createElement('canvas'); cv.width = 256; cv.height = 128; const g = cv.getContext('2d');
