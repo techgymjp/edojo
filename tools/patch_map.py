@@ -131,6 +131,7 @@ def comp(y, x):
             if 0 <= yy < h and 0 <= xx < wdt and A[yy, xx] == 0 and not lab[yy, xx]: lab[yy, xx] = n; q.append((yy, xx))
     return n
 keep = []
+DROPW = [(35.68748, 139.75686)]  # 白鳥濠 (本丸の中) のワープは消す
 KEEP_SAME = [(35.6848, 139.7454)]  # 半蔵門 (細い水路でつながるが、舟では通りにくいので残す)
 def snapw(x, z):
     y0, x0 = int(z / RES), int(x / RES)
@@ -152,11 +153,13 @@ for (la0, lo0), (la1, lo1) in MOVE:
 for k in w['warps']:
     ca = comp(int(k[1] / RES), int(k[0] / RES)); cb = comp(int(k[3] / RES), int(k[2] / RES))
     la, lo = N0 - k[1] / KZ, W0 + k[0] / KX
+    if any(min(math.hypot(k[0] - (lo_ - W0) * KX, k[1] - (N0 - la_) * KZ), math.hypot(k[2] - (lo_ - W0) * KX, k[3] - (N0 - la_) * KZ)) < 15 for la_, lo_ in DROPW): print('drop 白鳥濠 warp'); continue
     if ca == 0 or cb == 0 or (ca == cb and not any(abs(la - a) < 0.0003 and abs(lo - b) < 0.0003 for a, b in KEEP_SAME)):
         print('drop warp', round(la, 4), round(lo, 4)); continue
     keep.append(k)
 # 足すワープ: 実際は囲まれていて行けないお濠 (白鳥濠) も、ワープで行けるように
-ADD = [((35.68748, 139.75686), (35.68935, 139.75689)),  # 白鳥濠 ↔ 天神濠 (本丸の北)
+# (白鳥濠は本丸の中 (忍者のゴール) なので、ワープは置かない)
+ADD = [
        ((35.68927, 139.75364), (35.68935, 139.75391)),  # 乾濠 ↔ 平川濠 (北桔橋門)
        ]  # 本丸をぐるっと回れるように (蛤濠 ↔ 二重橋濠 ↔ … ↔ 桔梗濠 は今のワープでつながる)
 for a, b in ADD:
