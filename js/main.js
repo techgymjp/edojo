@@ -1278,7 +1278,10 @@ function drawMinimap() {
     // 外堀を越えた (上陸した) 忍者は黄緑、水の中は青、待ち伏せ・飛んでいるのは橙
     g.fillStyle = danger ? '#ff2020' : ['climbOut', 'emerge1', 'walk', 'run'].includes(nj.state) ? '#9acd32' : (nj.state === 'bamboo' || nj.state === 'swim1' || nj.state === 'dive') ? '#2a8cf0' : '#ff7a20';
     g.strokeStyle = '#fff'; g.lineWidth = 1.5;
-    const r = danger ? 30 : 24, qx = clamp(a, r, c.width - r), qy = clamp(b, r, c.height - r);
+    // 実際の場所に描く。地図の外の忍者は描かない (縁に並べない)
+    const r = danger ? 30 : 24;
+    if (a < -r || b < -r || a > c.width + r || b > c.height + r) continue;
+    const qx = a, qy = b;
     g.lineWidth = 4; g.beginPath(); g.arc(qx, qy, r, 0, Math.PI * 2); g.fill(); g.stroke();
     g.fillStyle = '#fff'; g.font = `900 ${r * 1.2}px serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('忍', qx, qy + 2);
   }
