@@ -1877,7 +1877,17 @@ function loop(now) {
 // 視点の切り替え (視ボタン・C キー): 0 = 小舟の後ろのローアングル、1 = 後ろ 50m・高さ 50m から見下ろす
 const toggleCam = () => { G.camMode = G.camMode ? 0 : 1; camInit = false; };
 addEventListener('keydown', (e) => { if (e.code === 'KeyC') toggleCam(); });
-addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+// 縦長の画面 (スマホを縦に持ったとき) は、横の見える範囲が狭くなって舟とお侍が大きく見えるので、
+// 横の画角が 70 度ほどになるよう縦の画角を広げ、カメラも少し後ろへ下げる
+function fitCamera() {
+  const asp = innerWidth / innerHeight;
+  camera.aspect = asp;
+  camera.fov = asp >= 1 ? 60 : Math.min(100, Math.max(60, 2 * Math.atan(Math.tan(35 * Math.PI / 180) / asp) * 180 / Math.PI));
+  camera.updateProjectionMatrix();
+  G.camDist = asp >= 1 ? 7 : 9;
+}
+fitCamera();
+addEventListener('resize', () => { fitCamera(); renderer.setSize(innerWidth, innerHeight); });
 requestAnimationFrame(loop);
 boot();
 window.__wy = waterY; window.__G = G; window.__P = P; window.__CFG = CFG; window.__ll = ll; window.__gh = groundH;
