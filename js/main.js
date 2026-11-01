@@ -1,7 +1,7 @@
 // 風雲江戸城: 起動・入力・小舟・忍者・投げ銭と投げ輪・HUD
 import * as THREE from '../vendor/three.module.min.js';
 import { W, loadWorld, buildGround, buildWalls, buildWater, cullChunks, nearCastle, isWater, codeAt, groundH, cellOf, ll, isDote, LEVEL_H, waterY, terrainH, nearWaterGrid } from './world.js';
-import { buildTown, buildModern, buildCastle, buildWarps, buildBalloon, moatName, labelSprite, MOAT_NAMES } from './edo.js';
+import { buildTown, buildModern, buildCastle, buildWarps, buildBalloon, moatName, labelSprite, MOAT_NAMES, GATES } from './edo.js';
 import { makeBoat, animateBoat, makeNinja, poseNinja, makeBamboo, makeCoin } from './models.js';
 import * as A from './audio.js';
 import { Fireworks } from './fireworks.js';
@@ -1253,12 +1253,17 @@ function drawMinimap() {
   // 中心: 全体のときは外堀の輪の中心、拡大したら自分
   const cx = mm.ringC[0] + (pmx - mm.ringC[0]) * clamp(t, 0, 1), cy = mm.ringC[1] + (pmy - mm.ringC[1]) * clamp(t, 0, 1);
   const s = mm.zoom;
+  // 拡大しているときは、自分が真ん中で、向いている方角が上
+  const wantRot = t > 0.5 ? -Math.PI / 2 - P.h : 0;
+  mm.rot = (mm.rot || 0) + angDiff(wantRot, mm.rot || 0) * 0.15;
+  const rot = mm.rot, rc = Math.cos(rot), rs = Math.sin(rot);
   g.setTransform(1, 0, 0, 1, 0, 0);
   g.fillStyle = '#e8e4d8'; g.fillRect(0, 0, c.width, c.height);
-  g.setTransform(s, 0, 0, s, c.width / 2 - cx * s, c.height / 2 - cy * s);
+  g.setTransform(1, 0, 0, 1, c.width / 2, c.height / 2);
+  g.rotate(rot); g.scale(s, s); g.translate(-cx, -cy);
   g.drawImage(mm.map, 0, 0); g.drawImage(mm.over, 0, 0);
   g.setTransform(1, 0, 0, 1, 0, 0);
-  const X = (x, z) => { const [a, b] = xzToMap(x, z); return [(a - cx) * s + c.width / 2, (b - cy) * s + c.height / 2]; };
+  const X = (x, z) => { const [a, b] = xzToMap(x, z), u = (a - cx) * s, v = (b - cy) * s; return [u * rc - v * rs + c.width / 2, u * rs + v * rc + c.height / 2]; };
   for (const w of warps) for (const e of [w.a, w.b]) { const [a, b] = X(e.x, e.z); g.fillStyle = '#0cc'; g.fillRect(a - 5, b - 5, 10, 10); }
   for (const nj of G.ninjas) {
     if (['gone', 'bound', 'fall', 'sink'].includes(nj.state)) continue;
@@ -1273,7 +1278,7 @@ function drawMinimap() {
     g.fillStyle = '#fff'; g.font = `900 ${r * 1.2}px serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('忍', qx, qy + 2);
   }
   const [a, b] = X(P.x, P.z);
-  g.save(); g.translate(a, b); g.rotate(P.h);
+  g.save(); g.translate(a, b); g.rotate(P.h + rot);
   g.fillStyle = '#ffd400'; g.strokeStyle = '#000'; g.lineWidth = 3;
   g.beginPath(); g.arc(0, 0, 24, 0, Math.PI * 2); g.fill(); g.stroke();
   g.fillStyle = '#000'; g.beginPath(); g.moveTo(21, 0); g.lineTo(-10, 13); g.lineTo(-3, 0); g.lineTo(-10, -13); g.closePath(); g.fill();
@@ -1358,19 +1363,18 @@ function updateNav() {
   const R0 = routePoints();
   let tx, tz, label;
   if (G.navStage !== 'ninja') {
-    // 向かっている方向 (舳先の左右 50 度) にある、一番近いお濠・川・見附の名前
-    if (!G.navPts) G.navPts = MOAT_NAMES.map(([n, la, lo]) => { const [x, z] = ll(la, lo); return { n, x, z }; });
-    const here = moatName(P.x, P.z);
-    let best = null, bs = 1e18;
+    // 次の御門: 舳先の向き (左右 60 度) にある一番近い御門・見附。なければ一番近い御門
+    if (!G.navPts) G.navPts = GATES.map(([n, la, lo]) => { const [x, z] = ll(la, lo); return { n, x, z }; });
+    let best = null, bs = 1e18, any = null, ad = 1e18;
     for (const q of G.navPts) {
-      if (q.n === here) continue;
       const dx = q.x - P.x, dz = q.z - P.z, d = Math.hypot(dx, dz);
-      if (d < 120 || d > 2500) continue;
+      if (d < 40) continue;
+      if (d < ad) { ad = d; any = q; }
       const ang = Math.abs(angDiff(Math.atan2(dz, dx), P.h));
-      if (ang > 50 * Math.PI / 180) continue;
-      const sc = d * (1 + ang);
-      if (sc < bs) { bs = sc; best = q; }
+      if (ang > 60 * Math.PI / 180) continue;
+      if (d < bs) { bs = d; best = q; }
     }
+    best = best || any;
     if (!best) { el.style.display = 'none'; G.navT = null; return; }
     tx = best.x; tz = best.z;
     const dn = Math.hypot(tx - P.x, tz - P.z);
