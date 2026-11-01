@@ -69,8 +69,10 @@ export function addCutaway(mat) {
 // ---- 国土地理院の鉄道データの線路と電車 ----
 function buildRail(root, city, OX, OZ) {
   const deck = { p: [], n: [], c: [] };
-  const quad = (a, b, c2, d, n, col) => { for (const v of [a, b, c2, a, c2, d]) { deck.p.push(...v); deck.n.push(...n); deck.c.push(...col); } };
-  const GRAY = [0.62, 0.62, 0.6], SIDE = [0.7, 0.7, 0.68], BAL = [0.42, 0.38, 0.34], RAILC = [0.55, 0.5, 0.45];
+  // 面の表 (反時計回り) が法線の向きになるように並べる (両面表示で裏の法線が反転して黒くならないように)
+  const _o = (a, b, c2, n) => { const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c2[0] - a[0], vy = c2[1] - a[1], vz = c2[2] - a[2]; return (uy * vz - uz * vy) * n[0] + (uz * vx - ux * vz) * n[1] + (ux * vy - uy * vx) * n[2] >= 0; };
+  const quad = (a, b, c2, d, n, col) => { if (!_o(a, b, c2, n)) [b, d] = [d, b]; for (const v of [a, b, c2, a, c2, d]) { deck.p.push(...v); deck.n.push(...n); deck.c.push(...col); } };
+  const GRAY = [0.62, 0.62, 0.6], SIDE = [0.7, 0.7, 0.68], BAL = [0.55, 0.5, 0.45], RAILC = [0.78, 0.78, 0.8];
   const piers = [];
   const gy = (x, z) => terrainH(x + OX, z + OZ);
   // 線路の下の本当の地面 (水の所は水面)
@@ -126,6 +128,15 @@ function buildRail(root, city, OX, OZ) {
         const A = [x1 + lx - ex, y1, z1 + lz - ez], B = [x1 - lx - ex, y1, z1 - lz - ez], C = [x2 - lx + ex, y2, z2 - lz + ez], D = [x2 + lx + ex, y2, z2 + lz + ez];
         quad(A, D, C, B, [0, 1, 0], elev ? GRAY : BAL);
         const nx = lx / (Wd / 2), nz = lz / (Wd / 2);
+        // レール (複線なら 2 本の線路、4 線なら 4 本)
+        {
+          const nt = r.n >= 4 ? 4 : 2, sp = Wd / nt;
+          for (let t = 0; t < nt; t++) for (const g of [-0.55, 0.55]) {
+            const o = -Wd / 2 + sp * (t + 0.5) + g, w2 = 0.09;
+            const P = (x, y, z, s) => [x + nx * (o + s), y + 0.2, z + nz * (o + s)];
+            quad(P(x1, y1, z1, -w2), P(x1, y1, z1, w2), P(x2, y2, z2, w2), P(x2, y2, z2, -w2), [0, 1, 0], RAILC);
+          }
+        }
         // レンガ高架 (中央線 東京〜神田〜万世橋、山手線 東京〜有楽町〜新橋): 地面までのレンガの壁にアーチ
         if (elev && isBrick(r, (x1 + x2) / 2, (z1 + z2) / 2)) {
           for (const [P0, P1, sd] of [[A, D, 1], [B, C, -1]]) {
@@ -226,24 +237,36 @@ function buildRail(root, city, OX, OZ) {
   piers.forEach(([x, z, y0, y1], i) => { m4.makeScale(1, Math.max(0.1, y1 - y0), 1).setPosition(x, y0, z); pm.setMatrixAt(i, m4); });
   pm.count = piers.length; root.add(pm);
   // 電車: 線をつないだ長い道筋を走らせる
-  const k = (x, z) => Math.round(x / 2) + ',' + Math.round(z / 2);
-  const ends = new Map(), used = new Set();
-  // 路線ごとにつなぐ (山手線・京浜東北 y、中央線 c、総武線 s、そのほかの JR、地下鉄・私鉄)
+  // 端どうしが 5m 以内なら同じ路線の線をつなぐ。分かれ道では、まっすぐに近い方へ
   RAIL.forEach((r) => { r.lk = r.ln || (r.jr ? 'j' : 'm'); });
-  RAIL.forEach((r, i) => { if (r.t) return; for (const e of [0, 1]) { const j = e ? r.x.length - 1 : 0, kk = r.lk + ':' + k(r.x[j], r.z[j]); if (!ends.has(kk)) ends.set(kk, []); ends.get(kk).push(i); } });
+  const used = new Set(), G5 = 10, egrid = new Map();
+  const gk = (x, z) => Math.floor(x / G5) * 100000 + Math.floor(z / G5);
+  RAIL.forEach((r, i) => { if (r.t) return; for (const j of [0, r.x.length - 1]) { const kk = gk(r.x[j], r.z[j]); if (!egrid.has(kk)) egrid.set(kk, []); egrid.get(kk).push([i, j]); } });
+  const findNext = (lk, x, z, hx, hz) => {
+    let best = null, bs = -2;
+    for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) for (const [q, j] of egrid.get(gk(x, z) + dx * 100000 + dz) || []) {
+      if (used.has(q) || RAIL[q].lk !== lk) continue;
+      const rq = RAIL[q]; if (Math.hypot(rq.x[j] - x, rq.z[j] - z) > 5) continue;
+      const j2 = j === 0 ? Math.min(1, rq.x.length - 1) : rq.x.length - 2, ox = rq.x[j2] - rq.x[j], oz = rq.z[j2] - rq.z[j], ol = Math.hypot(ox, oz) || 1;
+      const sc = (ox * hx + oz * hz) / ol;
+      if (sc > bs) { bs = sc; best = [q, j]; }
+    }
+    return bs > -0.3 ? best : null;
+  };
   const chains = [];
   RAIL.forEach((r, i) => {
     if (r.t || used.has(i)) return;
     used.add(i);
     let pts = r.x.map((x, j) => [x, r.z[j], r.y[j]]);
     for (const dir of [1, -1]) {
-      for (let guard = 0; guard < 200; guard++) {
-        const last = dir > 0 ? pts[pts.length - 1] : pts[0];
-        const cand = (ends.get(r.lk + ':' + k(last[0], last[1])) || []).filter((q) => !used.has(q));
-        if (!cand.length) break;
-        const q = cand[0], rq = RAIL[q]; used.add(q);
-        let add = rq.x.map((x, j) => [x, rq.z[j], rq.y[j]]);
-        if (k(add[0][0], add[0][1]) !== k(last[0], last[1])) add.reverse();
+      for (let guard = 0; guard < 400; guard++) {
+        const last = dir > 0 ? pts[pts.length - 1] : pts[0], prev = dir > 0 ? pts[Math.max(0, pts.length - 2)] : pts[Math.min(1, pts.length - 1)];
+        const hl = Math.hypot(last[0] - prev[0], last[1] - prev[1]) || 1;
+        const nx = findNext(r.lk, last[0], last[1], (last[0] - prev[0]) / hl, (last[1] - prev[1]) / hl);
+        if (!nx) break;
+        const [q, j] = nx, rq = RAIL[q]; used.add(q);
+        let add = rq.x.map((x, t) => [x, rq.z[t], rq.y[t]]);
+        if (j !== 0) add.reverse();
         add = add.slice(1);
         pts = dir > 0 ? pts.concat(add) : add.reverse().concat(pts);
       }
@@ -256,10 +279,13 @@ function buildRail(root, city, OX, OZ) {
   // 山手線 (黄緑) 2 本・京浜東北線 (水色) 2 本、中央線 (オレンジ) 2 本、総武線 (黄色) 2 本、ほかの JR 1 本、地下鉄・私鉄 (赤) 2 本
   const best = (lk) => chains.filter((c) => c.lk === lk);
   const pick = [];
-  for (const [lk, cols] of [['y', [0x9acd32, 0x00b2e5, 0x9acd32, 0x00b2e5]], ['c', [0xf15a22, 0xf15a22]], ['s', [0xf5c400, 0xf5c400]], ['j', [0x9a9a9a]], ['m', [0xe60012, 0xe60012]]]) {
-    const cs = best(lk).filter((c) => c.L > 300);
-    cols.forEach((col, i) => { const ch = cs[lk === 'm' ? i : i % Math.min(cs.length, 2)]; if (ch) pick.push({ ...ch, col }); });
+  // 長い道筋から順に、路線ごとに何本か (中央線は 飯田橋〜市ケ谷〜四ツ谷 の外濠ぞいも走るように多めに)
+  for (const [lk, cols, nmax] of [['y', [0x9acd32, 0x00b2e5], 3], ['c', [0xf15a22, 0xf5c400], 5], ['s', [0xf5c400], 3], ['j', [0x9a9a9a], 1], ['m', [0xe60012], 2]]) {
+    const cs = best(lk).filter((c) => c.L > 300).slice(0, nmax);
+    cs.forEach((ch, i) => { pick.push({ ...ch, col: cols[i % cols.length] }); if (lk === 'y' || ch.L > 1500) pick.push({ ...ch, col: cols[(i + 1) % cols.length] }); });
   }
+  console.log('train chains', pick.map((c) => c.lk + ':' + Math.round(c.L)).join(' '));
+  if (typeof window !== 'undefined') window.__chains = chains.map((c) => ({ lk: c.lk, L: Math.round(c.L), a: [Math.round(c.pts[0][0]), Math.round(c.pts[0][1])], b: [Math.round(c.pts[c.pts.length - 1][0]), Math.round(c.pts[c.pts.length - 1][1])] }));
   for (const ch of pick) {
     if (ch.L < 300) continue;
     const seg = []; let s0 = 0;
@@ -608,7 +634,8 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
   {
     const P = [], N = [], C = [];
     const tri = (a, b, c, n, col) => { P.push(...a, ...b, ...c); for (let k = 0; k < 3; k++) { N.push(...n); C.push(...col); } };
-    const quad = (a, b, c, d, n, col) => { tri(a, b, c, n, col); tri(a, c, d, n, col); };
+    const _o2 = (a, b, c2, n) => { const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c2[0] - a[0], vy = c2[1] - a[1], vz = c2[2] - a[2]; return (uy * vz - uz * vy) * n[0] + (uz * vx - ux * vz) * n[1] + (ux * vy - uy * vx) * n[2] >= 0; };
+    const quad = (a, b, c, d, n, col) => { if (!_o2(a, b, c, n)) [b, d] = [d, b]; tri(a, b, c, n, col); tri(a, c, d, n, col); };
     // 向き (ux, uz) の箱 (中心 x,z、長さ L、幅 w、y0〜y1)
     const boxU = (x, z, ux, uz, L, w, y0, y1, col, colTop = col) => {
       const vx = -uz, vz = ux, hl = L / 2, hw = w / 2;

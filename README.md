@@ -59,7 +59,7 @@ GitHub Pages は「Deploy from a branch」（`main` の `/ (root)`）で公開�
 - `data/terrain.png`・`data/water.png` — 地形と水面の高さ（3m 格子。R*256+G = (高さ+20)*200）
 - `js/rail-data.js` — JR の線路（国土地理院の鉄道データ。地上・高架。`python3 tools/fetch_rail.py > js/rail-data.js`）
 - `js/shutoko-data.js` — 首都高（国土地理院の道路データ。地上・高架・トンネル。`python3 tools/fetch_shutoko.py > js/shutoko-data.js`）
-- `tools/` — データを作るスクリプト（`python3 tools/fetch_dem.py`（国土地理院の標高タイル）→ `python3 tools/fetch_water.py > data/src/water.json` → `python3 tools/fetch_plateau_mvt.py 35.650 35.710 139.720 139.802 4 > data/src/plateau.json` → `python3 tools/build_map.py` → `python3 tools/build_terrain.py`）
+- `tools/` — データを作るスクリプト（`python3 tools/fetch_dem.py`（国土地理院の標高タイル）→ `python3 tools/fetch_water.py > data/src/water.json` → `python3 tools/fetch_plateau_mvt.py 35.650 35.710 139.720 139.802 4 > data/src/plateau.json` → `python3 tools/build_map.py` → `python3 tools/patch_map.py`（手直し: 新川の河口・汐留の池） → `python3 tools/build_terrain.py`）
 
 ## 出典
 

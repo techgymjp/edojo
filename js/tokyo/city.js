@@ -587,7 +587,9 @@ export class City {
       B.p.push(...a, ...b, ...c);
       for (let k = 0; k < 3; k++) { B.n.push(...n); B.c.push(...col); }
     };
-    const quad = (B, a, b, c, d, n, col) => { push(B, a, b, c, n, col); push(B, a, c, d, n, col); };
+    // 面の表が法線の向きになるように並べる (裏向きで黒くならないように)
+    const _o = (a, b, c, n) => { const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2]; return (uy * vz - uz * vy) * n[0] + (uz * vx - ux * vz) * n[1] + (ux * vy - uy * vx) * n[2] >= 0; };
+    const quad = (B, a, b, c, d, n, col) => { if (!_o(a, b, c, n)) [b, d] = [d, b]; push(B, a, b, c, n, col); push(B, a, c, d, n, col); };
     // 風雲江戸城: 国土地理院の首都高は上り・下りが別の線なので、片側 9m 幅 (半幅 4.6m)
     const W = this.roadHalfWidth || 8.5;
     const piers = [];

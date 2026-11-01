@@ -45,6 +45,32 @@ def feats(b):
                 elif ff == 4: geom = packed(fv)
             if gt == 2: out.append((props, lines(geom), ext))
     return out
+def clip_tile(ls, ext):
+    """タイルのふち (バッファ) からはみ出た所を切る (隣のタイルの線と重ならず、端がぴったり合うように)"""
+    out = []
+    for l in ls:
+        cur = []
+        for (x0, y0), (x1, y1) in zip(l, l[1:]):
+            t0, t1, dx, dy = 0.0, 1.0, x1 - x0, y1 - y0
+            ok = True
+            for p_, q_ in ((-dx, x0), (dx, ext - x0), (-dy, y0), (dy, ext - y0)):
+                if p_ == 0:
+                    if q_ < 0: ok = False; break
+                else:
+                    r = q_ / p_
+                    if p_ < 0: t0 = max(t0, r)
+                    else: t1 = min(t1, r)
+            if not ok or t0 > t1:
+                if len(cur) >= 2: out.append(cur)
+                cur = []; continue
+            a = (x0 + dx * t0, y0 + dy * t0); b = (x0 + dx * t1, y0 + dy * t1)
+            if cur and (abs(cur[-1][0] - a[0]) > 1e-6 or abs(cur[-1][1] - a[1]) > 1e-6):
+                if len(cur) >= 2: out.append(cur)
+                cur = []
+            if not cur: cur = [a]
+            cur.append(b)
+        if len(cur) >= 2: out.append(cur)
+    return out
 segs = []
 for X in range(int(tx(W - M)), int(tx(E + M)) + 1):
     for Y in range(int(ty(N + M)), int(ty(S - M)) + 1):
@@ -67,7 +93,7 @@ for X in range(int(tx(W - M)), int(tx(E + M)) + 1):
             elif st == 1 or lv > 0: kind = 1
             else: kind = 0
             n = int(p.get('snglDbl') or 2)
-            for l in ls:
+            for l in clip_tile(ls, ext):
                 pts = [xz(X, Y, px, py, ext) for px, py in l]
                 if len(pts) >= 2: segs.append((kind, lv, pts, n, jr, sta, ln))
 sys.stderr.write(f'segments {len(segs)}\n')
