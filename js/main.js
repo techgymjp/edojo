@@ -1246,10 +1246,10 @@ function drawMinimap() {
   // 本丸の近くのお濠では、さらに倍 (4 倍)
   const HONMARU_MOATS = ['平川濠', '大手濠', '桔梗濠', '蓮池濠', '乾濠', '天神濠', '白鳥濠', '和田倉濠', '二重橋濠', '蛤濠', '清水濠', '道灌濠'];
   const nearHon = inner && HONMARU_MOATS.includes(moatName(P.x, P.z));
-  // 外堀の西 (赤坂門・溜池 〜 市ヶ谷・牛込 〜 小石川門) も 2 倍
-  const WEST = ['溜池', '弁慶濠', '真田濠', '市ヶ谷濠', '新見附濠', '牛込濠', '飯田濠'];
+  // 2 倍にする所: 日本橋川 (小石川門の三崎橋から呉服橋・常盤橋まで)、弁慶濠から先 (溜池・外濠・道三濠)
+  // 外堀の全体の地図のまま: 神田川、隅田川、牛込濠〜市ヶ谷濠〜真田濠、日本橋川の常盤橋より下流
   const mn = moatName(P.x, P.z), lonP = W.W + P.x / W.KX;
-  const west = WEST.includes(mn) || (mn === '外濠' && lonP < 139.752) || ((mn === '神田川' || mn === '日本橋川') && lonP < 139.7535);
+  const west = ['弁慶濠', '溜池', '外濠', '道三濠'].includes(mn) || (mn === '日本橋川' && lonP < 139.7715);
   const want = mm.fit * (nearHon ? 4 : (inner || west) ? 2 : 1);
   mm.zoom += (want - mm.zoom) * 0.08;
   const t = Math.min(1, (mm.zoom - mm.fit) / mm.fit); // 0: 全体 1: 拡大
@@ -1297,6 +1297,14 @@ function hidden(c) {
   }
   return false;
 }
+// カメラから見て、ビルの陰か (ターザン大東京の街で調べる)
+const _ray = new THREE.Vector3();
+function occludedByCity(c) {
+  const o = camera.position, T = tokyo; if (!T) return false;
+  _ray.set(c.x - o.x, c.y - o.y, c.z - o.z); const L = _ray.length(); _ray.normalize();
+  const hit = T.city.raycast({ x: o.x - T.OX, y: o.y, z: o.z - T.OZ }, { x: _ray.x, y: _ray.y, z: _ray.z }, L - 2);
+  return !!(hit && hit.t < L - 2);
+}
 function updateMarkers() {
   let worst = null;
   for (const nj of G.ninjas) {
@@ -1306,7 +1314,9 @@ function updateMarkers() {
     if (nj.state !== 'bamboo' && nj.state !== 'swim1') { el.style.display = 'none'; continue; }
     const c = ninjaCenter(nj); c.y += 3;
     tmpV.copy(c).project(camera);
-    if (tmpV.z > 1 || Math.abs(tmpV.x) > 1.1 || Math.abs(tmpV.y) > 1.1 || c.distanceTo(camera.position) > 900) { el.style.display = 'none'; continue; }
+    // 竹筒が見えていて (石垣・建物・橋脚の陰でない)、300m 以内のときだけ
+    const bm = nj.bam.position, seen = nj.bam.visible && bm.y > waterY(nj.x, nj.z) - 0.5;
+    if (!seen || tmpV.z > 1 || Math.abs(tmpV.x) > 1.1 || Math.abs(tmpV.y) > 1.1 || c.distanceTo(camera.position) > 300 || hidden(c) || occludedByCity(c)) { el.style.display = 'none'; continue; }
     el.style.display = '';
     el.className = 'nmark down';
     el.style.left = ((tmpV.x + 1) / 2 * innerWidth) + 'px';

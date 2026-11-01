@@ -6,6 +6,7 @@ import { City } from './tokyo/city.js';
 import { CITY } from './tokyo/city-data.js';
 import { ROADS, HIGHWAYS } from './tokyo/road-data.js';
 import { SHUTOKO } from './shutoko-data.js';
+import { RAIL } from './rail-data.js';
 import { addTokyoTower, addDiet, addTechGym, addTokyoDome, addBudokan, addSkytree, addFuji, addDistant } from './tokyo/landmarks.js';
 import { addOchanomizu, addTokyoStation, addAkasaka, addRailways, addAkibaSigns, addNewOtani, addYotsuyaKudan, addGinzaNihonbashi, addUeno, addSensoji, addAsahi, addUenoAsakusa } from './tokyo/landmarks2.js';
 import { W, codeAt, isWater, LEVEL_H, terrainH, waterY, nearWaterGrid } from './world.js';
@@ -65,6 +66,104 @@ export function addCutaway(mat) {
   mat.needsUpdate = true;
 }
 
+// ---- 国土地理院の鉄道データの線路と電車 ----
+function buildRail(root, city, OX, OZ) {
+  const deck = { p: [], n: [], c: [] };
+  const quad = (a, b, c2, d, n, col) => { for (const v of [a, b, c2, a, c2, d]) { deck.p.push(...v); deck.n.push(...n); deck.c.push(...col); } };
+  const GRAY = [0.62, 0.62, 0.6], SIDE = [0.7, 0.7, 0.68], BAL = [0.42, 0.38, 0.34], RAILC = [0.55, 0.5, 0.45];
+  const piers = [];
+  const gy = (x, z) => terrainH(x + OX, z + OZ);
+  for (const r of RAIL) {
+    if (r.t) continue;
+    const Wd = r.n >= 4 ? 9 : 5;
+    let acc = 0;
+    for (let i = 0; i + 1 < r.x.length; i++) {
+      const x1 = r.x[i], z1 = r.z[i], x2 = r.x[i + 1], z2 = r.z[i + 1], L = Math.hypot(x2 - x1, z2 - z1);
+      if (L < 0.1) continue;
+      const g1 = gy(x1, z1), g2 = gy(x2, z2), e1 = r.h[i], e2 = r.h[i + 1];
+      const y1 = g1 + e1 + 0.2, y2 = g2 + e2 + 0.2;
+      const lx = (z2 - z1) / L * Wd / 2, lz = -(x2 - x1) / L * Wd / 2, ex = (x2 - x1) / L * 0.4, ez = (z2 - z1) / L * 0.4;
+      const A = [x1 + lx - ex, y1, z1 + lz - ez], B = [x1 - lx - ex, y1, z1 - lz - ez], C = [x2 - lx + ex, y2, z2 - lz + ez], D = [x2 + lx + ex, y2, z2 + lz + ez];
+      quad(A, D, C, B, [0, 1, 0], e1 > 2 || e2 > 2 ? GRAY : BAL);
+      if (e1 > 2 || e2 > 2) {
+        for (const [P0, P1, sd] of [[A, D, 1], [B, C, -1]]) {
+          const up = (q) => [q[0], q[1] + 1.2, q[2]], dn = (q) => [q[0], q[1] - 1.6, q[2]];
+          quad(dn(P0), dn(P1), up(P1), up(P0), [lx * sd, 0, lz * sd], SIDE);
+        }
+        quad([B[0], y1 - 1.6, B[2]], [C[0], y2 - 1.6, C[2]], [D[0], y2 - 1.6, D[2]], [A[0], y1 - 1.6, A[2]], [0, -1, 0], [0.45, 0.45, 0.44]);
+        acc += L;
+        if (acc > 25) { acc = 0; piers.push([x1, z1, g1, y1 - 1.6]); }
+      }
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(deck.p, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(deck.n, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(deck.c, 3));
+  g.computeBoundingSphere();
+  const mesh = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+  mesh.frustumCulled = false; root.add(mesh);
+  const pg = new THREE.BoxGeometry(2.4, 1, 2.4).translate(0, 0.5, 0);
+  const pm = new THREE.InstancedMesh(pg, new THREE.MeshLambertMaterial({ color: 0x9a9a96 }), Math.max(1, piers.length));
+  const m4 = new THREE.Matrix4();
+  piers.forEach(([x, z, y0, y1], i) => { m4.makeScale(1, Math.max(0.1, y1 - y0), 1).setPosition(x, y0, z); pm.setMatrixAt(i, m4); });
+  pm.count = piers.length; root.add(pm);
+  // 電車: 線をつないだ長い道筋を走らせる
+  const k = (x, z) => Math.round(x / 2) + ',' + Math.round(z / 2);
+  const ends = new Map(), used = new Set();
+  RAIL.forEach((r, i) => { if (r.t) return; for (const e of [0, 1]) { const j = e ? r.x.length - 1 : 0, kk = k(r.x[j], r.z[j]); if (!ends.has(kk)) ends.set(kk, []); ends.get(kk).push(i); } });
+  const chains = [];
+  RAIL.forEach((r, i) => {
+    if (r.t || used.has(i)) return;
+    used.add(i);
+    let pts = r.x.map((x, j) => [x, r.z[j], r.h[j]]);
+    for (const dir of [1, -1]) {
+      for (let guard = 0; guard < 200; guard++) {
+        const last = dir > 0 ? pts[pts.length - 1] : pts[0];
+        const cand = (ends.get(k(last[0], last[1])) || []).filter((q) => !used.has(q));
+        if (!cand.length) break;
+        const q = cand[0], rq = RAIL[q]; used.add(q);
+        let add = rq.x.map((x, j) => [x, rq.z[j], rq.h[j]]);
+        if (k(add[0][0], add[0][1]) !== k(last[0], last[1])) add.reverse();
+        add = add.slice(1);
+        pts = dir > 0 ? pts.concat(add) : add.reverse().concat(pts);
+      }
+    }
+    let L = 0; for (let j = 1; j < pts.length; j++) L += Math.hypot(pts[j][0] - pts[j - 1][0], pts[j][1] - pts[j - 1][1]);
+    chains.push({ pts, L });
+  });
+  chains.sort((a, b) => b.L - a.L);
+  const COLORS = [0xf5c400, 0xf15a22, 0x9acd32, 0x00b2e5, 0xf5c400, 0x9acd32];
+  const lines = [];
+  for (const ch of chains.slice(0, 6)) {
+    if (ch.L < 600) break;
+    const seg = []; let s0 = 0;
+    for (let j = 0; j + 1 < ch.pts.length; j++) { const [x1, z1, h1] = ch.pts[j], [x2, z2, h2] = ch.pts[j + 1], len = Math.hypot(x2 - x1, z2 - z1); seg.push({ x1, z1, h1, x2, z2, h2, len, s: s0 }); s0 += len; }
+    const at = (d) => { d = Math.max(0, Math.min(ch.L, d)); for (const q of seg) if (d <= q.s + q.len) { const t = (d - q.s) / (q.len || 1); return [q.x1 + (q.x2 - q.x1) * t, q.z1 + (q.z2 - q.z1) * t, Math.atan2(q.x2 - q.x1, q.z2 - q.z1), q.h1 + (q.h2 - q.h1) * t]; } const q = seg[seg.length - 1]; return [q.x2, q.z2, 0, q.h2]; };
+    const col = COLORS[lines.length % COLORS.length];
+    const cars = [];
+    for (let c = 0; c < 8; c++) {
+      const g2 = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.BoxGeometry(2.9, 3.4, 19.5).translate(0, 1.9, 0), new THREE.MeshLambertMaterial({ color: 0xd8dde2 }));
+      const band = new THREE.Mesh(new THREE.BoxGeometry(3.0, 0.7, 19.6).translate(0, 2.2, 0), new THREE.MeshLambertMaterial({ color: col }));
+      const win = new THREE.Mesh(new THREE.BoxGeometry(3.0, 0.9, 18).translate(0, 3.0, 0), new THREE.MeshLambertMaterial({ color: 0x2d3a48 }));
+      g2.add(body, band, win); root.add(g2); cars.push(g2);
+    }
+    lines.push({ line: { L: ch.L, at }, cars, speed: 14, d: ch.L * Math.random(), dir: Math.random() < 0.5 ? 1 : -1 });
+  }
+  console.log('rail lines', RAIL.length, 'chains', chains.length, 'trains', lines.length, 'piers', piers.length);
+  return {
+    lines, rl: [],
+    update(dt) {
+      for (const t of lines) {
+        t.d += t.speed * t.dir * dt;
+        if (t.d > t.line.L - 10) { t.d = t.line.L - 10; t.dir = -1; }
+        if (t.d < 170) { t.d = 170; t.dir = 1; }
+        t.cars.forEach((c, i) => { const [x, z, rot, h] = t.line.at(t.d - i * 20 * t.dir); c.position.set(x, gy(x, z) + h + 0.2, z); c.rotation.y = rot; });
+      }
+    },
+  };
+}
 const KXT = 111320 * Math.cos(35.674 * Math.PI / 180), KZT = 110574;
 export function buildTokyo(scene, renderer, bankSegs = []) {
   const OX = (139.745 - W.W) * W.KX, OZ = (W.N - 35.674) * W.KZ;
@@ -220,11 +319,14 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
   const seen = new Set(Object.values(mats));
   root.traverse((o) => { const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : []; for (const m of ms) if (!seen.has(m) && m.isMaterial && !m.isSpriteMaterial) { seen.add(m); addCutaway(m); } });
   let rails = null;
-  try { rails = addRailways(root, city); } catch (e) { console.warn('rails', e); }
+  // 線路: 国土地理院の鉄道データ (JR、地上・高架) から描き、電車を走らせる (ターザン大東京の手で引いた線路は使わない)
+  const nRail0 = root.children.length;
+  rails = buildRail(root, city, OX, OZ);
+  const railObjs = new Set(root.children.slice(nRail0));
   // 線路の高架・首都高の高架が通る所のビルは描かない (高架がビルを突き抜けないように)
   {
     const segs = [];
-    if (rails && rails.rl) for (const L of rails.rl) for (let i = 0; i + 1 < L.P.length; i++) segs.push([L.P[i][0], L.P[i][1], L.P[i + 1][0], L.P[i + 1][1], 9]);
+    for (const r of RAIL) if (!r.t) for (let i = 0; i + 1 < r.x.length; i++) if (r.h[i] > 2 || r.h[i + 1] > 2) segs.push([r.x[i], r.z[i], r.x[i + 1], r.z[i + 1], 8]);
     for (const r of CITY.roads) for (let i = 0; i + 1 < r.x.length; i++) if (!r.t[i] && (r.h[i] - terrainH(r.x[i] + OX, r.z[i] + OZ) > 3 || r.h[i + 1] - terrainH(r.x[i + 1] + OX, r.z[i + 1] + OZ) > 3)) segs.push([r.x[i], r.z[i], r.x[i + 1], r.z[i + 1], 9]);
     const G = 40, grid = new Map();
     segs.forEach((sg, k) => { for (let gx = Math.floor(Math.min(sg[0], sg[2]) / G) - 1; gx <= Math.floor(Math.max(sg[0], sg[2]) / G) + 1; gx++) for (let gz = Math.floor(Math.min(sg[1], sg[3]) / G) - 1; gz <= Math.floor(Math.max(sg[1], sg[3]) / G) + 1; gz++) { const key = gx * 100000 + gz; if (!grid.has(key)) grid.set(key, []); grid.get(key).push(k); } });
@@ -260,7 +362,7 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
   const usedGeo = new Set();
   root.updateMatrixWorld(true);
   for (const ch of [...root.children]) {
-    if (ch === city.tileGroup || roadObjs.has(ch)) continue;
+    if (ch === city.tileGroup || roadObjs.has(ch) || railObjs.has(ch)) continue;
     box3.setFromObject(ch); if (box3.isEmpty()) continue;
     box3.getCenter(cv); box3.getSize(sz);
     if (Math.max(sz.x, sz.z) < 250) { ch.position.y += Ts(cv.x - OX, cv.z - OZ); continue; }
