@@ -249,6 +249,11 @@ export function poseNinja(n, mode, t) {
     u.armR.rotation.set(-2.2 + s * 0.5, 0, 0); u.armL.rotation.set(-2.2 - s * 0.5, 0, 0);
   } else if (mode === 'roof') {
     u.armR.rotation.set(-0.4, 0, 0.3); u.armL.rotation.set(-1.4, 0, -0.2);
+  } else if (mode === 'guts') {
+    // ガッツポーズ: 右のこぶしを高く突き上げ、左はひじを曲げて引く
+    const s = Math.sin(t * 10) * 0.15;
+    u.body.rotation.x = -0.15;
+    u.armR.rotation.set(-3.0 + s, 0, -0.15); u.armL.rotation.set(-1.2, 0, -0.6);
   } else if (mode === 'stun') {
     u.body.rotation.x = -1.4;
     u.armR.rotation.set(0, 0, 1.2); u.armL.rotation.set(0, 0, -1.2);

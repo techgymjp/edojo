@@ -479,6 +479,15 @@ function updateNinja(nj, dt) {
     case 'raid': {
       // ゲームオーバーの演出: 天守へ一直線に走り、壁を駆け上がって、てっぺんに立つ
       const R = nj.raid; R.t += dt;
+      if (R.phase === -1) {
+        // 石垣を登り切ったところで、ガッツポーズをして宙に浮かぶ (1.6 秒)
+        const k = Math.min(1, R.t / 0.6);
+        nj.y = R.y0 + k * 3.5 + Math.sin(R.t * 4) * 0.25;
+        nj.m.position.set(nj.x, nj.y, nj.z); nj.m.rotation.set(0, Math.atan2(P.x - nj.x, P.z - nj.z), 0); // 小舟の方を向いて
+        poseNinja(nj.m, 'guts', R.t);
+        if (R.t > 1.6) { R.phase = 0; R.t = 0; }
+        break;
+      }
       if (R.phase === 0) {
         const dx = R.bx - nj.x, dz = R.bz - nj.z, l = Math.hypot(dx, dz);
         // 走る速さ: 32m/s 以上で、遠くても 4 秒で天守に着く
@@ -824,7 +833,7 @@ function intrude(nj) {
   // 天守へ: 走る → 天守の壁を駆け上がる → てっぺんに立つ
   const [tx, tz] = castle.tenshu;
   const dx = tx - nj.x, dz = tz - nj.z, l = Math.hypot(dx, dz) || 1;
-  nj.raid = { tx, tz, bx: tx - dx / l * 26, bz: tz - dz / l * 26, base: groundH(tx, tz), phase: 0, t: 0 };
+  nj.raid = { tx, tz, bx: tx - dx / l * 26, bz: tz - dz / l * 26, base: groundH(tx, tz), phase: -1, t: 0, y0: Math.max(nj.y || 0, groundH(nj.x, nj.z)) };
   nj.state = 'raid'; nj.m.visible = true; nj.bam.visible = false;
   G.intruder = nj;
   floatText(nj.x, nj.y + 3, nj.z, '侵入された！', 'red', true);
@@ -1716,7 +1725,8 @@ function loop(now) {
       const nj = G.intruder, R = nj.raid;
       // 走っている間は後ろから追いかけ、登りはじめたら天守を斜め下から見上げ、てっぺんでは回り込む
       let cp;
-      if (!R || R.phase === 0) { const a = Math.atan2((R ? R.tz : nj.z) - nj.z, (R ? R.tx : nj.x) - nj.x); cp = new THREE.Vector3(nj.x - Math.cos(a) * 9, nj.y + 3.5, nj.z - Math.sin(a) * 9); }
+      if (R && R.phase === -1) { cp = new THREE.Vector3(nj.x + (P.x - nj.x) * 0.15 / Math.max(1, Math.hypot(P.x - nj.x, P.z - nj.z) / 60), R.y0 + 4, nj.z + (P.z - nj.z) * 0.15 / Math.max(1, Math.hypot(P.x - nj.x, P.z - nj.z) / 60)); const d = Math.hypot(cp.x - nj.x, cp.z - nj.z); if (d < 8) { const a = Math.atan2(P.z - nj.z, P.x - nj.x); cp.x = nj.x + Math.cos(a) * 9; cp.z = nj.z + Math.sin(a) * 9; } }
+      else if (!R || R.phase === 0) { const a = Math.atan2((R ? R.tz : nj.z) - nj.z, (R ? R.tx : nj.x) - nj.x); cp = new THREE.Vector3(nj.x - Math.cos(a) * 9, nj.y + 3.5, nj.z - Math.sin(a) * 9); }
       else if (R.phase === 1) { const a = Math.atan2(R.tz - R.bz, R.tx - R.bx) + 0.9; cp = new THREE.Vector3(R.tx - Math.cos(a) * 55, R.base + 10 + (nj.y - R.base) * 0.6, R.tz - Math.sin(a) * 55); }
       else { const a = R.t * 0.5; cp = new THREE.Vector3(R.tx + Math.cos(a) * 26, nj.y + 6, R.tz + Math.sin(a) * 26); }
       camera.position.lerp(cp, 1 - Math.exp(-dt * (R && R.phase === 0 ? 8 : 3)));
