@@ -15,7 +15,8 @@ KX, KZ, RES, N0, W0 = w['KX'], w['KZ'], w['res'], w['N'], w['W']
 cell = lambda la, lo: (int((N0 - la) * KZ / RES), int((lo - W0) * KX / RES))
 CARVE = [  # (緯度, 経度) → (緯度, 経度), 幅 m
     ((35.6738, 139.7834), (35.6718, 139.7834), 12),  # 新川の河口 → 隅田川
-    ((35.6924, 139.7363), (35.6913, 139.7349), 22),  # 市ヶ谷: 新見附濠 ↔ 市ヶ谷濠 (市ヶ谷橋の下)
+    ((35.6924, 139.7363), (35.6913, 139.7349), 22),
+    ((35.68716, 139.75361), (35.68710, 139.75361), 8),  # 乾濠 ↔ 蓮池濠 (6m のすき間を水でつなぐ)  # 市ヶ谷: 新見附濠 ↔ 市ヶ谷濠 (市ヶ谷橋の下)
 ]
 FILL = [(35.6628, 139.7667), (35.6635, 139.7683), (35.6628, 139.7696)]  # 汐留のまん中の池 (三角・丸)
 img = Image.fromarray(A); d = ImageDraw.Draw(img)
@@ -145,10 +146,13 @@ for k in w['warps']:
         print('drop warp', round(la, 4), round(lo, 4)); continue
     keep.append(k)
 # 足すワープ: 実際は囲まれていて行けないお濠 (白鳥濠) も、ワープで行けるように
-ADD = [((35.68748, 139.75686), (35.68935, 139.75689))]  # 白鳥濠 ↔ 天神濠 (本丸の北)
+ADD = [((35.68748, 139.75686), (35.68935, 139.75689)),  # 白鳥濠 ↔ 天神濠 (本丸の北)
+       ((35.68927, 139.75364), (35.68935, 139.75391)),  # 乾濠 ↔ 平川濠 (北桔橋門)
+       ]  # 本丸をぐるっと回れるように (蛤濠 ↔ 二重橋濠 ↔ … ↔ 桔梗濠 は今のワープでつながる)
 for a, b in ADD:
     ya, xa = cell(*a); yb, xb = cell(*b)
     k = [xa * RES + RES / 2, ya * RES + RES / 2, xb * RES + RES / 2, yb * RES + RES / 2]
+    (xa, ya), (xb, yb) = [(int(v[0] / RES), int(v[1] / RES)) for v in (snapw(xa * RES, ya * RES), snapw(xb * RES, yb * RES))]
     if A[ya, xa] == 0 and A[yb, xb] == 0 and not any(abs(q[0] - k[0]) < 3 and abs(q[1] - k[1]) < 3 for q in keep): keep.append(k); print('add warp', a, b)
 w['warps'] = keep
 json.dump(w, open(os.path.join(D, 'world.json'), 'w'))

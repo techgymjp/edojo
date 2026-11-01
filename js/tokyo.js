@@ -7,7 +7,7 @@ import { CITY } from './tokyo/city-data.js';
 import { ROADS, HIGHWAYS } from './tokyo/road-data.js';
 import { SHUTOKO } from './shutoko-data.js';
 import { RAIL } from './rail-data.js';
-import { addTokyoTower, addDiet, addTechGym, addTokyoDome, addBudokan, addSkytree, addFuji, addDistant } from './tokyo/landmarks.js';
+import { addTokyoTower, addDiet, addTechGym, addTokyoDome, addBudokan, addGeihinkan, addSkytree, addFuji, addDistant } from './tokyo/landmarks.js';
 import { addOchanomizu, addTokyoStation, addAkasaka, addRailways, addAkibaSigns, addNewOtani, addYotsuyaKudan, addGinzaNihonbashi, addUeno, addSensoji, addAsahi, addUenoAsakusa } from './tokyo/landmarks2.js';
 import { W, codeAt, isWater, LEVEL_H, waterY, nearWaterGrid, groundMeshH } from './world.js';
 // 地面の上に置くもの (線路・道・橋のたもと・ビル) は、描いている地面のメッシュ (16m 格子) と同じ高さに合わせる (細かい標高だとメッシュに潜って途切れて見える)
@@ -176,6 +176,25 @@ function buildRail(root, city, OX, OZ) {
       }
     }
   }
+  // トンネルの入口 (地上の線路がトンネルに入る所): コンクリートの額と黒い口 (丸ノ内線の御茶ノ水・四ツ谷・茗荷谷など)
+  {
+    const tk = (x, z) => Math.round(x / 3) + ',' + Math.round(z / 3);
+    const tun = new Set(); for (const r of RAIL) if (r.t) for (const j of [0, r.x.length - 1]) tun.add(tk(r.x[j], r.z[j]));
+    const CONC = [0.66, 0.66, 0.63], BLK = [0.03, 0.03, 0.04];
+    for (const r of RAIL) {
+      if (r.t) continue;
+      for (const [j, j2] of [[0, 1], [r.x.length - 1, r.x.length - 2]]) {
+        if (j2 < 0 || j2 >= r.x.length || !tun.has(tk(r.x[j], r.z[j]))) continue;
+        const ox = r.x[j], oz = r.z[j], dx = ox - r.x[j2], dz = oz - r.z[j2], dl = Math.hypot(dx, dz) || 1, ux = dx / dl, uz = dz / dl, vx = -uz, vz = ux;
+        const y = r.y[j] - 0.2, hw = (r.n >= 4 ? 10 : 5.5) / 2 + 1;
+        const P = (a, b, yy) => [ox + ux * a + vx * b, yy, oz + uz * a + vz * b];
+        quad(P(0, -hw, y - 1), P(0, hw, y - 1), P(0, hw, y + 7), P(0, -hw, y + 7), [-ux, 0, -uz], CONC);
+        quad(P(0, -hw, y + 7), P(0, hw, y + 7), P(10, hw, y + 7), P(10, -hw, y + 7), [0, 1, 0], CONC);
+        for (const sd of [-1, 1]) quad(P(0, sd * hw, y - 1), P(10, sd * hw, y - 1), P(10, sd * hw, y + 7), P(0, sd * hw, y + 7), [vx * sd, 0, vz * sd], CONC);
+        quad(P(-0.1, -hw + 1, y), P(-0.1, hw - 1, y), P(-0.1, hw - 1, y + 5), P(-0.1, -hw + 1, y + 5), [-ux, 0, -uz], BLK);
+      }
+    }
+  }
   // 駅のホーム: 駅の区間 (sta) の線路の両側に、ホームと屋根
   const PLAT = [0.78, 0.76, 0.72], ROOFC = [0.4, 0.45, 0.5], EDGE = [0.95, 0.85, 0.2];
   const boxQ = (cx, cz, ux, uz, L, w, y0, y1, col) => {
@@ -287,14 +306,14 @@ function buildRail(root, city, OX, OZ) {
   const best = (lk) => chains.filter((c) => c.lk === lk);
   const pick = [];
   // 長い道筋から順に、路線ごとに何本か (中央線は 飯田橋〜市ケ谷〜四ツ谷 の外濠ぞいも走るように多めに)
-  for (const [lk, cols, nmax] of [['y', [0x9acd32, 0x00b2e5], 3], ['c', [0xf15a22, 0xf5c400], 5], ['s', [0xf5c400], 3], ['j', [0x9a9a9a], 1], ['m', [0xe60012], 2]]) {
-    const cs = best(lk).filter((c) => c.L > 300).slice(0, nmax);
+  for (const [lk, cols, nmax] of [['y', [0x9acd32, 0x00b2e5], 3], ['c', [0xf15a22, 0xf5c400], 5], ['s', [0xf5c400], 3], ['j', [0x9a9a9a], 1], ['m', [0xe60012], 8]]) {
+    const cs = best(lk).filter((c) => c.L > (lk === 'm' ? 120 : 300)).slice(0, nmax);
     cs.forEach((ch, i) => { pick.push({ ...ch, col: cols[i % cols.length] }); if (lk === 'y' || ch.L > 1500) pick.push({ ...ch, col: cols[(i + 1) % cols.length] }); });
   }
   console.log('train chains', pick.map((c) => c.lk + ':' + Math.round(c.L)).join(' '));
   if (typeof window !== 'undefined') window.__chains = chains.map((c) => ({ lk: c.lk, L: Math.round(c.L), a: [Math.round(c.pts[0][0]), Math.round(c.pts[0][1])], b: [Math.round(c.pts[c.pts.length - 1][0]), Math.round(c.pts[c.pts.length - 1][1])] }));
   for (const ch of pick) {
-    if (ch.L < 300) continue;
+    if (ch.L < (ch.lk === 'm' ? 120 : 300)) continue;
     const seg = []; let s0 = 0;
     for (let j = 0; j + 1 < ch.pts.length; j++) { const [x1, z1, h1] = ch.pts[j], [x2, z2, h2] = ch.pts[j + 1], len = Math.hypot(x2 - x1, z2 - z1); seg.push({ x1, z1, h1, x2, z2, h2, len, s: s0 }); s0 += len; }
     const at = (d) => { d = Math.max(0, Math.min(ch.L, d)); for (const q of seg) if (d <= q.s + q.len) { const t = (d - q.s) / (q.len || 1); return [q.x1 + (q.x2 - q.x1) * t, q.z1 + (q.z2 - q.z1) * t, Math.atan2(q.x2 - q.x1, q.z2 - q.z1), q.h1 + (q.h2 - q.h1) * t]; } const q = seg[seg.length - 1]; return [q.x2, q.z2, 0, q.h2]; };
@@ -426,10 +445,13 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
     }
   } };
   let dropped = 0;
+  const GHX = (139.72810 - 139.745) * KXT, GHZ = -(35.68030 - 35.674) * KZT;
   for (const bd of city.bld) {
     if (!bd.plateau) continue;
     const pts = [[bd.cx, bd.cz], [(bd.minx + bd.cx) / 2, bd.cz], [(bd.maxx + bd.cx) / 2, bd.cz], [bd.cx, (bd.minz + bd.cz) / 2], [bd.cx, (bd.maxz + bd.cz) / 2]];
     if (bad(bd.cx, bd.cz) || pts.filter(([x, z]) => bad(x, z)).length >= 2) { bd.plateau = false; dropped++; continue; }
+    // 手で作る名所 (迎賓館) の所の PLATEAU のビルは描かない
+    if (Math.hypot(bd.cx - GHX, bd.cz - GHZ) < 95) { bd.plateau = false; dropped++; continue; }
     // 小舟から見えるのは川・お濠に面した街と高いビルだけ。水から 200m より奥の低いビルは描かない (軽くする)
     if (bd.h < 45 && !nearWaterGrid(bd.cx + OX, bd.cz + OZ, 200)) { bd.plateau = false; bd.far = true; }
   }
@@ -545,6 +567,7 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
   const dome = addTokyoDome(root, city);
   // 日本武道館は北の丸 (江戸城の中) だが、特別に置く
   try { addBudokan(root, city); } catch (e) { console.warn('budokan', e); }
+  try { addGeihinkan(root, city); } catch (e) { console.warn('geihinkan', e); }
   for (const f of [addSensoji, addAsahi, addUeno, addOchanomizu, addTokyoStation, addAkasaka, addAkibaSigns, addNewOtani, addYotsuyaKudan, addUenoAsakusa, addGinzaNihonbashi]) {
     try { f(root, city); } catch (e) { console.warn(f.name, e); }
   }
@@ -660,7 +683,13 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
     const UNDER = [0.82, 0.82, 0.8];
     const isCastle = (x, z) => { const c = codeAt(x, z); return c === 3 || c === 4; };
     let nb = 0, nroad = 0;
-    for (const r of ROADS) {
+    // 国土地理院の道路データに無い橋を手で足す: [幅, [緯度, 経度], [緯度, 経度]]
+    const MANUAL = [
+      [22, [35.70182, 139.74395], [35.70142, 139.74535]], // 牛込橋 (神楽坂下 ↔ 飯田橋駅西口、牛込見附)
+    ];
+    const tz2 = (la, lo) => [((lo - 139.745) * KXT) * 2, (-(la - 35.674) * KZT) * 2];
+    const ROADS2 = ROADS.concat(MANUAL.map(([wd, a, b]) => [wd, ...tz2(...a), ...tz2(...b)]));
+    for (const r of ROADS2) {
       const wdt = Math.max(8, r[0]), walk = Math.min(4, wdt * 0.18);
       const pts = [];
       for (let i = 1; i + 3 < r.length; i += 2) {

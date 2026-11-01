@@ -445,9 +445,13 @@ export function buildWarps(scene) {
       // 渦は、岸 (石垣) から離れた水の上に置く: 端から 18m 以内で、まわりの岸から一番遠い所
       let px = x, pz = z, bestC = -1;
       const clear = (cx, cz) => { let m = 12; for (let a = 0; a < 8; a++) { const dx = Math.cos(a * Math.PI / 4), dz = Math.sin(a * Math.PI / 4); for (let r = 0; r < m; r += 1.5) if (!isWater(cx + dx * r, cz + dz * r)) { m = r; break; } } return m; };
-      for (let dz = -18; dz <= 18; dz += 3) for (let dx = -18; dx <= 18; dx += 3) {
+      // 堰 (土橋) をはさんで近い方の岸のすぐ前に置く: 端に一番近く、岸から 5m 以上離れた水の上 (お濠を横切った向こう岸には置かない)
+      for (let dz = -12; dz <= 12; dz += 1.5) for (let dx = -12; dx <= 12; dx += 1.5) {
         const cx = x + dx, cz = z + dz; if (!isWater(cx, cz)) continue;
-        const c = clear(cx, cz) - Math.hypot(dx, dz) * 0.15;
+        // 相手の渦から遠ざかる向き (お濠の奥) へは 8m まで
+        const away = (dx * (x - ox) + dz * (z - oz)) / (Math.hypot(x - ox, z - oz) || 1);
+        if (away > 8) continue;
+        const c = Math.min(clear(cx, cz), 5) * 10 - Math.hypot(dx, dz);
         if (c > bestC) { bestC = c; px = cx; pz = cz; }
       }
       const g = new THREE.Group();

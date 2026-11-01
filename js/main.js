@@ -1074,7 +1074,9 @@ function updateBoat(dt) {
         for (let k = 0; k < 24; k++) {
           const a = k / 24 * Math.PI * 2, cx = Math.cos(a), cz = Math.sin(a);
           let run = 0; while (run < 150 && isWater(o.x + cx * (run + 3), o.z + cz * (run + 3))) run += 3;
-          const sc = run * (1 + 0.3 * (cx * ux + cz * uz));
+          const dot = cx * ux + cz * uz;
+          if (dot < -0.2) continue; // 来た向きの逆 (後ろ向き) には出さない
+          const sc = Math.min(run, 60) * (1 + 1.5 * dot);
           if (sc > bestS) { bestS = sc; bestA = a; }
         }
         P.h = bestA; P.x = o.x; P.z = o.z;
