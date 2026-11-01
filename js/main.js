@@ -1,6 +1,6 @@
 // 風雲江戸城: 起動・入力・小舟・忍者・投げ銭と投げ輪・HUD
 import * as THREE from '../vendor/three.module.min.js';
-import { W, loadWorld, buildGround, buildWalls, buildWater, cullChunks, isWater, codeAt, groundH, cellOf, ll, isDote, LEVEL_H, waterY, terrainH, nearWaterGrid } from './world.js';
+import { W, loadWorld, buildGround, buildWalls, buildWater, cullChunks, nearCastle, isWater, codeAt, groundH, cellOf, ll, isDote, LEVEL_H, waterY, terrainH, nearWaterGrid } from './world.js';
 import { buildTown, buildModern, buildCastle, buildWarps, buildBalloon, moatName, labelSprite } from './edo.js';
 import { makeBoat, animateBoat, makeNinja, poseNinja, makeBamboo, makeCoin } from './models.js';
 import * as A from './audio.js';
@@ -26,6 +26,7 @@ export const CFG = {
   swim: 2.3,          // 竹筒 (水遁の術) の速さ
   climbStone: 0.55,   // 石垣を登る速さ (m/s)
   climbDote: 0.8,     // 土手を這い上がる速さ
+  climbGrass: 1.4,    // 外堀の草の岸をよじ登る速さ (m/s)。石垣は climbStone で遅い
   run: 9,             // 外堀を越えたあと、ビルの屋根伝いに走る速さ (m/s)
   hp: 3,              // 投げ銭で何枚当てれば捕まるか (竹筒・登っている忍者)
   coinRange: 40, coinCd: 0.75, coinSpeed: 70, // ぜに: 40m 以内の一番近い忍者
@@ -459,9 +460,9 @@ function updateNinja(nj, dt) {
     case 'swim1': {
       if (nj.stun <= 0) {
         const tgt = nj.path && nj.path.length ? nj.path[0] : null;
-        if (!tgt) { escape(nj); break; }
+        if (!tgt) { startClimbOut(nj); break; }
         const tx = cellX(tgt), tz = cellZ(tgt), dx = tx - nj.x, dz = tz - nj.z, l = Math.hypot(dx, dz);
-        if (l < 2) { nj.path.shift(); if (!nj.path.length) { escape(nj); break; } }
+        if (l < 2) { nj.path.shift(); if (!nj.path.length) { startClimbOut(nj); break; } }
         else { const sp = CFG.swim; nj.vx = dx / l * sp; nj.vz = dz / l * sp; nj.x += nj.vx * dt; nj.z += nj.vz * dt; }
       }
       nj.pop = Math.max(0, (nj.pop || 0) - dt);
@@ -480,14 +481,14 @@ function updateNinja(nj, dt) {
       break;
     }
     case 'climbOut': {
-      const sp = nj.dote ? CFG.climbDote : CFG.climbStone;
-      if (nj.stun <= 0) nj.prog += sp * 1.6 * dt / Math.max(1, nj.H - (nj.wy || 0));
+      const sp = nj.stone ? CFG.climbStone : CFG.climbGrass;
+      if (nj.stun <= 0) nj.prog += sp * dt / Math.max(1, nj.H - (nj.wy || 0));
       nj.prog = Math.max(0, nj.prog);
       const s = Math.min(1, nj.prog);
       nj.x = nj.bx + (nj.tx - nj.bx) * s; nj.z = nj.bz + (nj.tz - nj.bz) * s; nj.y = (nj.wy || 0) + s * (nj.H - (nj.wy || 0));
       nj.m.position.set(nj.x, nj.y - 0.3, nj.z);
-      poseNinja(nj.m, nj.dote ? 'crawl' : 'climb', G.t);
-      if (s >= 1) startRun(nj);
+      poseNinja(nj.m, nj.stone ? 'climb' : 'crawl', G.t);
+      if (s >= 1) escape(nj); // 向こう岸をよじ登り切ったら横断成功 (消える)
       break;
     }
     case 'run': {
@@ -580,7 +581,7 @@ function startClimb(nj, c) {
   nj.H = Math.max(nj.wy + 3, terrainH(wx + nx * 7, wz + nz * 7));
   if (nj.dote) {
     nj.bx = wx - nx * 2; nj.bz = wz - nz * 2;
-    nj.tx = wx + nx * 4; nj.tz = wz + nz * 4;
+    nj.tx = wx + nx * 6; nj.tz = wz + nz * 6;
   } else {
     nj.bx = wx + nx * 0.7; nj.bz = wz + nz * 0.7;
     nj.tx = wx + nx * 5; nj.tz = wz + nz * 5;
@@ -624,8 +625,10 @@ function startClimbOut(nj) {
   if (!nx && !nz) { const k = nearestLand(nj.x, nj.z); if (k) { const d = Math.hypot(k[0] - nj.x, k[1] - nj.z) || 1; nx = (k[0] - nj.x) / d; nz = (k[1] - nj.z) / d; } else nx = 1; }
   const wx = cellX(c), wz = cellZ(c);
   nj.dote = isDote(wx + nx * 3, wz + nz * 3);
+  // 石垣 (お城のまわり) はよじ登るのに時間がかかる。草の岸・土手は速い
+  nj.stone = !nj.dote && nearCastle(wx, wz);
   nj.wy = waterY(wx, wz);
-  nj.H = groundH(wx + nx * 4, wz + nz * 4);
+  { let hm = -1e9; for (let d = 3; d <= 15; d += 3) if (!isWater(wx + nx * d, wz + nz * d)) hm = Math.max(hm, terrainH(wx + nx * d, wz + nz * d)); nj.H = Math.max(nj.wy + 2.5, hm); }
   nj.bx = wx - nx * (nj.dote ? 2 : -0.7); nj.bz = wz - nz * (nj.dote ? 2 : -0.7);
   nj.tx = wx + nx * 4; nj.tz = wz + nz * 4;
   nj.x = nj.bx; nj.z = nj.bz; nj.y = nj.wy;

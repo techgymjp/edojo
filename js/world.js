@@ -266,7 +266,7 @@ function grassTexture() {
 }
 
 const nearMemo = new Map();
-function nearCastle(x, z) {
+export function nearCastle(x, z) {
   const k = Math.floor(x / 25) * 100000 + Math.floor(z / 25);
   if (nearMemo.has(k)) return nearMemo.get(k);
   let r = false;
