@@ -206,7 +206,7 @@ for (a_, b_, wd_) in [((35.67480, 139.73820), (35.67380, 139.74030), 45), ((35.6
     ya_, xa_ = cell(*a_); yb_, xb_ = cell(*b_); dr.line([(xa_, ya_), (xb_, yb_)], fill=0, width=int(wd_ / RES))
 A = np.array(img)
 # 丘の上を通ってしまった想像の堀 (溜池の水路が日枝神社の山王の丘を切っている所) を陸に戻す: 半径の中で岸の高さが高い水のマス
-HILL = [((35.6748, 139.7397), 60, 16)]  # (中心, 半径 m, この高さ m より高い岸)
+HILL = [((35.6748, 139.7397), 22, 22)]  # 社殿のまわりだけ  # (中心, 半径 m, この高さ m より高い岸)
 Tp = np.array(Image.open(os.path.join(D, 'terrain.png')).convert('RGB')).astype(float); TH = (Tp[..., 0] * 256 + Tp[..., 1]) / 200 - 20
 for (la, lo), rad, thr in HILL:
     y0, x0 = cell(la, lo); r = int(rad / RES); nfill = 0

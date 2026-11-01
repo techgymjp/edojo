@@ -15,7 +15,8 @@ const rand = (a, b) => a + Math.random() * (b - a);
 
 // ---------- 遊びの数値 ----------
 export const CFG = {
-  total: 20,          // 忍者の数
+  total: 88,          // 忍者の数
+  wakeSpan: 600,      // この秒数 (10 分) のあいだに、全員がランダムな時刻で動き出す
   maxActive: 4,       // 同時に出る数の上限
   firstAt: 4,         // 最初の忍者 (秒)
   wakeDist: 220,      // 小舟がこれだけ近づくと、潜伏していた忍者が現れる (m)
@@ -301,10 +302,11 @@ function planNinjas() {
   // 忍者の待ち伏せ場所は毎回ランダム: 外堀・隅田川の外側のビルの屋上。飛び込む先は外堀・隅田川の水
   const N = navi, roofs = allRoofs().filter((b) => b.sy >= 15 && b.sy <= 70 && !N.inRing(b.x, b.z));
   const plans = [], used = [];
-  for (let tries = 0; tries < 4000 && plans.length < CFG.total; tries++) {
+  for (let tries = 0; tries < 12000 && plans.length < CFG.total; tries++) {
     const land = N.outerLand[(Math.random() * N.outerLand.length) | 0];
     const lx = cellX(land), lz = cellZ(land);
-    if (used.some(([x, z]) => Math.hypot(x - lx, z - lz) < 250)) continue; // ばらけるように
+    const sp = tries < 3000 ? 200 : tries < 6000 ? 120 : tries < 9000 ? 60 : 0;
+    if (used.some(([x, z]) => Math.hypot(x - lx, z - lz) < sp)) continue; // ばらけるように
     const cands = roofs.filter((b) => { const d = Math.hypot(b.x - lx, b.z - lz); return d > 40 && d < 200; });
     if (!cands.length) continue;
     plans.push({ roof: cands[(Math.random() * cands.length) | 0], land });
@@ -370,10 +372,14 @@ function updateNinja(nj, dt) {
   switch (nj.state) {
     case 'wait': {
       // 外堀の外のビルの屋上で待ち伏せ。小舟が近くに来たら構えて飛ぶ
+      // 小舟とは関係なく、決められた時刻 (10 分のあいだのランダム) に動き出す
+      if (nj.wakeAt === undefined) nj.wakeAt = 3 + Math.random() * (CFG.wakeSpan - 3);
+      if (G.t >= nj.wakeAt) { nj.m.visible = true; nj.state = 'roof'; nj.t = rand(...CFG.roofTime); if (Math.hypot(nj.x - P.x, nj.z - P.z) < 400) A.sfx('bell', 0.35, 1.2); break; }
+      // 遠くの屋上の忍者は描かない (88 人いるので軽くする)
+      nj.m.visible = Math.hypot(nj.x - P.x, nj.z - P.z) < 700;
+      if (!nj.m.visible) break;
       poseNinja(nj.m, 'roof', G.t);
       nj.m.rotation.y = Math.atan2(P.x - nj.x, P.z - nj.z);
-      const active = G.ninjas.filter((n) => ['roof', 'glide', 'dive', 'swim1', 'emerge1', 'climbOut', 'walk'].includes(n.state)).length;
-      if (Math.hypot(nj.lx - P.x, nj.lz - P.z) < CFG.wakeDist && active < CFG.maxActive) { nj.state = 'roof'; nj.t = rand(...CFG.roofTime); A.sfx('bell', 0.35, 1.2); }
       break;
     }
     case 'roof': {
@@ -1664,7 +1670,7 @@ function showResult() {
   $('result').classList.remove('hidden');
   $('rHead').textContent = win ? '天晴れ！ 全員御用' : '本丸に曲者！';
   const n = G.captured;
-  const title = win ? (G.t < 330 ? '江戸一番の名同心' : '名同心') : n >= 15 ? '腕利きの同心' : n >= 10 ? '同心' : n >= 5 ? '下っ引き' : '見習い';
+  const title = win ? (G.t < 330 ? '江戸一番の名同心' : '名同心') : n >= 60 ? '腕利きの同心' : n >= 35 ? '同心' : n >= 15 ? '下っ引き' : '見習い';
   $('rTitle').textContent = `${G.name}　「${title}」`;
   $('rCap').textContent = `${n} / ${CFG.total} 人`;
   $('rTime').textContent = `${Math.floor(G.t / 60)}分${Math.floor(G.t % 60)}秒`;
