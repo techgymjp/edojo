@@ -218,7 +218,7 @@ export function makeNinja() {
     0, 1.4, 0, -0.3, 0.1, 0, -1.5, 1.35, -0.1, 0, 1.4, 0, 0, 0.5, 0, -0.3, 0.1, 0,
   ], 3));
   capeGeo.computeVertexNormals();
-  const cape = new THREE.Mesh(capeGeo, new THREE.MeshLambertMaterial({ color: 0x3a2030, side: THREE.DoubleSide }));
+  const cape = new THREE.Mesh(capeGeo, new THREE.MeshLambertMaterial({ color: 0x9a1c2c, emissive: 0x3a0a10, side: THREE.DoubleSide }));
   cape.visible = false; body.add(cape);
   // 縄で縛られた姿
   const rope = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.04, 5, 12), M(0xc8a060));

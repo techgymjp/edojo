@@ -21,20 +21,20 @@ export const CFG = {
   wakeDist: 330,      // 小舟がこれだけ近づくと、潜伏していた忍者が現れる (m)
   idleSpawn: 35,      // 誰も出ていないまま、これだけたつと一番近い忍者が現れる (秒)
   gap0: 17, gap1: 9,  // 出てくる間隔 (最初 → 最後)
-  roofTime: [0.8, 1.5], // ビルの上で構える時間
+  roofTime: [0.3, 0.6], // ビルの上で構える時間
   glideSpeed: 40,     // ムササビの術の速さ (m/s)
   swim: 2.3,          // 竹筒 (水遁の術) の速さ
   climbStone: 0.55,   // 石垣を登る速さ (m/s)
   climbDote: 0.8,     // 土手を這い上がる速さ
   run: 9,             // 外堀を越えたあと、ビルの屋根伝いに走る速さ (m/s)
   hp: 3,              // 投げ銭で何枚当てれば捕まるか (竹筒・登っている忍者)
-  coinRange: 38, coinCd: 0.75, coinSpeed: 65,
-  lassoRange: 140, lassoCd: 2.2, lassoCatch: 9,
+  coinRange: 40, coinCd: 0.75, coinSpeed: 70, // ぜに: 40m 以内の一番近い忍者
+  lassoMin: 30, lassoRange: 150, lassoCd: 2.2, lassoCatch: 9, // なわ: 30〜150m の一番近い忍者
   gears: [-5, 0, 12, 20, 28],
   accel0: 5, accelGrow: 4, accelMax: 14, vmax: 50, vback: -8, brake: 18, drag: 0.12, // 上を長押しで加速 (m/s²)
   jump0: 7, jumpBoost: 26, jumpHold: 0.5, gravity: 22,     // ジャンプ (長押しで高く)
   boatJumpSpeed: 18,  // これより速いと舟ごと跳ぶ (m/s)
-  ninjaScale: 2.4,    // 忍者を大きめに (遠くからでも見えるように)
+  ninjaScale: 4,    // 忍者を大きめに (遠くからでも見えるように)
 };
 
 // ---------- 描画の準備 ----------
@@ -314,6 +314,23 @@ function planNinjas() {
   }
   return plans;
 }
+// 小舟から水の道に沿って d m 先のセル
+function aheadCell(d) {
+  let c = cellOf(P.x, P.z);
+  if (c < 0) return -1;
+  const f = G.navStage === 'ninja' || !routePoints() ? null : fieldTo(G.wpi || 0);
+  let x = P.x, z = P.z;
+  for (let s2 = 0; s2 < d; s2 += 3) {
+    if (f && f[c] > 0) {
+      const cx = c % W.w, cy = (c / W.w) | 0; let best = c, bd = f[c];
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const nb = (cy + dy) * W.w + cx + dx, dd = f[nb]; if (dd >= 0 && dd < bd) { bd = dd; best = nb; } }
+      if (best === c) break; c = best;
+    } else {
+      x += Math.cos(P.h) * 3; z += Math.sin(P.h) * 3; if (!isWater(x, z)) break; c = cellOf(x, z);
+    }
+  }
+  return c;
+}
 function spawnNinja(plan) {
   if (!plan) {
     // 小舟に一番近い潜伏場所から
@@ -322,7 +339,14 @@ function spawnNinja(plan) {
     if (bi < 0) return false;
     plan = G.hidden.splice(bi, 1)[0];
   }
-  const roof = plan.roof, land = plan.land;
+  let roof = plan.roof, land = plan.land;
+  // 小舟の前方 (着くころに小舟が来る所) の水に飛び込み、その近くのビルから飛ぶ
+  const ahead = aheadCell(Math.max(90, Math.abs(P.v) * 3.5 + 50));
+  if (ahead >= 0) {
+    const ax = cellX(ahead), az = cellZ(ahead);
+    const c = allRoofs().filter((b) => b.sy >= 15 && b.sy <= 60 && Math.hypot(b.x - ax, b.z - az) > 35 && Math.hypot(b.x - ax, b.z - az) < 140);
+    if (c.length) { roof = c[(Math.random() * c.length) | 0]; land = ahead; }
+  }
   const lx = cellX(land), lz = cellZ(land);
   const m = makeNinja();
   m.scale.setScalar(CFG.ninjaScale);
@@ -359,7 +383,7 @@ function updateNinja(nj, dt) {
       if (nj.t <= 0) {
         nj.state = 'glide'; nj.hp = 1;
         const d = Math.hypot(nj.lx - nj.sx, nj.lz - nj.sz);
-        nj.T = clamp(d / CFG.glideSpeed, 3, 4.5); nj.t = nj.T;
+        nj.T = clamp(d / CFG.glideSpeed, 2.5, 3.5); nj.t = nj.T;
         A.sfx('whoosh', 0.5, 0.8);
       }
       break;
@@ -674,16 +698,14 @@ function preferDir() {
   }
   return P.h;
 }
-function pickTarget(range) {
-  const hp = heroPos(), pd = preferDir();
-  let best = null, bs = 1e9;
+// 一番近い忍者 (minR〜maxR m の中)
+function pickTarget(maxR, minR = 0) {
+  const hp = heroPos();
+  let best = null, bd = 1e9;
   for (const nj of G.ninjas) {
     if (!['roof', 'glide', 'bamboo', 'emerge', 'climb', 'swim1', 'emerge1', 'climbOut', 'run'].includes(nj.state)) continue;
-    const c = ninjaCenter(nj), d = c.distanceTo(hp);
-    if (d > range) continue;
-    const a = Math.abs(angDiff(Math.atan2(c.z - P.z, c.x - P.x), pd));
-    const s = d * (1 + a * 0.5) * (nj.state === 'climb' || nj.state === 'emerge' ? 0.5 : 1);
-    if (s < bs) { bs = s; best = nj; }
+    const d = ninjaCenter(nj).distanceTo(hp);
+    if (d >= minR && d <= maxR && d < bd) { bd = d; best = nj; }
   }
   return best;
 }
@@ -705,7 +727,7 @@ function throwCoins() {
 const ropeMat = new THREE.LineBasicMaterial({ color: 0xd8b070 });
 function throwLasso() {
   if (G.lassoCd > 0) return;
-  const tg = pickTarget(CFG.lassoRange);
+  const tg = pickTarget(CFG.lassoRange, CFG.lassoMin);
   G.lassoCd = CFG.lassoCd; G.throwT = 1;
   A.sfx('whoosh', 0.7, 1.1);
   const p = heroPos();
@@ -749,7 +771,7 @@ function updateWeapons(dt) {
   for (const l of G.lassos) {
     l.t += dt;
     const s = l.done ? Math.max(0, 1 - (l.t - l.T) / 0.35) : Math.min(1, l.t / l.T);
-    if (!l.done) l.from.copy(heroPos());
+    if (!l.done) { l.from.copy(heroPos()); if (l.tg && ['roof', 'glide', 'bamboo', 'emerge', 'climb', 'swim1', 'emerge1', 'climbOut', 'run'].includes(l.tg.state)) l.to.copy(ninjaCenter(l.tg)); }
     const pts = [];
     for (let i = 0; i < 24; i++) pts.push(bez(l, (i / 23) * s));
     l.line.geometry.setFromPoints(pts);
@@ -757,7 +779,8 @@ function updateWeapons(dt) {
     if (!l.done && l.t >= l.T) {
       l.done = true;
       const tg = l.tg;
-      if (tg && ['roof', 'glide', 'bamboo', 'emerge', 'climb', 'swim1', 'emerge1', 'climbOut', 'run'].includes(tg.state) && ninjaCenter(tg).distanceTo(l.to) < CFG.lassoCatch + (tg.state === 'climb' ? 2 : 0)) {
+      // 距離が合っていれば当たり
+      if (tg && ['roof', 'glide', 'bamboo', 'emerge', 'climb', 'swim1', 'emerge1', 'climbOut', 'run'].includes(tg.state)) {
         hitNinja(tg, true);
       } else {
         if (l.to.y < 1) { splash(l.to.x, l.to.z, 0.6); A.sfx('splash0', 0.4); }
@@ -968,18 +991,7 @@ function updateCamera(dt) {
   // ローアングル (水面から 7m ほど。首都高の高架の下から小舟を見る)
   let dist = G.camDist, ty = waterY(P.x, P.z) + 4.2, blockF = -1;
   let tx, tz;
-  if (Math.abs(G.camYaw) < 0.25 && trail.length > 3) {
-    let need = dist, cx = P.x, cz = P.z;
-    for (let i = trail.length - 1; i >= 0 && need > 0; i--) {
-      const dx = trail[i].x - cx, dz = trail[i].z - cz, l = Math.hypot(dx, dz);
-      if (l >= need) { cx += dx / l * need; cz += dz / l * need; need = 0; break; }
-      cx = trail[i].x; cz = trail[i].z; need -= l;
-    }
-    if (need > 0) { // 道筋が短いときは後ろへのばす (水の上だけ)
-      for (let s2 = 0; s2 < need && isWater(cx - Math.cos(P.h) * 2, cz - Math.sin(P.h) * 2); s2 += 2) { cx -= Math.cos(P.h) * 2; cz -= Math.sin(P.h) * 2; }
-    }
-    tx = cx; tz = cz;
-  }
+  // 小舟の真後ろにつく (速くても置いていかれないように)
   if (tx === undefined || Math.hypot(tx - P.x, tz - P.z) < G.camDist * 0.5) {
     // Q/E で回したとき: 間にビルや石垣があれば手前へ寄せる
     const wy0 = waterY(P.x, P.z);
@@ -991,7 +1003,7 @@ function updateCamera(dt) {
     tx = P.x - Math.cos(ch) * dist; tz = P.z - Math.sin(ch) * dist;
   }
   ty = Math.max(ty, groundH(tx, tz) + 4);
-  const k = camInit ? 1 - Math.exp(-dt * 5) : 1;
+  const k = camInit ? 1 - Math.exp(-dt * 14) : 1;
   camInit = true;
   camera.position.x += (tx - camera.position.x) * k;
   camera.position.z += (tz - camera.position.z) * k;
