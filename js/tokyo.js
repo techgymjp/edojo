@@ -211,7 +211,8 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
   addDiet(root, city);
   const techgym = addTechGym(root, city);
   const dome = addTokyoDome(root, city);
-  // 日本武道館は北の丸 (内堀の内側 = 江戸時代の江戸城) にあるので置かない
+  // 日本武道館は北の丸 (江戸城の中) だが、特別に置く
+  try { addBudokan(root, city); } catch (e) { console.warn('budokan', e); }
   for (const f of [addSensoji, addAsahi, addUeno, addOchanomizu, addTokyoStation, addAkasaka, addAkibaSigns, addNewOtani, addYotsuyaKudan, addUenoAsakusa, addGinzaNihonbashi]) {
     try { f(root, city); } catch (e) { console.warn(f.name, e); }
   }
@@ -220,6 +221,29 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
   root.traverse((o) => { const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : []; for (const m of ms) if (!seen.has(m) && m.isMaterial && !m.isSpriteMaterial) { seen.add(m); addCutaway(m); } });
   let rails = null;
   try { rails = addRailways(root, city); } catch (e) { console.warn('rails', e); }
+  // 線路の高架・首都高の高架が通る所のビルは描かない (高架がビルを突き抜けないように)
+  {
+    const segs = [];
+    if (rails && rails.rl) for (const L of rails.rl) for (let i = 0; i + 1 < L.P.length; i++) segs.push([L.P[i][0], L.P[i][1], L.P[i + 1][0], L.P[i + 1][1], 9]);
+    for (const r of CITY.roads) for (let i = 0; i + 1 < r.x.length; i++) if (!r.t[i] && (r.h[i] - terrainH(r.x[i] + OX, r.z[i] + OZ) > 3 || r.h[i + 1] - terrainH(r.x[i + 1] + OX, r.z[i + 1] + OZ) > 3)) segs.push([r.x[i], r.z[i], r.x[i + 1], r.z[i + 1], 9]);
+    const G = 40, grid = new Map();
+    segs.forEach((sg, k) => { for (let gx = Math.floor(Math.min(sg[0], sg[2]) / G) - 1; gx <= Math.floor(Math.max(sg[0], sg[2]) / G) + 1; gx++) for (let gz = Math.floor(Math.min(sg[1], sg[3]) / G) - 1; gz <= Math.floor(Math.max(sg[1], sg[3]) / G) + 1; gz++) { const key = gx * 100000 + gz; if (!grid.has(key)) grid.set(key, []); grid.get(key).push(k); } });
+    const near = (x, z) => { const l = grid.get(Math.floor(x / G) * 100000 + Math.floor(z / G)); if (!l) return false; for (const k of l) { const [x1, z1, x2, z2, w] = segs[k]; const dx = x2 - x1, dz = z2 - z1, L2 = dx * dx + dz * dz || 1; const t = Math.max(0, Math.min(1, ((x - x1) * dx + (z - z1) * dz) / L2)); if (Math.hypot(x - x1 - dx * t, z - z1 - dz * t) < w) return true; } return false; };
+    let cut = 0;
+    for (const t of city.tiles.values()) {
+      t.list = t.list.filter((idx) => {
+        const bd = city.bld[idx];
+        for (let i = 0; i < bd.n; i++) if (near(bd.pts[i * 2], bd.pts[i * 2 + 1])) { bd.plateau = false; cut++; return false; }
+        let hasSeg = false;
+        for (let gx = Math.floor(bd.minx / G); gx <= Math.floor(bd.maxx / G) && !hasSeg; gx++) for (let gz = Math.floor(bd.minz / G); gz <= Math.floor(bd.maxz / G); gz++) if (grid.has(gx * 100000 + gz)) { hasSeg = true; break; }
+        if (!hasSeg) return true;
+        for (let x = bd.minx; x <= bd.maxx; x += 5) for (let z = bd.minz; z <= bd.maxz; z += 5) if (city.inside(bd, x, z) && near(x, z)) { bd.plateau = false; cut++; return false; }
+        return true;
+      });
+      if (t.meshes) { city.dropTile(t); }
+    }
+    console.log('buildings under viaducts removed', cut);
+  }
   const skytreeMat = addSkytree(root);
   const fuji = addFuji(root);
   const distant = addDistant(root);

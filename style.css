@@ -113,3 +113,5 @@ h1 { font-family: "Yuji Syuku", serif; font-size: clamp(52px, 13vw, 96px); line-
 #nav.ninja #navArrow { color: #ff6a50; }
 .nmark.down { color: #ffd23a; font-size: 30px; font-weight: 900; text-shadow: 0 0 4px #000, 0 2px 3px #000; animation: bob 0.6s infinite alternate; }
 @keyframes bob { to { margin-top: 8px; } }
+#ninjaNav { position: absolute; top: max(62px, calc(env(safe-area-inset-top) + 54px)); right: 12px; background: rgba(110, 20, 20, 0.78); border: 1px solid rgba(255, 170, 150, 0.7); border-radius: 22px; padding: 4px 14px; font-size: 20px; font-weight: 800; color: #ffd8c8; white-space: nowrap; text-shadow: 0 1px 2px #000; display: none; }
+#ninjaArrow { display: inline-block; color: #ff6a50; font-size: 24px; }

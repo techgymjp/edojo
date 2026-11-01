@@ -1349,48 +1349,49 @@ function routePoints() {
   if (!routeXZ) routeXZ = ROUTE.map(([n, la, lo]) => { let [x, z] = ll(la, lo); if (!isWater(x, z)) { const k = nearestWater(x, z); if (k) [x, z] = k; } return { n, x, z }; });
   return routeXZ;
 }
+// 道案内 (中央): 舳先の向きにある次の御門。なければ向かう先のお濠・川
+// 忍者の案内 (右上): 一番近い忍者
+const fmtD = (d) => (d >= 1000 ? (Math.round(d / 100) / 10) + 'km' : Math.round(d / 10) * 10 + 'm');
+function aheadPick(list, maxAng, minD, maxD) {
+  let best = null, bs = 1e18;
+  for (const q of list) {
+    const dx = q.x - P.x, dz = q.z - P.z, d = Math.hypot(dx, dz);
+    if (d < minD || d > maxD) continue;
+    const ang = Math.abs(angDiff(Math.atan2(dz, dx), P.h));
+    if (ang > maxAng * Math.PI / 180) continue;
+    if (d < bs) { bs = d; best = q; }
+  }
+  return best;
+}
 function updateNav() {
   const el = $('nav');
-  const c = cellOf(P.x, P.z), d0 = c >= 0 ? navi.dist[c] : -1;
-  // 忍者が出ていれば一番近い忍者を、いなければ外堀を回る道の次の地点を指す
+  // 案内するのは御門 (見附) と、両国橋・永代橋
+  if (!G.gatePts) G.gatePts = [...GATES, ['両国橋', 35.69402, 139.78794], ['永代橋', 35.67688, 139.78688]].map(([n, la, lo]) => { const [x, z] = ll(la, lo); return { n, x, z }; });
+  if (!G.waterPts) G.waterPts = MOAT_NAMES.map(([n, la, lo]) => { const [x, z] = ll(la, lo); return { n, x, z }; });
+  const here = moatName(P.x, P.z);
+  let best = aheadPick(G.gatePts, 60, 40, 2500);
+  if (!best) best = aheadPick(G.waterPts.filter((q) => q.n !== here), 60, 120, 2500);
+  if (best) {
+    const a = Math.atan2(best.z - P.z, best.x - P.x) - camHeading();
+    el.style.display = ''; el.classList.remove('ninja');
+    $('navArrow').style.transform = `rotate(${a}rad)`;
+    $('navInfo').textContent = `${best.n}（約${fmtD(Math.hypot(best.x - P.x, best.z - P.z))}）`;
+    G.navT = [best.x, best.z];
+  } else { el.style.display = 'none'; G.navT = null; }
+  // 近くの忍者
+  const ne = $('ninjaNav');
   let ninja = null, nd = 1e18;
   for (const nj of G.ninjas) {
     if (['gone', 'bound', 'in', 'fall', 'sink', 'wait'].includes(nj.state)) continue;
-    const d = Math.hypot(nj.x - P.x, nj.z - P.z) * (nj.state === 'climb' || nj.state === 'emerge' ? 0.4 : 1);
+    const d = Math.hypot(nj.x - P.x, nj.z - P.z);
     if (d < nd) { nd = d; ninja = nj; }
   }
   G.navStage = ninja ? 'ninja' : 'route';
-  const R0 = routePoints();
-  let tx, tz, label;
-  if (G.navStage !== 'ninja') {
-    // 次の御門: 舳先の向き (左右 60 度) にある一番近い御門・見附。なければ一番近い御門
-    if (!G.navPts) G.navPts = GATES.map(([n, la, lo]) => { const [x, z] = ll(la, lo); return { n, x, z }; });
-    let best = null, bs = 1e18, any = null, ad = 1e18;
-    for (const q of G.navPts) {
-      const dx = q.x - P.x, dz = q.z - P.z, d = Math.hypot(dx, dz);
-      if (d < 40) continue;
-      if (d < ad) { ad = d; any = q; }
-      const ang = Math.abs(angDiff(Math.atan2(dz, dx), P.h));
-      if (ang > 60 * Math.PI / 180) continue;
-      if (d < bs) { bs = d; best = q; }
-    }
-    best = best || any;
-    if (!best) { el.style.display = 'none'; G.navT = null; return; }
-    tx = best.x; tz = best.z;
-    const dn = Math.hypot(tx - P.x, tz - P.z);
-    label = `${best.n}（約${dn >= 1000 ? (Math.round(dn / 100) / 10) + 'km' : Math.round(dn / 10) * 10 + 'm'}）`;
-  } else {
-    const best = ninja;
-    tx = best.x; tz = best.z;
-    const what = { roof: '屋上の忍者', glide: '飛んでいる忍者', dive: '水に潜った忍者', swim1: '竹筒の忍者', bamboo: '竹筒の忍者', emerge1: '岸を登る忍者', climbOut: '岸を登る忍者', walk: '歩く忍者', run: '屋根を走る忍者', emerge: '石垣を登る忍者', climb: '石垣を登る忍者' }[best.state] || '忍者';
-    label = `忍者（約${Math.round(Math.hypot(tx - P.x, tz - P.z) / 10) * 10}m）`;
-  }
-  G.navT = [tx, tz];
-  const a = Math.atan2(tz - P.z, tx - P.x) - camHeading();
-  el.style.display = '';
-  el.classList.toggle('ninja', G.navStage === 'ninja');
-  $('navArrow').style.transform = `rotate(${a}rad)`;
-  $('navInfo').textContent = label;
+  if (ninja) {
+    ne.style.display = '';
+    $('ninjaArrow').style.transform = `rotate(${Math.atan2(ninja.z - P.z, ninja.x - P.x) - camHeading()}rad)`;
+    $('ninjaInfo').textContent = `忍者 ${fmtD(nd)}`;
+  } else ne.style.display = 'none';
 }
 function updateHud(dt) {
   updateNav();
