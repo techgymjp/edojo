@@ -476,6 +476,36 @@ function updateNinja(nj, dt) {
       if (nj.t <= 0) { nj.state = 'climbOut'; nj.prog = 0; }
       break;
     }
+    case 'raid': {
+      // ゲームオーバーの演出: 天守へ一直線に走り、壁を駆け上がって、てっぺんに立つ
+      const R = nj.raid; R.t += dt;
+      if (R.phase === 0) {
+        const dx = R.bx - nj.x, dz = R.bz - nj.z, l = Math.hypot(dx, dz);
+        // 走る速さ: 32m/s 以上で、遠くても 4 秒で天守に着く
+        if (!R.sp) R.sp = Math.max(32, Math.hypot(R.bx - nj.x, R.bz - nj.z) / 4);
+        const sp = R.sp;
+        if (l < sp * dt + 0.5) { nj.x = R.bx; nj.z = R.bz; R.phase = 1; R.y0 = terrainH(nj.x, nj.z); }
+        else { nj.x += dx / l * sp * dt; nj.z += dz / l * sp * dt; }
+        nj.y = Math.max(terrainH(nj.x, nj.z), groundH(nj.x, nj.z)) + Math.abs(Math.sin(R.t * 14)) * 1.2; // 跳ねるように走る
+        nj.m.position.set(nj.x, nj.y, nj.z); nj.m.rotation.set(0, Math.atan2(R.tx - nj.x, R.tz - nj.z), 0);
+        poseNinja(nj.m, 'walk', G.t * 6);
+      } else if (R.phase === 1) {
+        // 天守台と五重の壁 (少しずつ内側へ) を駆け上がる
+        const top = R.base + 54;
+        nj.y = Math.min(top, nj.y + 16 * dt);
+        const f = (nj.y - R.base) / 54, inset = 26 - (5 + f * 12);
+        const dx = R.tx - R.bx, dz = R.tz - R.bz, l = Math.hypot(dx, dz) || 1;
+        nj.x = R.tx - dx / l * inset; nj.z = R.tz - dz / l * inset;
+        nj.m.position.set(nj.x, nj.y, nj.z); nj.m.rotation.set(0, Math.atan2(dx, dz), 0);
+        poseNinja(nj.m, 'climb', G.t * 3);
+        if (nj.y >= top) { R.phase = 2; R.t = 0; nj.x = R.tx; nj.z = R.tz; nj.y = top + 4; floatText(nj.x, nj.y + 4, nj.z, '天守を取られた！', 'red', true); A.sfx('boom', 0.8); }
+      } else {
+        nj.m.position.set(nj.x, nj.y, nj.z); nj.m.rotation.y += dt * 0.8;
+        poseNinja(nj.m, 'roof', G.t);
+        if (R.t > 2.5 && G.endT > 1) G.endT = 1;
+      }
+      break;
+    }
     case 'walkin': {
       // お城の中を本丸へ (着いたらゲームオーバー)
       const dx = nj.lx - nj.x, dz = nj.lz - nj.z, l = Math.hypot(dx, dz);
@@ -782,6 +812,8 @@ function innerDive(nj) {
 }
 // 石垣を登ったあと (または土橋から) 本丸へ歩く
 function startWalkIn(nj) {
+  // 本丸のお濠の石垣を登り切った時点でゲームオーバー (このあと天守まで駆け上がる演出)
+  if (G.state === 'play') { intrude(nj); return; }
   let best = null, bd = 1e18;
   for (let j = 0; j < W.h; j += 4) for (let i = 0; i < W.w; i += 4) { if (W.code[j * W.w + i] !== 4) continue; const x = (i + 0.5) * W.res, z = (j + 0.5) * W.res, d = (x - nj.x) ** 2 + (z - nj.z) ** 2; if (d < bd) { bd = d; best = [x, z]; } }
   if (!best || bd < 9) { intrude(nj); return; }
@@ -789,11 +821,16 @@ function startWalkIn(nj) {
 }
 function intrude(nj) {
   if (G.state !== 'play') return;
-  nj.state = 'in';
+  // 天守へ: 走る → 天守の壁を駆け上がる → てっぺんに立つ
+  const [tx, tz] = castle.tenshu;
+  const dx = tx - nj.x, dz = tz - nj.z, l = Math.hypot(dx, dz) || 1;
+  nj.raid = { tx, tz, bx: tx - dx / l * 26, bz: tz - dz / l * 26, base: groundH(tx, tz), phase: 0, t: 0 };
+  nj.state = 'raid'; nj.m.visible = true; nj.bam.visible = false;
   G.intruder = nj;
   floatText(nj.x, nj.y + 3, nj.z, '侵入された！', 'red', true);
   A.sfx('bell', 1); A.sfx('boom', 0.6);
   finish(false);
+  G.endT = 60; // 天守のてっぺんに着いてから数秒で結果へ (raid で決める)
 }
 
 // ---------- 投げ銭 (近い敵に 3 連射) と投げ輪 (遠くまで届く) ----------
@@ -1676,9 +1713,14 @@ function loop(now) {
       updateCamera(dt);
       camera.lookAt(tx, 120, tz);
     } else if (G.state === 'ending' && G.intruder) {
-      const nj = G.intruder;
-      camera.position.lerp(new THREE.Vector3(nj.x - Math.cos(P.h) * 20, nj.y + 6, nj.z - Math.sin(P.h) * 20), 1 - Math.exp(-dt * 3));
-      camera.lookAt(nj.x, nj.y, nj.z);
+      const nj = G.intruder, R = nj.raid;
+      // 走っている間は後ろから追いかけ、登りはじめたら天守を斜め下から見上げ、てっぺんでは回り込む
+      let cp;
+      if (!R || R.phase === 0) { const a = Math.atan2((R ? R.tz : nj.z) - nj.z, (R ? R.tx : nj.x) - nj.x); cp = new THREE.Vector3(nj.x - Math.cos(a) * 9, nj.y + 3.5, nj.z - Math.sin(a) * 9); }
+      else if (R.phase === 1) { const a = Math.atan2(R.tz - R.bz, R.tx - R.bx) + 0.9; cp = new THREE.Vector3(R.tx - Math.cos(a) * 55, R.base + 10 + (nj.y - R.base) * 0.6, R.tz - Math.sin(a) * 55); }
+      else { const a = R.t * 0.5; cp = new THREE.Vector3(R.tx + Math.cos(a) * 26, nj.y + 6, R.tz + Math.sin(a) * 26); }
+      camera.position.lerp(cp, 1 - Math.exp(-dt * (R && R.phase === 0 ? 8 : 3)));
+      camera.lookAt(nj.x, nj.y + 1, nj.z);
     } else updateCamera(dt);
     if (window.__camOverride) { const d = window.__camOverride; camera.position.set(...d.p); camera.lookAt(...d.l); }
     updateSky();
@@ -1722,4 +1764,4 @@ requestAnimationFrame(loop);
 boot();
 window.__wy = waterY; window.__G = G; window.__P = P; window.__CFG = CFG; window.__ll = ll; window.__gh = groundH;
 window.__tokyo = () => tokyo; window.__cam = camera; window.__THREE = THREE; window.__W = W; window.__renderer = renderer; window.__scene = scene;
-window.__dbg = { warps: () => warps, hitNinja, spawnNinja, throwCoins, throwLasso, startGame, navi: () => navi, isWater, cellOf, step, updateNav };
+window.__dbg = { intrude: (nj) => intrude(nj), warps: () => warps, hitNinja, spawnNinja, throwCoins, throwLasso, startGame, navi: () => navi, isWater, cellOf, step, updateNav };
