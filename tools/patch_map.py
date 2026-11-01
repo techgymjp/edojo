@@ -139,6 +139,13 @@ def snapw(x, z):
                 if A[y0 + dy, x0 + dx] == 0: return ((x0 + dx) * RES + RES / 2, (y0 + dy) * RES + RES / 2)
     return (x, z)
 w['warps'] = [[*snapw(k[0], k[1]), *snapw(k[2], k[3])] for k in w['warps']]
+# ワープの端を手で動かす: (今の端の近く, 新しい場所)
+MOVE = [((35.6924, 139.7548), (35.69269, 139.75533))]  # 清水濠の側を雉子橋御門のそばへ
+for (la0, lo0), (la1, lo1) in MOVE:
+    x0, z0 = (lo0 - W0) * KX, (N0 - la0) * KZ; x1, z1 = snapw((lo1 - W0) * KX, (N0 - la1) * KZ)
+    for k in w['warps']:
+        for e in (0, 2):
+            if math.hypot(k[e] - x0, k[e + 1] - z0) < 25: k[e], k[e + 1] = x1, z1; print('moved warp end', la0, lo0, '->', la1, lo1)
 for k in w['warps']:
     ca = comp(int(k[1] / RES), int(k[0] / RES)); cb = comp(int(k[3] / RES), int(k[2] / RES))
     la, lo = N0 - k[1] / KZ, W0 + k[0] / KX
