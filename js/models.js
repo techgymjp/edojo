@@ -284,7 +284,7 @@ export function makeCoin() {
   const hole = new THREE.Path(); hole.moveTo(-0.045, -0.045); hole.lineTo(0.045, -0.045); hole.lineTo(0.045, 0.045); hole.lineTo(-0.045, 0.045); hole.lineTo(-0.045, -0.045);
   shape.holes.push(hole);
   const m = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: 0.03, bevelEnabled: false }), new THREE.MeshBasicMaterial({ color: 0xf0c040 }));
-  m.scale.setScalar(2.2);
+  m.scale.setScalar(1.2); // 実物 (2.5cm) より大きめ (見えるように)。飛ぶあとに金の筋を引く
   return m;
 }
 

@@ -34,7 +34,7 @@ export const CFG = {
   climbGrass: 0.9,    // 外堀の草の岸をよじ登る速さ (m/s)。石垣は climbStone で遅い
   run: 9,             // 外堀を越えたあと、ビルの屋根伝いに走る速さ (m/s)
   hp: 3,              // 投げ銭で何枚当てれば捕まるか (竹筒・登っている忍者)
-  coinRange: 40, coinCd: 0.9, coinSpeed: 55, // ぜに: 40m 以内の一番近い忍者
+  coinRange: 40, coinCd: 0.9, coinSpeed: 150, // ぜに: 光の弾 (秒速 150m) // ぜに: 40m 以内の一番近い忍者
   lassoMin: 30, lassoRange: 150, lassoCd: 2.2, lassoCatch: 9, // なわ: 30〜150m の一番近い忍者
   gears: [-5, 0, 12, 20, 28],
   accel0: 5, accelGrow: 5, accelMax: 20, vmax: 66.7, vback: -8, brake: 18, drag: 0.12, // 上を長押しで加速 (m/s²)
@@ -905,7 +905,10 @@ function intrude(nj) {
 }
 
 // ---------- 投げ銭 (近い敵に 3 連射) と投げ輪 (遠くまで届く) ----------
-function heroPos() { return new THREE.Vector3(P.x - Math.cos(P.h) * 0.6, (P.air ? P.alt : waterY(P.x, P.z)) + 3.6, P.z - Math.sin(P.h) * 0.6); }
+// お侍の右手の高さ (実寸: 舟の上で水面から 約 1.5m)
+// お侍の体の真ん中 (投げ輪を出す所)
+function bodyPos() { return new THREE.Vector3(P.x - Math.cos(P.h) * 0.3, (P.air ? P.alt : waterY(P.x, P.z)) + 1.1, P.z - Math.sin(P.h) * 0.3); }
+function heroPos() { const sx = -Math.sin(P.h) * 0.35, sz = Math.cos(P.h) * 0.35; return new THREE.Vector3(P.x - Math.cos(P.h) * 0.6 + sx, (P.air ? P.alt : waterY(P.x, P.z)) + 1.5, P.z - Math.sin(P.h) * 0.6 + sz); }
 function preferDir() {
   if (G.t - G.lastMouse < 3 && !I.joy) {
     const ray = new THREE.Raycaster();
@@ -934,29 +937,43 @@ function throwCoins() {
   if (G.coinCd > 0) return;
   G.coinCd = CFG.coinCd; G.throwT = 1;
   const tg = pickTarget(CFG.coinRange);
-  // 5 連射。扇形に広く撃ち出し、近くの忍者の方へ曲がっていく
-  const SPREAD = [-0.5, 0.25, 0, -0.25, 0.5];
+  // 5 連射: 瀬戸内の海賊王の鉄砲のように、光の弾 (金色のビーム) を一直線に撃つ。忍者の動きを読んで当てる
   for (let k = 0; k < 5; k++) {
     setTimeout(() => {
       if (G.state !== 'play') return;
-      const m = makeCoin(); scene.add(m);
       const p = heroPos();
-      const base = tg ? Math.atan2(ninjaCenter(tg).z - p.z, ninjaCenter(tg).x - p.x) : P.h;
-      const a = base + SPREAD[k];
-      const up = tg ? clamp((ninjaCenter(tg).y - p.y) / Math.max(5, ninjaCenter(tg).distanceTo(p)), -0.5, 0.8) + 0.15 : 0.15;
-      const dir = new THREE.Vector3(Math.cos(a), up, Math.sin(a)).normalize();
-      G.coins.push({ m, p, v: dir.multiplyScalar(CFG.coinSpeed), tg, life: CFG.coinRange / CFG.coinSpeed * 1.6 + 0.4 });
+      let dir;
+      if (tg && !['gone', 'bound', 'fall', 'sink'].includes(tg.state)) {
+        const c = ninjaCenter(tg), T = c.distanceTo(p) / CFG.coinSpeed;
+        c.x += (tg.vx || 0) * T; c.z += (tg.vz || 0) * T;
+        dir = c.sub(p).normalize();
+      } else dir = new THREE.Vector3(Math.cos(P.h), 0.02, Math.sin(P.h)).normalize();
+      // ほんの少しだけぶれる
+      dir.x += rand(-0.012, 0.012); dir.z += rand(-0.012, 0.012); dir.normalize();
+      if (!coinBeamGeo) {
+        coinBeamGeo = new THREE.CylinderGeometry(0.13, 0.02, 9, 6, 1, true).rotateX(Math.PI / 2).translate(0, 0, -4.5);
+        coinHeadGeo = new THREE.SphereGeometry(0.2, 10, 8);
+      }
+      const m = new THREE.Group();
+      m.add(new THREE.Mesh(coinHeadGeo, coinBeamHead), new THREE.Mesh(coinBeamGeo, coinBeamMat));
+      m.position.copy(p); m.lookAt(p.clone().add(dir)); scene.add(m);
+      // 手もとの光
+      spark(p.clone().addScaledVector(dir, 0.8));
+      G.coins.push({ m, p: p.clone(), v: dir.multiplyScalar(CFG.coinSpeed), tg, life: CFG.coinRange / CFG.coinSpeed + 0.12 });
       A.chirin(k);
-    }, k * 80);
+    }, k * 70);
   }
 }
+let coinBeamGeo = null, coinHeadGeo = null;
+const coinBeamMat = new THREE.MeshBasicMaterial({ color: 0xffe070, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+const coinBeamHead = new THREE.MeshBasicMaterial({ color: 0xfff4c0, fog: false });
 const ropeMat = new THREE.LineBasicMaterial({ color: 0xd8b070 });
 function throwLasso() {
   if (G.lassoCd > 0) return;
   const tg = pickTarget(CFG.lassoRange, CFG.lassoMin);
   G.lassoCd = CFG.lassoCd; G.throwT = 1;
   A.sfx('whoosh', 0.7, 1.1);
-  const p = heroPos();
+  const p = bodyPos();
   let aim;
   if (tg) {
     const c = ninjaCenter(tg), d = c.distanceTo(p), T = 0.25 + d / 60;
@@ -971,7 +988,7 @@ function throwLasso() {
   const loop = new THREE.Mesh(new THREE.TorusGeometry(1.4, 0.08, 6, 20), new THREE.MeshBasicMaterial({ color: 0xe8c080 }));
   scene.add(loop);
   // シュートかカーブで横に曲がって飛ぶ
-  G.lassos.push({ line, loop, from: p, to: aim, apex: 4 + d * 0.22, side: (Math.random() < 0.5 ? -1 : 1) * d * 0.35, T: 0.35 + d / 55, t: 0, tg, done: false });
+  G.lassos.push({ line, loop, from: p, to: aim, apex: 1 + d * 0.06, side: (Math.random() < 0.5 ? -1 : 1) * d * 0.35, T: 0.35 + d / 55, t: 0, tg, done: false });
 }
 function bez(l, s) {
   const p = new THREE.Vector3().lerpVectors(l.from, l.to, s);
@@ -984,15 +1001,14 @@ function bez(l, s) {
 function updateWeapons(dt) {
   for (const c of G.coins) {
     c.life -= dt;
-    if (c.tg && !['gone', 'bound', 'fall', 'sink'].includes(c.tg.state)) {
-      const want = ninjaCenter(c.tg).sub(c.p).normalize().multiplyScalar(CFG.coinSpeed);
-      c.v.lerp(want, Math.min(1, dt * 4.5)); c.v.setLength(CFG.coinSpeed);
-    } else c.v.y -= 9.8 * dt;
+    const p0 = c.p.clone();
     c.p.addScaledVector(c.v, dt);
-    c.m.position.copy(c.p); c.m.rotation.x += dt * 20; c.m.rotation.y += dt * 13;
-    if (c.tg && ['roof', 'glide', 'bamboo', 'emerge', 'climb', 'swim1', 'emerge1', 'climbOut', 'run', 'walk', 'walkin'].includes(c.tg.state) && ninjaCenter(c.tg).distanceTo(c.p) < 3) {
-      hitNinja(c.tg, false); c.life = 0;
-      spark(c.p);
+    c.m.position.copy(c.p);
+    // 速いので、このフレームで進んだ線分と忍者の近さで当たりを見る
+    for (const nj of (c.tg ? [c.tg] : G.ninjas)) {
+      if (!['roof', 'glide', 'bamboo', 'emerge', 'climb', 'swim1', 'emerge1', 'climbOut', 'run', 'walk', 'walkin'].includes(nj.state)) continue;
+      const q = ninjaCenter(nj), d = c.p.clone().sub(p0), L2 = d.lengthSq() || 1, t = clamp(q.clone().sub(p0).dot(d) / L2, 0, 1);
+      if (p0.clone().addScaledVector(d, t).distanceTo(q) < 2.2) { hitNinja(nj, false); spark(q); c.life = 0; break; }
     }
     if (c.p.y < waterY(c.p.x, c.p.z)) { c.life = 0; splash(c.p.x, c.p.z, 0.25); }
     if (c.life <= 0) scene.remove(c.m);
@@ -1002,8 +1018,8 @@ function updateWeapons(dt) {
     l.t += dt;
     const s = l.done ? (l.caught && l.tg.state === 'fall' ? 1 : Math.max(0, 1 - (l.t - (l.relT || l.T)) / 0.35)) : Math.min(1, l.t / l.T);
     if (l.done && l.caught && l.tg.state !== 'fall' && !l.relT) l.relT = l.t;
-    if (!l.done) { l.from.copy(heroPos()); if (l.tg && ['roof', 'glide', 'bamboo', 'emerge', 'climb', 'swim1', 'emerge1', 'climbOut', 'run', 'walk', 'walkin'].includes(l.tg.state)) l.to.copy(ninjaCenter(l.tg)); }
-    else if (l.caught && l.tg.state === 'fall') { l.from.copy(heroPos()); l.to.set(l.tg.x, l.tg.y + 2, l.tg.z); l.side *= 0.9; l.apex *= 0.9; }
+    if (!l.done) { l.from.copy(bodyPos()); if (l.tg && ['roof', 'glide', 'bamboo', 'emerge', 'climb', 'swim1', 'emerge1', 'climbOut', 'run', 'walk', 'walkin'].includes(l.tg.state)) l.to.copy(ninjaCenter(l.tg)); }
+    else if (l.caught && l.tg.state === 'fall') { l.from.copy(bodyPos()); l.to.set(l.tg.x, l.tg.y + 2, l.tg.z); l.side *= 0.9; l.apex *= 0.9; }
     const pts = [];
     for (let i = 0; i < 24; i++) pts.push(bez(l, (i / 23) * s));
     l.line.geometry.setFromPoints(pts);
