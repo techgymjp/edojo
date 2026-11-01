@@ -4,9 +4,10 @@
 import * as THREE from '../vendor/three.module.min.js';
 import { City } from './tokyo/city.js';
 import { CITY } from './tokyo/city-data.js';
+import { ROADS } from './tokyo/road-data.js';
 import { addTokyoTower, addDiet, addTechGym, addTokyoDome, addSkytree, addFuji, addDistant } from './tokyo/landmarks.js';
 import { addOchanomizu, addTokyoStation, addAkasaka, addRailways, addAkibaSigns, addNewOtani, addYotsuyaKudan, addGinzaNihonbashi, addUeno, addSensoji, addAsahi, addUenoAsakusa } from './tokyo/landmarks2.js';
-import { W, codeAt, isWater, LEVEL_H, terrainH } from './world.js';
+import { W, codeAt, isWater, LEVEL_H, terrainH, waterY } from './world.js';
 
 // 窓のテクスチャ (ターザン大東京と同じ。8×8 の窓が 1 枚。lit = 夜に明かりがつく窓)
 function windowTex(kind, lit, renderer) {
@@ -38,7 +39,7 @@ function windowTex(kind, lit, renderer) {
 }
 
 // カメラと小舟のあいだにある建物を透かして消す (主人公が建物の陰で見えなくならないように)
-export const CUT = { cam: { value: new THREE.Vector3() }, boat: { value: new THREE.Vector3(0, -1e5, 0) }, r: { value: 9 } };
+export const CUT = { cam: { value: new THREE.Vector3() }, boat: { value: new THREE.Vector3(0, -1e5, 0) }, r: { value: 3.5 } };
 export function addCutaway(mat) {
   const prev = mat.onBeforeCompile;
   mat.onBeforeCompile = (sh, r) => {
@@ -55,7 +56,7 @@ export function addCutaway(mat) {
       .replace('void main() {', `void main() {
         vec3 cutAB = uCutBoat - uCutCam;
         float cutT = clamp(dot(vCutW - uCutCam, cutAB) / max(dot(cutAB, cutAB), 1e-3), 0.0, 1.0);
-        if (cutT > 0.0 && cutT < 0.96 && length(vCutW - (uCutCam + cutAB * cutT)) < uCutR + cutT * 4.0) discard;`);
+        if (cutT > 0.02 && cutT < 0.88 && length(vCutW - (uCutCam + cutAB * cutT)) < uCutR + cutT * 3.0) discard;`);
   };
   const key = mat.customProgramCacheKey ? mat.customProgramCacheKey.bind(mat) : () => '';
   mat.customProgramCacheKey = () => key() + '|cut';
@@ -85,6 +86,7 @@ export function buildTokyo(scene, renderer) {
   city.skipGround = (x, z) => isWater(x + OX, z + OZ);
   // 地形 (国土地理院の標高)。ビルは輪郭の一番低い所に建てる。道路・高架・名所は 60m 四方でならした地面の高さに乗せる
   const Ts = (x, z) => { let s = 0; for (const dz of [-30, 0, 30]) for (const dx of [-30, 0, 30]) s += terrainH(x + OX + dx, z + OZ + dz); return s / 9; };
+  city.groundAt = Ts;
   for (const bd of city.bld) {
     if (!bd.plateau) continue;
     let mn = 1e9;
@@ -146,6 +148,53 @@ export function buildTokyo(scene, renderer) {
       }
       pa.needsUpdate = true; o.geometry.computeBoundingSphere();
     });
+  }
+  // 今の橋: 国土地理院の道路の線 (ターザン大東京の road-data) が水を渡る所に、道の幅のコンクリートの橋
+  {
+    const P = [], N = [], add = (a, b, c, n) => { P.push(...a, ...b, ...c); for (let k = 0; k < 3; k++) N.push(...n); };
+    const quad = (a, b, c, d, n) => { add(a, b, c, n); add(a, c, d, n); };
+    let nb = 0;
+    const isCastle = (x, z) => { const c = codeAt(x, z); return c === 3 || c === 4; };
+    for (const r of ROADS) {
+      const wdt = Math.max(8, r[0]);
+      // 2m ごとに点を取る (この地図の座標)
+      const pts = [];
+      for (let i = 1; i + 3 < r.length; i += 2) {
+        const x1 = r[i] / 2 + OX, z1 = r[i + 1] / 2 + OZ, x2 = r[i + 2] / 2 + OX, z2 = r[i + 3] / 2 + OZ, L = Math.hypot(x2 - x1, z2 - z1);
+        for (let d = 0; d < L; d += 2) pts.push([x1 + (x2 - x1) * d / L, z1 + (z2 - z1) * d / L]);
+      }
+      let k = 0;
+      while (k < pts.length) {
+        if (!isWater(...pts[k])) { k++; continue; }
+        let e = k; while (e < pts.length && isWater(...pts[e])) e++;
+        const a = Math.max(0, k - 2), b = Math.min(pts.length - 1, e + 1);
+        if (k > 0 && e < pts.length && (e - k) * 2 >= 4 && (e - k) * 2 < 400 && !isCastle(...pts[a]) && !isCastle(...pts[b])) {
+          const span = pts.slice(a, b + 1);
+          const ya = terrainH(...pts[a]), yb = terrainH(...pts[b]);
+          let wmax = -1e9; for (let q = k; q < e; q++) wmax = Math.max(wmax, waterY(...pts[q]));
+          const deck = Math.max(Math.max(ya, yb) + 0.2, wmax + 4.5);
+          for (let q = 0; q + 1 < span.length; q++) {
+            const [x1, z1] = span[q], [x2, z2] = span[q + 1], L = Math.hypot(x2 - x1, z2 - z1) || 1;
+            const nx = -(z2 - z1) / L * wdt / 2, nz = (x2 - x1) / L * wdt / 2, ux = (x2 - x1) / L * 0.3, uz = (z2 - z1) / L * 0.3;
+            const A1 = [x1 + nx - ux, deck, z1 + nz - uz], B1 = [x1 - nx - ux, deck, z1 - nz - uz], C1 = [x2 - nx + ux, deck, z2 - nz + uz], D1 = [x2 + nx + ux, deck, z2 + nz + uz];
+            quad(A1, D1, C1, B1, [0, 1, 0]);
+            const lo = (p) => [p[0], deck - 1.6, p[2]], hi = (p) => [p[0], deck + 1.1, p[2]];
+            quad(lo(A1), lo(D1), hi(D1), hi(A1), [nx, 0, nz]); quad(lo(C1), lo(B1), hi(B1), hi(C1), [-nx, 0, -nz]);
+            quad(lo(B1), lo(C1), lo(D1), lo(A1), [0, -1, 0]);
+          }
+          nb++;
+        }
+        k = e;
+      }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
+    const bm = new THREE.MeshLambertMaterial({ color: 0x9a9c9e, side: THREE.DoubleSide });
+    addCutaway(bm);
+    const mesh = new THREE.Mesh(g, bm); mesh.frustumCulled = false;
+    scene.add(mesh);
+    console.log('modern bridges', nb);
   }
   // ニンジャが飛び立つビル (この地図の座標)
   const roofs = [];

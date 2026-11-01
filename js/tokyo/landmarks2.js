@@ -416,7 +416,7 @@ export function addRailways(scene, city) {
         if (t.d < 200) { t.d = 200; t.dir = 1; }
         t.cars.forEach((c, i) => {
           const [x, z, rot] = t.line.at(t.d - i * 20 * t.dir);
-          c.position.set(x, t.line.h, z);
+          c.position.set(x, t.line.h + (city.groundAt ? city.groundAt(x, z) : 0), z); // 風雲江戸城: 地形の高さを足す
           c.rotation.y = rot;
         });
       }

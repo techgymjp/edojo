@@ -10,6 +10,7 @@ import json, math, os
 from collections import deque
 from PIL import Image, ImageDraw
 from region import S, N, W, E, LAT0
+import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 D = os.path.join(HERE, '..', 'data')
@@ -117,6 +118,60 @@ def obb(pts, hgt):
     return [round(hgt, 1), round(cx, 1), round(cz, 1), round(bw, 1), round(bd, 1), round(ang, 3)]
 
 
+def meiji_water(nat):
+    """明治期の低湿地の水部 (data/src/swale.png) を 3m 格子へ。古地図のずれを 600m の区画ごとに今の川・お濠に合わせて直す"""
+    sw = np.array(Image.open(os.path.join(D, 'src', 'swale.png')).convert('RGB')).astype(np.int16)
+    Z, X0, Y0 = map(int, open(os.path.join(D, 'src', 'swale.txt')).read().split())
+    jj, ii = np.mgrid[0:h, 0:w]
+    lon = W + (ii + 0.5) * RES / KX; lat = N - (jj + 0.5) * RES / KZ
+    fx = ((lon + 180) / 360 * 2 ** Z - X0) * 256; r = np.radians(lat)
+    fy = ((1 - np.log(np.tan(r) + 1 / np.cos(r)) / math.pi) / 2 * 2 ** Z - Y0) * 256
+    def sample(dyc, dxc):
+        # dyc, dxc: 3m 格子でのずれ (セル)
+        py = np.clip((fy + dyc * RES / 1.94).astype(int), 0, sw.shape[0] - 1); px_ = np.clip((fx + dxc * RES / 1.94).astype(int), 0, sw.shape[1] - 1)
+        c = sw[py, px_]
+        return (abs(c[..., 0] - 147) < 14) & (abs(c[..., 1] - 200) < 14) & (abs(c[..., 2] - 254) < 6)
+    base = sample(0, 0)
+    bp = np.pad(base, 16)
+    # 区画ごとのずれ
+    B = 200
+    nby, nbx = (h + B - 1) // B, (w + B - 1) // B
+    sy = np.zeros((nby, nbx)); sx = np.zeros((nby, nbx)); ok = np.zeros((nby, nbx), bool)
+    for by in range(nby):
+        for bx in range(nbx):
+            j0, j1, i0, i1 = by * B, min(h, by * B + B), bx * B, min(w, bx * B + B)
+            a = nat[j0:j1, i0:i1]
+            if a.sum() < 400: continue
+            best = None
+            for dy in range(-16, 17):
+                for dx in range(-16, 17):
+                    bb = bp[j0 + dy + 16:j1 + dy + 16, i0 + dx + 16:i1 + dx + 16]
+                    sc = (a & bb).sum() / max(1, (a | bb).sum())
+                    if best is None or sc > best[0]: best = (sc, dy, dx)
+            if best[0] > 0.25 and abs(best[1]) < 16 and abs(best[2]) < 16: sy[by, bx], sx[by, bx], ok[by, bx] = best[1], best[2], True
+    # ない区画はまわりの平均で埋める
+    for _ in range(20):
+        if ok.all(): break
+        ny, nx_ = sy.copy(), sx.copy(); nok = ok.copy()
+        for by in range(nby):
+            for bx in range(nbx):
+                if ok[by, bx]: continue
+                vs = [(sy[y, x], sx[y, x]) for y, x in ((by - 1, bx), (by + 1, bx), (by, bx - 1), (by, bx + 1)) if 0 <= y < nby and 0 <= x < nbx and ok[y, x]]
+                if vs: ny[by, bx] = np.mean([v[0] for v in vs]); nx_[by, bx] = np.mean([v[1] for v in vs]); nok[by, bx] = True
+        sy, sx, ok = ny, nx_, nok
+    print('meiji shift (cells)\n', sy.astype(int), '\n', sx.astype(int))
+    # 区画の中心のあいだを補間したずれで、セルごとに古地図を引く
+    cy = (jj + 0.5) / B - 0.5; cx = (ii + 0.5) / B - 0.5
+    y0 = np.clip(np.floor(cy).astype(int), 0, nby - 1); x0 = np.clip(np.floor(cx).astype(int), 0, nbx - 1)
+    y1 = np.clip(y0 + 1, 0, nby - 1); x1 = np.clip(x0 + 1, 0, nbx - 1)
+    u = np.clip(cx - x0, 0, 1); v = np.clip(cy - y0, 0, 1)
+    DY = sy[y0, x0] * (1 - u) * (1 - v) + sy[y0, x1] * u * (1 - v) + sy[y1, x0] * (1 - u) * v + sy[y1, x1] * u * v
+    DX = sx[y0, x0] * (1 - u) * (1 - v) + sx[y0, x1] * u * (1 - v) + sx[y1, x0] * (1 - u) * v + sx[y1, x1] * u * v
+    py = np.clip((fy + DY * RES / 1.94).astype(int), 0, sw.shape[0] - 1); px_ = np.clip((fx + DX * RES / 1.94).astype(int), 0, sw.shape[1] - 1)
+    c = sw[py, px_]
+    return (abs(c[..., 0] - 147) < 14) & (abs(c[..., 1] - 200) < 14) & (abs(c[..., 2] - 254) < 6)
+
+
 def main():
     img = Image.new('L', (w, h), 5)
     d = ImageDraw.Draw(img)
@@ -148,13 +203,25 @@ def main():
     img = Image.fromarray(A); d = ImageDraw.Draw(img)
     # 今の水面 (戻した江戸の堀と区別する。地形の水面の高さを決めるのに使う)
     Image.fromarray(np.where(A == 0, 255, 0).astype(np.uint8)).save(os.path.join(D, 'src', 'natural.png'))
-    # 江戸の堀
-    for line, width in CHANNELS:
-        pts = [px(*p) for p in line]; r = width / RES / 2
-        d.line(pts, fill=0, width=int(round(width / RES)), joint='curve')
-        for x, y in pts:
-            d.ellipse([x - r, y - r, x + r, y + r], fill=0)
     A = np.array(img)
+    # 埋め立てられた江戸の堀・運河: 国土地理院「明治期の低湿地」の水部 (明治前期の古地図) から戻す
+    mj = meiji_water(A == 0)
+    # 今の陸だけを水にする (お城の中・湾の埋立地 (明治にはまだ海) はそのまま)
+    jj, ii = np.mgrid[0:h, 0:w]
+    lat = N - (jj + 0.5) * RES / KZ; lon = W + (ii + 0.5) * RES / KX
+    bay = (lat < 35.6625) | ((lon > 139.7835) & (lat < 35.6765)) | ((lon > 139.7935) & (lat < 35.690))
+    add = mj & (A == 5) & ~bay
+    print('meiji canals added', int(add.sum()))
+    A[add] = 0
+    # 明治の地図にうまく出ない外堀 (真田濠・溜池まわり) は手で引いた線で補う
+    img2 = Image.fromarray(A); d2 = ImageDraw.Draw(img2)
+    for line, width in CHANNELS:
+        if not any(abs(la - 35.684) < 0.006 and lo < 139.7340 for la, lo in line) and not any(abs(lo - 139.741) < 0.006 and la < 35.6785 for la, lo in line):
+            continue
+        pts = [px(*p) for p in line]; r = width / RES / 2
+        d2.line(pts, fill=0, width=int(round(width / RES)), joint='curve')
+        for x, y in pts: d2.ellipse([x - r, y - r, x + r, y + r], fill=0)
+    B2 = np.array(img2); keep = (A == 3) | (A == 4); B2[keep] = A[keep]; A = B2
     # 川の中の小さな陸 (橋脚・中州のかけら) を水にする: 水を 2 画素ふくらませてから縮める (お城の陸はそのまま)
     from PIL import ImageFilter
     wm = Image.fromarray(np.where(A == 0, 255, 0).astype(np.uint8))

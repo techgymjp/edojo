@@ -29,7 +29,10 @@ export const CFG = {
   hp: 3,              // 投げ銭で何枚当てれば捕まるか (竹筒・登っている忍者)
   coinRange: 38, coinCd: 0.75, coinSpeed: 65,
   lassoRange: 140, lassoCd: 2.2, lassoCatch: 5,
-  gears: [-5, 0, 12, 20, 28], dashAdd: 12, dashMax: 22,
+  gears: [-5, 0, 12, 20, 28],
+  accel0: 5, accelGrow: 4, accelMax: 14, vmax: 50, vback: -8, brake: 18, drag: 0.12, // 上を長押しで加速 (m/s²)
+  jump0: 7, jumpBoost: 26, jumpHold: 0.5, gravity: 22,     // ジャンプ (長押しで高く)
+  boatJumpSpeed: 18,  // これより速いと舟ごと跳ぶ (m/s)
 };
 
 // ---------- 描画の準備 ----------
@@ -62,7 +65,7 @@ scene.add(moon);
 const G = {
   state: 'loading', t: 0, captured: 0, spawned: 0, nextSpawn: 0, st: 100, stDelay: 0,
   name: '平次', ninjas: [], coins: [], lassos: [], fx: [], floats: [], coinCd: 0, lassoCd: 0, throwT: 0,
-  warpCd: 0, camYaw: 0, camDist: 30, lastMouse: -99, mouseDir: null, endT: 0, result: null, intruder: null,
+  warpCd: 0, camYaw: 0, camDist: 42, lastMouse: -99, mouseDir: null, endT: 0, result: null, intruder: null,
 };
 const P = { x: 0, z: 0, h: 0, v: 0, gear: 1, roll: 0, dashT: 0 };
 let boat, water, modern, castle, warps = [], balloon, navi, fw, tokyo;
@@ -126,7 +129,7 @@ const holdBtn = (id, on, off) => {
   b.addEventListener('mouseup', () => off && off());
   b.addEventListener('mouseleave', () => off && off());
 };
-holdBtn('btnDash', () => { I.tDash = true; }, () => { I.tDash = false; });
+holdBtn('btnJump', () => { I.tJump = true; }, () => { I.tJump = false; });
 holdBtn('btnLasso', () => I.pressed.add('Lasso'));
 holdBtn('btnCoin', () => I.pressed.add('Coin'));
 
@@ -652,7 +655,7 @@ function intrude(nj) {
 }
 
 // ---------- 投げ銭 (近い敵に 3 連射) と投げ輪 (遠くまで届く) ----------
-function heroPos() { return new THREE.Vector3(P.x - Math.cos(P.h) * 0.6, waterY(P.x, P.z) + 3.6, P.z - Math.sin(P.h) * 0.6); }
+function heroPos() { return new THREE.Vector3(P.x - Math.cos(P.h) * 0.6, (P.air ? P.alt : waterY(P.x, P.z)) + 3.6, P.z - Math.sin(P.h) * 0.6); }
 function preferDir() {
   if (G.t - G.lastMouse < 3 && !I.joy) {
     const ray = new THREE.Raycaster();
@@ -808,8 +811,8 @@ function alertMsg(t) { const a = $('alert'); a.textContent = t; a.classList.add(
 
 // ---------- 小舟 ----------
 function updateBoat(dt) {
-  if (pressed('KeyW') || pressed('ArrowUp')) P.gear = Math.min(3, P.gear + 1);
-  if (pressed('KeyS') || pressed('ArrowDown')) P.gear = Math.max(-1, P.gear - 1);
+  // 上 (W・↑・スティックを前) を長押しすると、どんどん加速する。下でブレーキ・後ろへ
+  let up = down('KeyW') || down('ArrowUp') || I.tUp, back = down('KeyS') || down('ArrowDown');
   let turn = 0;
   if (down('KeyA') || down('ArrowLeft')) turn -= 1;
   if (down('KeyD') || down('ArrowRight')) turn += 1;
@@ -817,14 +820,34 @@ function updateBoat(dt) {
     const a = Math.atan2(I.joy.y, I.joy.x), mag = Math.min(1, Math.hypot(I.joy.x, I.joy.y));
     const target = camHeading() + a + Math.PI / 2;
     turn = clamp(angDiff(target, P.h) * 2, -1, 1) * (mag > 0.25 ? 1 : 0);
-    P.gear = mag > 0.25 ? (mag > 0.8 ? 3 : 2) : P.gear;
+    if (mag > 0.25) up = true;
   }
   if (window.__steer !== undefined) turn = window.__steer; // 確かめ用 (自動で走らせるテスト)
-  const dash = (down('Space') || down('ShiftLeft') || down('ShiftRight') || I.tDash) && G.st > 3 && P.gear >= 0;
-  if (dash) { P.dashT += dt; G.st = Math.max(0, G.st - 20 * dt); G.stDelay = 0.6; if (Math.random() < dt * 3) A.sfx('oar', 0.4, 1.4); }
-  else { P.dashT = 0; if (G.stDelay > 0) G.stDelay -= dt; else G.st = Math.min(100, G.st + 15 * dt); }
-  const target = CFG.gears[P.gear + 1] + (dash ? CFG.dashAdd + Math.min(CFG.dashMax, P.dashT * 10) : 0);
-  P.v += (target - P.v) * (1 - Math.exp(-dt * (target > P.v ? (dash ? 2 : 0.9) : 1.4)));
+  if (window.__up !== undefined) up = window.__up;
+  if (up) {
+    P.holdT += dt;
+    const acc = CFG.accel0 + Math.min(CFG.accelMax, P.holdT * CFG.accelGrow);
+    P.v = Math.min(CFG.vmax, P.v + acc * dt);
+    if (Math.random() < dt * (1 + P.v / 15)) A.sfx('oar', 0.3, 1.2 + P.v / 60);
+  } else {
+    P.holdT = 0;
+    if (back) P.v = Math.max(CFG.vback, P.v - CFG.brake * dt);
+    else P.v *= Math.exp(-dt * CFG.drag);
+  }
+  // ジャンプ (Space・ジャンプボタン)。長押しするほど高く
+  const jumpKey = down('Space') || I.tJump;
+  if (jumpKey && !P.air && !P.jumpHeld) {
+    // 速いときは舟ごと、遅いときはお侍だけが跳ぶ (着地すると舟が下に来る)
+    P.air = true; P.boatAir = Math.abs(P.v) >= CFG.boatJumpSpeed; P.vy = CFG.jump0; P.jt = 0; P.alt = waterY(P.x, P.z);
+    A.sfx('whoosh', 0.5, 0.8); if (P.boatAir) splash(P.x, P.z, 0.6);
+  }
+  P.jumpHeld = jumpKey;
+  if (P.air) {
+    if (jumpKey && P.jt < CFG.jumpHold) { P.vy += CFG.jumpBoost * dt; P.jt += dt; } else P.jt = 1e9;
+    P.vy -= CFG.gravity * dt;
+    P.alt += P.vy * dt;
+  }
+  const dash = P.v > 30;
   P.h += turn * (0.9 + Math.min(0.8, Math.abs(P.v) / 22)) * dt;
   P.roll += (-turn * Math.min(1, Math.abs(P.v) / 20) * 0.15 - P.roll) * (1 - Math.exp(-dt * 3));
   const nx = P.x + Math.cos(P.h) * P.v * dt, nz = P.z + Math.sin(P.h) * P.v * dt;
@@ -833,6 +856,7 @@ function updateBoat(dt) {
   // 進む向きの先 (舳先) と真ん中が水なら進める (艫が岸にふれていても引っかからない)
   const ok = (x, z, h) => isWater(x, z) && isWater(x + Math.cos(h) * 5 * sg, z + Math.sin(h) * 5 * sg) && isWater(x + Math.cos(h) * 2.5 * sg, z + Math.sin(h) * 2.5 * sg);
   let slid = false, moved = false;
+  // 宙に浮いているときも、お濠の幅の中だけ (陸の上へは出られない)
   if (ok(nx, nz, P.h)) { P.x = nx; P.z = nz; moved = true; }
   else {
     // 岸に沿ってすべる (斜めにぶつかったとき)
@@ -858,6 +882,14 @@ function updateBoat(dt) {
   if (!isWater(P.x, P.z)) { // めりこんだら一番近い水へ
     const k = nearestWater(P.x, P.z); if (k) { P.x = k[0]; P.z = k[1]; }
   }
+  if (P.air) {
+    const surf = waterY(P.x, P.z);
+    if (P.alt <= surf && P.vy < 0) {
+      P.air = false; P.vy = 0;
+      if (P.boatAir) { splash(P.x, P.z, 1.2); A.sfx('splash1', 0.6); } else A.sfx('hit', 0.3, 0.7);
+    }
+  }
+  if (!P.air) { P.alt = waterY(P.x, P.z); if (isWater(P.x, P.z)) P.lastWater = [P.x, P.z]; }
   // ワープ
   if (G.warpCd > 0) G.warpCd -= dt;
   else for (const w of warps) {
@@ -885,10 +917,13 @@ function pushTrail() {
 }
 function updateBoatMesh(dt, dash) {
   pushTrail();
-  boat.position.set(P.x, waterY(P.x, P.z) + 0.05 + Math.sin(G.t * 1.6) * 0.06, P.z);
+  const bAir = P.air && P.boatAir;
+  boat.position.set(P.x, (bAir ? P.alt : waterY(P.x, P.z)) + 0.05 + (bAir ? 0 : Math.sin(G.t * 1.6) * 0.06), P.z);
+  // お侍だけ跳んでいるとき
+  boat.userData.hero.position.y = 0.45 + (P.air && !P.boatAir ? (P.alt - waterY(P.x, P.z)) / boat.scale.y : 0);
   boat.rotation.set(0, 0, 0);
   boat.rotation.y = Math.atan2(Math.cos(P.h), Math.sin(P.h));
-  boat.rotateZ(P.roll); boat.rotateX(Math.sin(G.t * 1.2) * 0.02 - (dash ? 0.04 : 0));
+  boat.rotateZ(P.roll); boat.rotateX(Math.sin(G.t * 1.2) * 0.02 - (dash ? 0.04 : 0) - (bAir ? clamp(P.vy * 0.03, -0.35, 0.35) : 0));
   G.throwT = Math.max(0, G.throwT - dt * 3);
   animateBoat(boat, G.t, Math.abs(P.v), G.throwT);
   if (Math.abs(P.v) > 3 && Math.random() < dt * (Math.abs(P.v) / 3)) addWake();
@@ -1206,7 +1241,6 @@ function updateNav() {
 }
 function updateHud(dt) {
   updateNav();
-  $('stbar').style.width = G.st + '%';
   $('hCap').textContent = G.captured;
   $('hTotal').textContent = CFG.total;
   $('hLeft').textContent = CFG.total - G.captured;
@@ -1214,7 +1248,7 @@ function updateHud(dt) {
   const KOKU = ['暁九つ', '暁八つ', '暁七つ', '明け六つ', '朝五つ', '昼四つ', '昼九つ', '昼八つ', '夕七つ', '暮れ六つ', '宵五つ', '夜四つ'];
   $('hTime').textContent = KOKU[Math.floor(((hourNow() + 1) % 24) / 2)];
   $('hPlace').textContent = moatName(P.x, P.z);
-  $('gear').textContent = ['後', '止', '漕', '速', '全速'][P.gear + 1];
+  $('gear').textContent = `時速${Math.round(Math.abs(P.v) * 3.6)}km`;
   if (alertTimer > 0) { alertTimer -= dt; if (alertTimer <= 0) $('alert').classList.remove('show'); }
   drawMinimap();
   updateMarkers();
@@ -1243,7 +1277,7 @@ function startGame() {
   // 浅草橋の手前 (神田川) から、外堀・内堀の方 (西) へ向いて
   let [sx, sz] = ll(35.69595, 139.7850);
   const k = isWater(sx, sz) ? null : nearestWater(sx, sz); if (k) [sx, sz] = k;
-  Object.assign(P, { x: sx, z: sz, h: Math.PI + 0.15, v: 0, gear: 1, roll: 0, dashT: 0 });
+  Object.assign(P, { x: sx, z: sz, h: Math.PI + 0.15, v: 0, gear: 1, roll: 0, dashT: 0, holdT: 0, air: false, vy: 0, alt: null, jumpHeld: false, lastWater: null });
   // 道案内 (外堀を回るルート) の最初の点へ舳先を向ける
   G.navStage = 'route'; G.wpi = 0;
   { const R = routePoints(); P.h = Math.atan2(R[0].z - P.z, R[0].x - P.x); }
@@ -1368,7 +1402,7 @@ function loop(now) {
   for (const w of warps) for (const e of [w.a, w.b]) e.disc.rotation.z = now / 400;
   I.pressed.clear();
   // 建物の透かし: 遊んでいるときだけ (カメラ → 小舟の主人公)
-  if (G.state === 'play' || G.state === 'ending') { CUT.cam.value.copy(camera.position); CUT.boat.value.set(P.x, waterY(P.x, P.z) + 3, P.z); }
+  if (G.state === 'play' || G.state === 'ending') { CUT.cam.value.copy(camera.position); CUT.boat.value.set(P.x, (P.air ? P.alt : waterY(P.x, P.z)) + 3, P.z); }
   else CUT.boat.value.set(0, -1e5, 0);
   // 水面の映り込みには透かしを使わない
   const cb = CUT.boat.value.y; CUT.boat.value.y = -1e5;

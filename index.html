@@ -23,7 +23,6 @@
 <div id="hud" class="hidden">
   <div class="hud-left">
     <div class="pname"><span id="hudName">平次</span> <small>同心</small></div>
-    <div class="bar"><div id="stbar" class="fill"></div><span class="lbl">ダッシュ</span></div>
     <div class="place"><span id="hPlace"></span>　<span id="gear">漕</span></div>
   </div>
   <div class="hud-center">
@@ -35,13 +34,13 @@
   <div id="nav"><span id="navArrow">➤</span> <span id="navInfo"></span></div>
   <div id="danger"><div id="dangerArrow">➤</div><div id="dangerInfo"></div></div>
   <canvas id="minimap" width="520" height="468"></canvas>
-  <div id="help" class="help">W/S 速さ　A/D 舵　Space ダッシュ　J・左クリック 投げ銭　K・右クリック 投げ輪　Q/E 視点</div>
+  <div id="help" class="help">W 長押しで加速　S ブレーキ　A/D 舵　Space ジャンプ（長押しで高く）　J・左クリック 投げ銭　K・右クリック 投げ輪　Q/E 視点</div>
   <div id="joyzone"></div>
   <div id="joybase"><div id="joyknob"></div></div>
   <div id="tbtns">
     <button id="btnLasso" class="tbtn lasso">なわ</button>
     <button id="btnCoin" class="tbtn coin">ぜに</button>
-    <button id="btnDash" class="tbtn dash">ダッシュ</button>
+    <button id="btnJump" class="tbtn dash">ジャンプ</button>
   </div>
 </div>
 
@@ -74,14 +73,15 @@
       <li><b>忍者の動き</b>：外堀の外のビルの屋上に現れ（!）、<b>ムササビの術</b>で外堀へ飛び込む →「どどん！」<b>水遁の術</b>で竹筒（ぴょこん）だけを出して外堀を渡る → 岸を這い上がり（越）、ビルの屋根伝いに走って（走）内堀へ飛び込む → 竹筒で内堀の石垣・土手に着くと登りはじめる（登）。登り切られたら負け。外堀を越えられても、内堀の中に入られなければ大丈夫。</li>
       <li><b>ぜに（投げ銭）</b>：近くの忍者に 3 連射。屋根の上・飛んでいる忍者は 1 枚で落ちる。竹筒・登っている忍者は 3 枚当てると召し捕る（当たると少しずり落ちる）。</li>
       <li><b>なわ（投げ輪）</b>：遠くまで届く。当たればその場で召し捕る。動いている相手には外れることもある。投げ直しに少し時間がかかる。</li>
-      <li><b>ダッシュ</b>：押している間、謎の力で速く進む（ゲージを使う）。</li>
+      <li><b>加速</b>：上（W・↑・スティックを前）を長押しするほど、どんどん速くなる。下でブレーキ。</li>
+      <li><b>ジャンプ</b>：長押しするほど高く跳ぶ。土橋や低い岸を跳び越えられる（陸に落ちたら水に戻る）。</li>
       <li><b>ワープ</b>：本当はつながっていないお濠（半蔵門の土橋など）には、水色の渦のワープがある。入ると向こう側のお濠へ出る。</li>
       <li>狙う相手は自動で選ぶ。パソコンではマウスを向けた方の忍者を優先する。</li>
     </ul>
     <table>
       <tr><th></th><th>パソコン</th><th>スマホ</th></tr>
-      <tr><td>進む・舵</td><td>W/S で速さ、A/D で舵</td><td>画面の左をなぞる</td></tr>
-      <tr><td>ダッシュ</td><td>Space</td><td>「ダッシュ」長押し</td></tr>
+      <tr><td>進む・舵</td><td>W 長押しで加速・S ブレーキ・A/D 舵</td><td>画面の左をなぞる (前に倒すと加速)</td></tr>
+      <tr><td>ジャンプ</td><td>Space (長押しで高く)</td><td>「ジャンプ」長押し</td></tr>
       <tr><td>ぜに</td><td>J・左クリック</td><td>「ぜに」</td></tr>
       <tr><td>なわ</td><td>K・右クリック</td><td>「なわ」</td></tr>
       <tr><td>視点</td><td>Q/E・ホイール</td><td>画面の右をなぞる</td></tr>

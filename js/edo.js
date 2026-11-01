@@ -38,6 +38,7 @@ const GATES = [
   ['牛込門', 35.7015, 139.7438, 'bridge', 1], ['小石川門', 35.7027, 139.7515, 'bridge', 1], ['筋違橋門', 35.6975, 139.7710, 'bridge', 1],
   ['浅草橋門', 35.6965, 139.7855, 'bridge', 1],
 ];
+const CASTLE_GATES = new Set(['大手門', '外桜田門', '半蔵門', '坂下門', '和田倉門', '馬場先門', '日比谷門', '平川門', '北桔橋門', '竹橋門', '清水門', '田安門', '西の丸大手門']);
 // 門のない江戸の橋 (擬宝珠の木の橋)。外堀・道三堀・日本橋川・神田川・隅田川
 const BRIDGES = [
   ['日本橋', 35.68385, 139.77457, { width: 8 }], ['江戸橋', 35.6842, 139.7772, {}], ['一石橋', 35.6862, 139.7722, {}],
@@ -331,7 +332,8 @@ export function buildCastle(scene, castleSegs) {
       const [p, q] = inner === 'a' ? [c.b, c.a] : [c.a, c.b];
       const wm = waterY((p[0] + q[0]) / 2, (p[1] + q[1]) / 2);
       const br = makeBridge(p[0], p[1], groundH(...p), q[0], q[1], groundH(...q), { width: 6, arch: Math.max(1.5, wm + 5 - Math.min(groundH(...p), groundH(...q))) });
-      scene.add(br);
+      // 外堀の見附は、今の橋 (道路) があるので木の橋は置かない。お城の門だけ
+      if (CASTLE_GATES.has(name)) scene.add(br);
       const ux = (q[0] - p[0]) / c.L, uz = (q[1] - p[1]) / c.L;
       gx = q[0] + ux * 3; gz = q[1] + uz * 3; rot = Math.atan2(-ux, -uz);
     } else {
@@ -363,9 +365,7 @@ export function buildCastle(scene, castleSegs) {
     const c = crossing(x, z, 300);
     if (!c) continue;
     const ya = groundH(...c.a), yb = groundH(...c.b);
-    const wm = waterY((c.a[0] + c.b[0]) / 2, (c.a[1] + c.b[1]) / 2);
-    const br = makeBridge(c.a[0], c.a[1], ya, c.b[0], c.b[1], yb, { arch: Math.max(3, Math.min(8, c.L * 0.06), wm + 5.5 - Math.min(ya, yb)), ...opt });
-    scene.add(br);
+    // 橋は今のもの (道路の橋) を使い、ここでは名前だけ出す
     const l = labelSprite(name, '#ffe9b0', 0.9); l.position.set((c.a[0] + c.b[0]) / 2, Math.max(ya, yb) + 14, (c.a[1] + c.b[1]) / 2); scene.add(l); labels.push(l);
   }
   return { labels, tenshu: [tx, tz] };
