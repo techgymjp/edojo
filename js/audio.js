@@ -74,3 +74,14 @@ export function playBgm(name) {
   bgmSrc = s; bgmName = name;
 }
 export function stopBgm() { if (bgmSrc) { try { bgmSrc.stop(); } catch (e) {} } bgmSrc = null; bgmName = null; pendingBgm = null; }
+
+// 警報「ブー、ブー」: 低い四角い音を 2 回
+export function buzzer() {
+  if (!ctx) return;
+  for (let k = 0; k < 2; k++) {
+    const t = ctx.currentTime + k * 0.55, o = ctx.createOscillator(), o2 = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'square'; o.frequency.value = 220; o2.type = 'square'; o2.frequency.value = 227;
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.22, t + 0.02); g.gain.setValueAtTime(0.22, t + 0.38); g.gain.linearRampToValueAtTime(0, t + 0.42);
+    o.connect(g); o2.connect(g); g.connect(master); o.start(t); o2.start(t); o.stop(t + 0.45); o2.stop(t + 0.45);
+  }
+}

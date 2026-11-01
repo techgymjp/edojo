@@ -29,7 +29,7 @@ export const CFG = {
   climbDote: 0.8,     // 土手を這い上がる速さ
   swimInner: 2,       // 内堀の竹筒の速さ (m/s)
   walkIn: 4,        // 石垣を登ったあと本丸へ歩く速さ (m/s)
-  walk: 1.6,          // 上陸した忍者が内堀へ歩く速さの下限 (m/s)
+  walk: 10 / 3.6,     // 上陸した忍者が内堀へ走る速さ (時速 10km、遠さに関係なく一定)
   walkTime: 80,       // 上陸してから内堀に着くまでのおおよその秒数
   climbGrass: 0.9,    // 外堀の草の岸をよじ登る速さ (m/s)。石垣は climbStone で遅い
   run: 9,             // 外堀を越えたあと、ビルの屋根伝いに走る速さ (m/s)
@@ -807,9 +807,9 @@ function startWalk(nj) {
   for (const c of navi.innerEntry) { const d = (cellX(c) - nj.x) ** 2 + (cellZ(c) - nj.z) ** 2; if (d < bd) { bd = d; best = c; } }
   if (best < 0) { escape(nj); return; }
   nj.lx = cellX(best); nj.lz = cellZ(best);
-  // 内堀まで CFG.walkTime 秒ほどかけて歩く (遠いほど速歩き)
+  // 内堀へは時速 10km で走る (遠さに関係なく同じ速さ)
   const F = walkField(), k0 = Math.floor(nj.z / F.C) * F.gw + Math.floor(nj.x / F.C), dd = F.dist[k0] >= 0 ? F.dist[k0] * F.C * 1.1 : Math.sqrt(bd);
-  nj.walkSp = Math.max(CFG.walk, dd / CFG.walkTime);
+  nj.walkSp = CFG.walk; void dd;
   nj.state = 'walk';
 }
 function escape(nj) {
@@ -823,6 +823,12 @@ function escape(nj) {
 // 内堀に飛び込む
 function innerDive(nj) {
   nj.outer = false; nj.state = 'dive'; nj.t = 0.9; nj.y = waterY(nj.x, nj.z);
+  // 警報: 「○○濠で忍者発生！」と出して、BGM を止めて「ブー、ブー」を鳴らす (4 秒)
+  if (G.state === 'play') {
+    $('alert').textContent = `⚠ ${moatName(nj.x, nj.z) || '内堀'}で忍者発生！`;
+    $('alert').classList.add('show'); alertTimer = 4;
+    G.alarmT = 4; G.alarmBeep = 0; A.stopBgm();
+  }
   nj.m.visible = false; splash(nj.x, nj.z, 1.6); A.dodon(); A.sfx('splash1', 0.8);
 }
 // 石垣を登ったあと (または土橋から) 本丸へ歩く
@@ -1628,7 +1634,7 @@ function startGame() {
   for (const nj of G.ninjas) { scene.remove(nj.m); scene.remove(nj.bam); nj.marker.remove(); }
   for (const c of G.coins) scene.remove(c.m);
   for (const l of G.lassos) { scene.remove(l.line); scene.remove(l.loop); }
-  Object.assign(G, { escaped: 0, lastSpawn: 0, forceSpawn: 120, t: 0, captured: 0, spawned: 0, nextSpawn: CFG.firstAt, st: 100, ninjas: [], coins: [], lassos: [], coinCd: 0, lassoCd: 0, warpCd: 0, camYaw: 0, intruder: null, result: null });
+  Object.assign(G, { escaped: 0, lastSpawn: 0, forceSpawn: 120, t: 0, captured: 0, spawned: 0, nextSpawn: CFG.firstAt, st: 100, ninjas: [], coins: [], lassos: [], coinCd: 0, lassoCd: 0, warpCd: 0, camYaw: 0, intruder: null, result: null, alarmT: 0, alarmBeep: 0 });
   G.name = ($('nameInput').value || '平次').slice(0, 10);
   $('hudName').textContent = G.name;
   // 浅草橋の手前 (神田川) から、外堀・内堀の方 (西) へ向いて
@@ -1701,7 +1707,10 @@ function step(dt) {
     // 出現
     // 忍者は最初から外堀の外のビルの屋上で待っている (startGame で置く)。小舟が近くに来たら飛び込む ('wait')
     const climbing = G.ninjas.some((n) => n.state === 'climb' || n.state === 'emerge');
-    A.playBgm(climbing ? 'bgmBattle' : 'bgmSea');
+    if (G.alarmT > 0) {
+      G.alarmT -= dt; G.alarmBeep -= dt;
+      if (G.alarmBeep <= 0) { A.buzzer(); G.alarmBeep = 1.4; }
+    } else A.playBgm(climbing ? 'bgmBattle' : 'bgmSea');
   } else {
     updateBoatMesh(dt, false);
     G.endT -= dt;
@@ -1780,4 +1789,4 @@ requestAnimationFrame(loop);
 boot();
 window.__wy = waterY; window.__G = G; window.__P = P; window.__CFG = CFG; window.__ll = ll; window.__gh = groundH;
 window.__tokyo = () => tokyo; window.__cam = camera; window.__THREE = THREE; window.__W = W; window.__renderer = renderer; window.__scene = scene;
-window.__dbg = { intrude: (nj) => intrude(nj), warps: () => warps, hitNinja, spawnNinja, throwCoins, throwLasso, startGame, navi: () => navi, isWater, cellOf, step, updateNav };
+window.__dbg = { innerDive: (nj) => innerDive(nj), intrude: (nj) => intrude(nj), warps: () => warps, hitNinja, spawnNinja, throwCoins, throwLasso, startGame, navi: () => navi, isWater, cellOf, step, updateNav };
