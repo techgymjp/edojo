@@ -41,7 +41,7 @@ GitHub Pages は「Deploy from a branch」（`main` の `/ (root)`）で公開�
 - **橋**：擬宝珠の欄干の木の反り橋。門の橋と、日本橋・江戸橋・一石橋・鎌倉橋・昌平橋・水道橋・両国橋・新大橋・永代橋。向きと長さは水面の形から決めています。
 - **町並み**：町人地は碁盤の目の町家、河岸は白壁の土蔵、武家地は長屋で囲んだ大名屋敷、内郭は松。
 - **今の東京**：皇居ゾーンの外は、ターザン大東京（techgymjp/tarzan）の街をそのまま使用（PLATEAU のビルの実際の輪郭と高さ、首都高の高架、東京タワー・東京駅・ニコライ堂・秋葉原の電気街の看板・電車・テックジムのアドバルーンなど。`js/tokyo/`）。お濠の上と皇居ゾーンに建つビルは描かない。ターザン大東京の範囲の外は PLATEAU の箱のビルで埋める。
-- **お茶の水の谷**：神田川の水道橋〜昌平橋は、川の水面が道より約 9m 低い谷（水ぎわは石垣、その上は木の茂った急な崖。両端はなだらかに水面を下げる）。
+- **地形**：国土地理院の標高タイル（DEM5A：航空レーザー測量の 5m メッシュ。ない所は 5B・10B）で、地面全体に実際の高低差を付けている（山の手の台地・坂・お茶の水の谷・下町の低地・本丸の台地など）。お濠と川の水面の高さも標高データから場所ごとに決め（千鳥ヶ淵・半蔵濠は高く、日比谷濠・隅田川は低い）、戻した江戸の堀はまわりの道より 3.2m 低くしている。ビル・首都高・名所も地形の上に建てる。
 - **水面**：皇居ランナーと同じ、景色が映り込んでさざ波でゆれる水面。
 
 ## ファイル構成
@@ -53,10 +53,12 @@ GitHub Pages は「Deploy from a branch」（`main` の `/ (root)`）で公開�
 - `js/models.js` — 小舟・岡っ引き・忍者・竹筒・寛永通宝・天守・櫓・門・橋の 3D モデル
 - `js/audio.js` — 効果音と BGM、`js/fireworks.js` — 花火
 - `data/map.png` — 地図（0 水 / 1 町人地 / 2 武家地 / 3 内郭 / 4 本丸 / 5 今の東京、3m/画素）、`data/world.json` — 範囲・外堀の輪・ワープ、`data/bld.json` — 今のビル
-- `tools/` — データを作るスクリプト（`python3 tools/fetch_water.py > data/src/water.json` → `python3 tools/fetch_plateau_mvt.py 35.650 35.710 139.720 139.802 4 > data/src/plateau.json` → `python3 tools/build_map.py`）
+- `data/terrain.png`・`data/water.png` — 地形と水面の高さ（3m 格子。R*256+G = (高さ+20)*200）
+- `tools/` — データを作るスクリプト（`python3 tools/fetch_dem.py`（国土地理院の標高タイル）→ `python3 tools/fetch_water.py > data/src/water.json` → `python3 tools/fetch_plateau_mvt.py 35.650 35.710 139.720 139.802 4 > data/src/plateau.json` → `python3 tools/build_map.py` → `python3 tools/build_terrain.py`）
 
 ## 出典
 
+- 地形・水面の高さ：[国土地理院 標高タイル](https://maps.gsi.go.jp/development/demtile.html)（DEM5A・DEM5B・DEM10B）を加工して作成
 - お濠・川の形：[国土地理院 ベクトルタイル](https://maps.gsi.go.jp/development/vt.html)（水面）を加工して作成
 - ビル：国土交通省 Project PLATEAU（東京都23区 2020年度）を [plateau-tokyo23ku-building-mvt-2020](https://indigo-lab.github.io/plateau-tokyo23ku-building-mvt-2020/)（indigo-lab）経由で使用
 - 効果音・BGM：瀬戸内の海賊王・孤軍奮闘小早川（テックジム）。花火：瀬戸内の海賊王（元はセンターフライ）

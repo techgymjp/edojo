@@ -8,11 +8,22 @@ export const LEVEL_H = [-2.5, 2.5, 5, 10, 16];
 
 export const W = { w: 0, h: 0, res: 3, code: null, lv: null };
 
+const loadImg = (src) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+// 高さの PNG (R*256+G = (h+20)*200) → Float32Array
+function heightsOf(img) {
+  const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+  const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0);
+  const d = g.getImageData(0, 0, img.width, img.height).data, out = new Float32Array(img.width * img.height);
+  for (let i = 0; i < out.length; i++) out[i] = (d[i * 4] * 256 + d[i * 4 + 1]) / 200 - 20;
+  return out;
+}
 export async function loadWorld() {
-  const [info, img] = await Promise.all([
+  const [info, img, timg, wimg] = await Promise.all([
     fetch('data/world.json').then((r) => r.json()),
-    new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = 'data/map.png'; }),
+    loadImg('data/map.png'), loadImg('data/terrain.png'), loadImg('data/water.png'),
   ]);
+  // 地形 (国土地理院の 5m 標高) と水面の高さ
+  W.T = heightsOf(timg); W.WL = heightsOf(wimg);
   Object.assign(W, info);
   const c = document.createElement('canvas');
   c.width = W.w; c.height = W.h;
@@ -38,27 +49,28 @@ export function cellOf(x, z) {
 }
 export function codeAt(x, z) { const k = cellOf(x, z); return k < 0 ? 5 : W.code[k]; }
 export function isWater(x, z) { const k = cellOf(x, z); return k >= 0 && W.code[k] === 0; }
-export function groundH(x, z) { const k = cellOf(x, z); return k < 0 ? LEVEL_H[1] : (W.code[k] === 0 ? 0 : LEVEL_H[W.lv[k]]); }
-// ---- お茶の水の谷: 神田川の水道橋〜昌平橋は、川の水面が道より約 9m 低い (両端はなだらかに) ----
-let GZ = null;
-function gorge() {
-  if (!GZ) {
-    const x = (lon) => (lon - W.W) * W.KX, z = (lat) => (W.N - lat) * W.KZ;
-    GZ = { x0: x(139.7495), x1: x(139.7535), x2: x(139.7690), x3: x(139.7730), z0: z(35.7042), z1: z(35.6960), D: 9 };
-  }
-  return GZ;
+// 3m 格子の値を双一次補間 (セルの中心が格子点)
+function bil(arr, x, z) {
+  const fx = x / W.res - 0.5, fz = z / W.res - 0.5;
+  const i = Math.max(0, Math.min(W.w - 2, Math.floor(fx))), j = Math.max(0, Math.min(W.h - 2, Math.floor(fz)));
+  const u = Math.max(0, Math.min(1, fx - i)), v = Math.max(0, Math.min(1, fz - j)), w = W.w;
+  return arr[j * w + i] * (1 - u) * (1 - v) + arr[j * w + i + 1] * u * (1 - v) + arr[(j + 1) * w + i] * (1 - u) * v + arr[(j + 1) * w + i + 1] * u * v;
 }
-export function gorgeDepth(x, z) {
-  const g = gorge();
-  if (z < g.z0 || z > g.z1 || x < g.x0 || x > g.x3) return 0;
-  const s = (a, b, v) => { const t = Math.max(0, Math.min(1, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
-  return g.D * s(g.x0, g.x1, x) * (1 - s(g.x2, g.x3, x));
-}
-export function gorgeInfo() { return gorge(); }
-// 水面の高さ (ふつうは 0、お茶の水の谷では低い)
-export function waterY(x, z) { return -gorgeDepth(x, z); }
+// 地面の高さ (国土地理院の標高)。水の所は水面の高さ
+export function terrainH(x, z) { return bil(W.T, x, z); }
+export function waterY(x, z) { return bil(W.WL, x, z); }
+export function groundH(x, z) { return isWater(x, z) ? waterY(x, z) : terrainH(x, z); }
+// 昔の谷のしかけ (今は標高から谷ができるので使わない)
+export function gorgeDepth() { return 0; }
 export function inEdo(x, z) { const c = codeAt(x, z); return c >= 1 && c <= 4; }
 
+// 陸 (1) と水 (0) を双一次補間
+function landBilinear(x, z) {
+  const fx = x / W.res - 0.5, fz = z / W.res - 0.5;
+  const i = Math.max(0, Math.min(W.w - 2, Math.floor(fx))), j = Math.max(0, Math.min(W.h - 2, Math.floor(fz)));
+  const u = fx - i, v = fz - j, L = W.lv, w = W.w, b = (k) => (L[k] > 0 ? 1 : 0);
+  return b(j * w + i) * (1 - u) * (1 - v) + b(j * w + i + 1) * u * (1 - v) + b((j + 1) * w + i) * (1 - u) * v + b((j + 1) * w + i + 1) * u * v;
+}
 // 段の値を双一次補間 (セルの中心が格子点)
 function lvBilinear(x, z) {
   const fx = x / W.res - 0.5, fz = z / W.res - 0.5;
@@ -116,27 +128,49 @@ function quadXZ(x0, z0, x1, z1, y) {
   return g;
 }
 
+// 地面: 国土地理院の標高で起伏を付けたメッシュ (6m 格子)。水の所は描かない。お城の急な斜面は石垣の色
 export function buildGround(scene) {
   const { tex, lvTex } = makeGroundTextures();
-  for (let L = 1; L <= 4; L++) {
-    const m = new THREE.MeshLambertMaterial({ map: tex });
-    m.customProgramCacheKey = () => 'ground' + L;
-    m.onBeforeCompile = (sh) => {
-      sh.uniforms.lvMap = { value: lvTex };
-      sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', '#include <common>\nuniform sampler2D lvMap;')
-        .replace('#include <map_fragment>', `
-          float lvv = texture2D(lvMap, vMapUv).r * 255.0 / 63.0;
-          if (lvv < ${L - 0.5} || lvv > ${L + 0.5}) discard;
-          #include <map_fragment>`);
-    };
-    const mesh = new THREE.Mesh(quadXZ(0, 0, W.sizeX, W.sizeZ, LEVEL_H[L]), m);
-    mesh.matrixAutoUpdate = false;
-    scene.add(mesh);
+  const G = 6, nx = Math.ceil(W.sizeX / G) + 1, nz = Math.ceil(W.sizeZ / G) + 1;
+  const pos = new Float32Array(nx * nz * 3), uv = new Float32Array(nx * nz * 2);
+  for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+    const x = Math.min(W.sizeX, i * G), z = Math.min(W.sizeZ, j * G), k = j * nx + i;
+    pos[k * 3] = x; pos[k * 3 + 1] = terrainH(x, z); pos[k * 3 + 2] = z;
+    uv[k * 2] = x / W.sizeX; uv[k * 2 + 1] = z / W.sizeZ;
   }
-  // 範囲の外 (遠景の地面)
-  // 範囲の外は 4 枚で囲む (範囲の中の水面をふさがないように)
-  const om = new THREE.MeshLambertMaterial({ color: 0x6e7076 }), y = LEVEL_H[1] - 0.05, F = 6000, X = W.sizeX, Z = W.sizeZ;
+  const idx = new Uint32Array((nx - 1) * (nz - 1) * 6);
+  let q = 0;
+  for (let j = 0; j < nz - 1; j++) for (let i = 0; i < nx - 1; i++) {
+    const a = j * nx + i, b = a + 1, c = a + nx, d = c + 1;
+    idx[q++] = a; idx[q++] = c; idx[q++] = b; idx[q++] = b; idx[q++] = c; idx[q++] = d;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  g.setIndex(new THREE.BufferAttribute(idx, 1));
+  g.computeVertexNormals();
+  const m = new THREE.MeshLambertMaterial({ map: tex });
+  m.customProgramCacheKey = () => 'terrain';
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.lvMap = { value: lvTex };
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying float vUp;')
+      .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\nvUp = normal.y;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform sampler2D lvMap; varying float vUp;')
+      .replace('#include <map_fragment>', `
+        float lvv = texture2D(lvMap, vMapUv).r * 255.0 / 63.0;
+        if (lvv < 0.5) discard;
+        #include <map_fragment>
+        // お城の急な斜面 (石垣) は石の色、まちの急な斜面 (崖・土手) は草の色
+        float steep = smoothstep(0.82, 0.6, vUp);
+        vec3 stoneC = vec3(0.52, 0.5, 0.46) * (0.85 + 0.15 * fract(sin(dot(floor(vMapUv * 4000.0), vec2(12.9898, 78.233))) * 43758.5453));
+        diffuseColor.rgb = mix(diffuseColor.rgb, lvv > 2.5 ? stoneC : vec3(0.32, 0.45, 0.25), steep);`);
+  };
+  const mesh = new THREE.Mesh(g, m);
+  mesh.matrixAutoUpdate = false;
+  scene.add(mesh);
+  // 範囲の外は 4 枚で囲む
+  const om = new THREE.MeshLambertMaterial({ color: 0x6e7076 }), y = 2, F = 6000, X = W.sizeX, Z = W.sizeZ;
   for (const [x0, z0, x1, z1] of [[-F, -F, X + F, 0], [-F, Z, X + F, Z + F], [-F, 0, 0, Z], [X, 0, X + F, Z]]) scene.add(new THREE.Mesh(quadXZ(x0, z0, x1, z1, y), om));
 }
 
@@ -244,49 +278,31 @@ export function buildWalls(scene) {
     if (len < 0.05) return;
     let nx = dz / len, nz = -dx / len;
     const mx = (ax + bx) / 2, mz = (az + bz) / 2;
-    if (lvBilinear(mx + nx * R * 0.4, mz + nz * R * 0.4) > k - 0.5) { nx = -nx; nz = -nz; }
+    if (landBilinear(mx + nx * R * 0.4, mz + nz * R * 0.4) > 0.5) { nx = -nx; nz = -nz; }
     // 高い側のセル
     const hx = mx - nx * R * 0.6, hz = mz - nz * R * 0.6;
     const hc = codeAt(hx, hz);
     // お城のお濠の向こう岸 (皇居ゾーンから 100m 以内) は石垣、それより外は今のコンクリートの護岸
     const modern = (hc === 5 || codeAt(mx + nx * R * 0.6, mz + nz * R * 0.6) === 5 && hc === 0) && !nearCastle(mx, mz);
-    let y0 = LEVEL_H[k - 1];
-    const y1 = LEVEL_H[k];
-    const gd = k === 1 ? gorgeDepth(mx, mz) : 0;
-    if (gd > 0.05) {
-      // お茶の水の谷: 水ぎわは石垣、その上は木の茂った急な崖
-      y0 = -gd - 2.5;
-      const tu2 = Math.abs(dx) > Math.abs(dz) ? 1 : 0, uu0 = (tu2 ? ax : az) / 4, uu1 = (tu2 ? bx : bz) / 4;
-      const mid = -gd + 1.5;
-      if (mid > y1 - 0.5) { quad(stone, ax, az, bx, bz, y0, y1, nx, nz, uu0, uu1, 3.2); return; }
-      quad(stone, ax, az, bx, bz, y0, mid, nx, nz, uu0, uu1, 3.2);
-      const off = Math.min(4, (y1 - mid) * 0.45), ox = nx * off, oz = nz * off;
-      let A0 = [ax + ox, az + oz], B0 = [bx + ox, bz + oz], A1 = [ax, az], B1 = [bx, bz];
-      if (-(bz - az) * nx + (bx - ax) * nz < 0) { [A0, B0] = [B0, A0]; [A1, B1] = [B1, A1]; }
-      const sl = Math.hypot(off, y1 - mid) || 1, ny = off / sl, nh = (y1 - mid) / sl;
-      grass.p.push(A0[0], mid, A0[1], B0[0], mid, B0[1], B1[0], y1, B1[1], A0[0], mid, A0[1], B1[0], y1, B1[1], A1[0], y1, A1[1]);
-      for (let q = 0; q < 6; q++) grass.n.push(nx * nh, ny, nz * nh);
-      grass.uv.push(uu0, 0, uu1, 0, uu1, 2, uu0, 0, uu1, 2, uu0, 2);
-      gorgeTrees.push([(ax + bx) / 2 + nx * off * 0.15, y1 - 3, (az + bz) / 2 + nz * off * 0.15]);
-      return;
-    }
+    // 水面の少し下から、岸の地面の高さまで
+    const y0 = waterY(mx, mz) - 2.5;
+    const y1 = terrainH(hx, hz) + 0.05;
+    if (y1 - y0 < 0.3) return;
     // 縦の模様が切れにくいよう、u は向きに沿った世界座標
     const tu = Math.abs(dx) > Math.abs(dz) ? 1 : 0;
     const u0 = (tu ? ax : az) / 4, u1 = (tu ? bx : bz) / 4;
     const lvHigh = L[cellOf(hx, hz)] ?? 0;
-    const dote = isDote(mx, mz) && k <= 3;
+    const dote = isDote(mx, mz);
     if (dote) {
       // 土手: 下を外 (水の方) へずらした斜面。水から一番上まで 1 枚で (途中の段は作らない)
-      const lowLv = L[cellOf(mx + nx * R * 0.6, mz + nz * R * 0.6)] ?? 0;
-      if (lvHigh !== k) return;
-      const yb = lowLv === 0 ? -0.5 : LEVEL_H[lowLv];
+      const yb = waterY(mx, mz) - 0.5;
       // 斜面の向きは端点ごとに段の値の傾きから決める (隣の面とすき間なくつながる)
       const dn = (x, z) => {
-        const gx = lvBilinear(x + 4.5, z) - lvBilinear(x - 4.5, z), gz = lvBilinear(x, z + 4.5) - lvBilinear(x, z - 4.5);
+        const gx = landBilinear(x + 4.5, z) - landBilinear(x - 4.5, z), gz = landBilinear(x, z + 4.5) - landBilinear(x, z - 4.5);
         const l = Math.hypot(gx, gz);
         return l < 1e-3 ? [nx, nz] : [-gx / l, -gz / l];
       };
-      const off = Math.min(9, (y1 - yb) * 0.9);
+      const off = Math.min(6, (y1 - yb) * 0.6);
       let [anx, anz] = dn(ax, az), [bnx, bnz] = dn(bx, bz);
       let A0 = [ax + anx * off, az + anz * off], B0 = [bx + bnx * off, bz + bnz * off], A1 = [ax, az], B1 = [bx, bz];
       if (-(bz - az) * nx + (bx - ax) * nz < 0) { [A0, B0] = [B0, A0]; [A1, B1] = [B1, A1]; [anx, anz, bnx, bnz] = [bnx, bnz, anx, anz]; }
@@ -294,13 +310,13 @@ export function buildWalls(scene) {
       grass.p.push(A0[0], yb, A0[1], B0[0], yb, B0[1], B1[0], y1, B1[1], A0[0], yb, A0[1], B1[0], y1, B1[1], A1[0], y1, A1[1]);
       for (const [qx, qz] of [[anx, anz], [bnx, bnz], [bnx, bnz], [anx, anz], [bnx, bnz], [anx, anz]]) grass.n.push(qx * nh, ny, qz * nh);
       grass.uv.push(u0, 0, u1, 0, u1, 2, u0, 0, u1, 2, u0, 2);
-      if (k >= 3) doteSegs.push({ ax, az, bx, bz, nx, nz, y: y1, len, off });
+      if (hc === 3 || hc === 4) doteSegs.push({ ax, az, bx, bz, nx, nz, y: y1, len, off });
       return;
     }
     if (modern) quad(conc, ax, az, bx, bz, y0 - 0.01, y1, nx, nz, u0, u1, 4);
     else quad(stone, ax, az, bx, bz, y0, y1, nx, nz, u0, u1, 3.2);
     // 城 (内郭・本丸) の石垣の上には白い土塀
-    if (!modern && k >= 3 && lvHigh === k) {
+    if (!modern && (hc === 3 || hc === 4)) {
       const ix = -nx * 0.7, iz = -nz * 0.7;
       quad(wallTop, ax + ix, az + iz, bx + ix, bz + iz, y1, y1 + 2.1, nx, nz, u0, u1, 3);
       // 笠 (瓦): 外へ少し出る
@@ -314,19 +330,22 @@ export function buildWalls(scene) {
       castleSegs.push({ ax, az, bx, bz, nx, nz, y: y1, len });
     }
   };
-  for (let k = 1; k <= 4; k++) {
-    const t = k - 0.5;
+  // 水と陸の境目だけ (陸 = 1、水 = 0 の 0.5 の線)
+  const B = new Uint8Array(w * h);
+  for (let k = 0; k < w * h; k++) B[k] = L[k] > 0 ? 1 : 0;
+  {
+    const k = 1, t = 0.5;
     for (let j = 0; j < h - 1; j++) {
       for (let i = 0; i < w - 1; i++) {
-        const a = L[j * w + i], b = L[j * w + i + 1], c = L[(j + 1) * w + i + 1], d = L[(j + 1) * w + i];
+        const a = B[j * w + i], b = B[j * w + i + 1], c = B[(j + 1) * w + i + 1], d = B[(j + 1) * w + i];
+        if (a === b && b === c && c === d) continue;
         const ca = a > t, cb = b > t, cc = c > t, cd = d > t;
-        if (ca === cb && cb === cc && cc === cd) continue;
         const idx = (ca << 3) | (cb << 2) | (cc << 1) | cd;
         const E = [
-          () => lerpPt(i, j, a, i + 1, j, b, t),         // 0 上 a-b
-          () => lerpPt(i + 1, j, b, i + 1, j + 1, c, t), // 1 右 b-c
-          () => lerpPt(i + 1, j + 1, c, i, j + 1, d, t), // 2 下 c-d
-          () => lerpPt(i, j + 1, d, i, j, a, t),         // 3 左 d-a
+          () => lerpPt(i, j, a, i + 1, j, b, t),
+          () => lerpPt(i + 1, j, b, i + 1, j + 1, c, t),
+          () => lerpPt(i + 1, j + 1, c, i, j + 1, d, t),
+          () => lerpPt(i, j + 1, d, i, j, a, t),
         ];
         let pairs;
         const center = (a + b + c + d) / 4 > t;
@@ -408,7 +427,7 @@ export function buildWater(scene) {
     uniforms: {
       tReflect: { value: rt.texture }, texMat: { value: new THREE.Matrix4() }, time: { value: 0 },
       color: { value: new THREE.Color(0x24525e) }, fogColor: { value: new THREE.Color() }, fogNear: { value: 300 }, fogFar: { value: 2000 },
-      camPos: { value: new THREE.Vector3() }, strength: { value: 0.8 },
+      camPos: { value: new THREE.Vector3() }, strength: { value: 0.55 },
       gz: { value: new THREE.Vector4() }, gx: { value: new THREE.Vector4() }, isGorge: { value: 0 },
     },
     vertexShader: `uniform mat4 texMat; varying vec4 vR; varying vec3 vW; varying float vDepth;
@@ -418,7 +437,6 @@ export function buildWater(scene) {
       varying vec4 vR; varying vec3 vW; varying float vDepth; uniform vec4 gx; uniform vec4 gz; uniform float isGorge;
       void main(){
         // お茶の水の谷の所は、低い水面 (別の面) にまかせる
-        if (isGorge < 0.5 && vW.z > gz.x && vW.z < gz.y && vW.x > gx.x + 1.0 && vW.x < gx.w - 1.0) discard;
         vec2 p = vW.xz;
         float w1 = sin(p.x * 0.35 + time * 1.3) + sin(p.y * 0.42 - time * 1.1) + sin((p.x + p.y) * 0.9 + time * 2.1) * 0.5;
         float w2 = cos(p.y * 0.31 + time * 1.2) + cos(p.x * 0.47 + time * 0.9) + cos((p.x - p.y) * 1.1 - time * 1.7) * 0.5;
@@ -426,43 +444,52 @@ export function buildWater(scene) {
         vec3 refl = texture2DProj(tReflect, r).rgb;
         vec3 v = normalize(camPos - vW);
         float fres = 0.25 + 0.75 * pow(1.0 - max(v.y, 0.0), 3.0);
-        vec3 c = mix(color, refl, clamp(fres * strength + 0.15, 0.0, 0.95));
+        vec3 c = mix(color, refl, clamp(fres * strength + 0.1, 0.0, 0.6));
         c += vec3(0.04) * (w1 * 0.5 + 0.5) * (1.0 - fres);
         float f = smoothstep(fogNear, fogFar, vDepth);
         gl_FragColor = vec4(mix(c, fogColor, f), 1.0);
         #include <colorspace_fragment>
       }`,
   });
-  const mesh = new THREE.Mesh(quadXZ(-200, -200, W.sizeX + 200, W.sizeZ + 200, 0), mat);
-  scene.add(mesh);
-  // お茶の水の谷の水面 (川に沿って低くなる面)
-  const g = gorgeInfo();
-  mat.uniforms.gx.value.set(g.x0, g.x1, g.x2, g.x3); mat.uniforms.gz.value.set(g.z0, g.z1, 0, 0);
-  const gmat = mat.clone();
-  gmat.uniforms = { ...mat.uniforms, isGorge: { value: 1 } };
-  const N = 80, pos = [], idx = [];
-  for (let i = 0; i <= N; i++) {
-    const x = g.x0 + (g.x3 - g.x0) * i / N, y = -gorgeDepth(x, (g.z0 + g.z1) / 2);
-    pos.push(x, y, g.z0, x, y, g.z1);
-    if (i < N) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+  // 水面: 場所ごとの水面の高さ (国土地理院の標高から) の 6m 格子。水のある所だけ
+  const G = 6, nx = Math.ceil(W.sizeX / G) + 1, nz = Math.ceil(W.sizeZ / G) + 1;
+  const vid = new Int32Array(nx * nz).fill(-1), pos = [], idx = [];
+  const wet = (i, j) => { for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (isWater(i * G + dx * G * 0.5, j * G + dz * G * 0.5)) return true; return false; };
+  const V = (i, j) => {
+    const k = j * nx + i;
+    if (vid[k] < 0) { const x = Math.min(W.sizeX, i * G), z = Math.min(W.sizeZ, j * G); vid[k] = pos.length / 3; pos.push(x, Math.min(waterY(x, z), terrainH(x, z) - 0.3), z); }
+    return vid[k];
+  };
+  for (let j = 0; j < nz - 1; j++) for (let i = 0; i < nx - 1; i++) {
+    if (!wet(i + 0.5, j + 0.5)) continue;
+    const a = V(i, j), b = V(i + 1, j), c = V(i, j + 1), d = V(i + 1, j + 1);
+    idx.push(a, c, b, b, c, d);
   }
-  const gg = new THREE.BufferGeometry();
-  gg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); gg.setIndex(idx);
-  const gmesh = new THREE.Mesh(gg, gmat);
-  scene.add(gmesh);
+  const wg = new THREE.BufferGeometry();
+  wg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  wg.setIndex(idx);
+  const mesh = new THREE.Mesh(wg, mat);
+  mesh.frustumCulled = false;
+  scene.add(mesh);
+  const gmesh = { visible: true };
   const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
   const mirrorCam = new THREE.PerspectiveCamera();
   const rScale = isTouch ? 0.33 : 0.5;
   const _v = new THREE.Vector3(), _t = new THREE.Vector3(), _n = new THREE.Vector3(0, 1, 0), _rm = new THREE.Matrix4(), _la = new THREE.Vector3();
   const _plane = new THREE.Plane(), _clip = new THREE.Vector4(), _q = new THREE.Vector4(), P = new THREE.Vector3(0, 0, 0);
+  let mirrorY = null;
   return {
     mesh,
     update(t) { mat.uniforms.time.value = t; },
     // 水面を鏡にして、カメラを上下反転した所から景色を描く
-    reflect(renderer, scene, camera) {
+    reflect(renderer, scene, camera, level) {
       const w = Math.max(64, Math.floor(renderer.domElement.width * rScale)), h = Math.max(64, Math.floor(renderer.domElement.height * rScale));
       if (rt.width !== w || rt.height !== h) rt.setSize(w, h);
       const cp = camera.position;
+      // 鏡の高さ: カメラの近くの水面 (お濠ごとに高さがちがう)
+      const wy = level ?? waterY(cp.x, cp.z);
+      mirrorY = mirrorY === null || Math.abs(wy - mirrorY) > 2 ? wy : mirrorY + (wy - mirrorY) * 0.15;
+      P.set(0, mirrorY, 0);
       camera.updateMatrixWorld();
       _v.subVectors(P, cp);
       if (_v.dot(_n) > 0) return;

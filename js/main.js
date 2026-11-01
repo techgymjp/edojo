@@ -1,6 +1,6 @@
 // 風雲江戸城: 起動・入力・小舟・忍者・投げ銭と投げ輪・HUD
 import * as THREE from '../vendor/three.module.min.js';
-import { W, loadWorld, buildGround, buildWalls, buildWater, isWater, codeAt, groundH, cellOf, ll, isDote, LEVEL_H, waterY } from './world.js';
+import { W, loadWorld, buildGround, buildWalls, buildWater, isWater, codeAt, groundH, cellOf, ll, isDote, LEVEL_H, waterY, terrainH } from './world.js';
 import { buildTown, buildModern, buildCastle, buildWarps, buildBalloon, moatName, labelSprite } from './edo.js';
 import { makeBoat, animateBoat, makeNinja, poseNinja, makeBamboo, makeCoin } from './models.js';
 import * as A from './audio.js';
@@ -365,7 +365,7 @@ function updateNinja(nj, dt) {
       nj.m.rotation.y = Math.atan2(nj.lx - nj.sx, nj.lz - nj.sz);
       poseNinja(nj.m, 'glide', G.t);
       if (nj.t <= 0) {
-        nj.state = 'dive'; nj.t = 0.9; nj.x = nj.lx; nj.z = nj.lz; nj.y = 0;
+        nj.state = 'dive'; nj.t = 0.9; nj.x = nj.lx; nj.z = nj.lz; nj.y = waterY(nj.x, nj.z);
         nj.m.visible = false;
         splash(nj.x, nj.z, 1.6);
         A.dodon(); A.sfx('splash1', 0.8);
@@ -476,7 +476,7 @@ function updateNinja(nj, dt) {
       nj.m.userData.body.rotation.x = 0.5;
       if (l < 1) {
         nj.outer = false;
-        nj.state = 'dive'; nj.t = 0.9; nj.y = 0;
+        nj.state = 'dive'; nj.t = 0.9; nj.y = waterY(nj.x, nj.z);
         nj.m.visible = false;
         splash(nj.x, nj.z, 1.6);
         A.dodon(); A.sfx('splash1', 0.8);
@@ -488,18 +488,18 @@ function updateNinja(nj, dt) {
     case 'emerge': {
       const s = 1 - nj.t / 1.2;
       nj.m.visible = true;
-      nj.m.position.set(nj.bx, -1.8 + s * 1.8, nj.bz);
+      nj.m.position.set(nj.bx, nj.wy - 1.8 + s * 1.8, nj.bz);
       poseNinja(nj.m, 'climb', G.t);
       if (nj.t <= 0) { nj.state = 'climb'; nj.prog = 0; }
       break;
     }
     case 'climb': {
       const sp = nj.dote ? CFG.climbDote : CFG.climbStone;
-      if (nj.stun <= 0) nj.prog += sp * dt / nj.H;
+      if (nj.stun <= 0) nj.prog += sp * dt / Math.max(1, nj.H - nj.wy);
       nj.prog = Math.max(0, nj.prog);
       const s = Math.min(1, nj.prog);
       nj.x = nj.bx + (nj.tx - nj.bx) * s; nj.z = nj.bz + (nj.tz - nj.bz) * s;
-      nj.y = s * nj.H;
+      nj.y = nj.wy + s * (nj.H - nj.wy);
       nj.m.position.set(nj.x, nj.y - 0.3, nj.z);
       poseNinja(nj.m, nj.dote ? 'crawl' : 'climb', G.t);
       if (s >= 1) intrude(nj);
@@ -510,7 +510,7 @@ function updateNinja(nj, dt) {
       nj.y += nj.vy * dt; nj.x += nj.vx * dt; nj.z += nj.vz * dt;
       nj.m.position.set(nj.x, nj.y, nj.z);
       nj.m.rotation.x += dt * 6;
-      if (nj.y <= 0) { splash(nj.x, nj.z, 1.2); A.sfx('splash0', 0.6); capture(nj, true); }
+      if (nj.y <= groundH(nj.x, nj.z)) { splash(nj.x, nj.z, 1.2); A.sfx('splash0', 0.6); capture(nj, true); }
       break;
     }
     case 'bound': {
@@ -532,15 +532,17 @@ function startClimb(nj, c) {
   const wx = cellX(c), wz = cellZ(c);
   const nx = info.dx, nz = info.dy;
   nj.dote = isDote(wx + nx * 3, wz + nz * 3);
-  nj.H = LEVEL_H[info.lv];
+  // 石垣・土手の高さ: 水面から、少し内側の地面 (国土地理院の標高) まで
+  nj.wy = waterY(wx, wz);
+  nj.H = Math.max(nj.wy + 3, terrainH(wx + nx * 7, wz + nz * 7));
   if (nj.dote) {
     nj.bx = wx - nx * 2; nj.bz = wz - nz * 2;
     nj.tx = wx + nx * 4; nj.tz = wz + nz * 4;
   } else {
     nj.bx = wx + nx * 0.7; nj.bz = wz + nz * 0.7;
-    nj.tx = wx + nx * 2.4; nj.tz = wz + nz * 2.4;
+    nj.tx = wx + nx * 5; nj.tz = wz + nz * 5;
   }
-  nj.x = nj.bx; nj.z = nj.bz; nj.y = 0;
+  nj.x = nj.bx; nj.z = nj.bz; nj.y = nj.wy;
   nj.m.rotation.set(0, Math.atan2(nx, nz), 0);
   nj.state = 'emerge'; nj.t = 1.2; nj.hp = CFG.hp;
   nj.bam.visible = false;
@@ -584,7 +586,7 @@ function startClimbOut(nj) {
   nj.H = groundH(wx + nx * 4, wz + nz * 4);
   nj.bx = wx - nx * (nj.dote ? 2 : -0.7); nj.bz = wz - nz * (nj.dote ? 2 : -0.7);
   nj.tx = wx + nx * 4; nj.tz = wz + nz * 4;
-  nj.x = nj.bx; nj.z = nj.bz; nj.y = 0;
+  nj.x = nj.bx; nj.z = nj.bz; nj.y = nj.wy;
   nj.m.rotation.set(0, Math.atan2(nx, nz), 0);
   nj.state = 'emerge1'; nj.t = 1.0; nj.hp = CFG.hp;
   nj.bam.visible = false;
@@ -614,7 +616,7 @@ function hitNinja(nj, byLasso) {
   if (byLasso) { capture(nj); return; }
   nj.hp--;
   A.sfx('hit', 0.6, 1.3);
-  if (nj.state === 'climb') { nj.prog -= 2 / nj.H; nj.stun = 0.5; }
+  if (nj.state === 'climb') { nj.prog -= 2 / Math.max(1, nj.H - nj.wy); nj.stun = 0.5; }
   if (nj.state === 'bamboo' || nj.state === 'swim1') { nj.stun = 0.7; }
   if (nj.state === 'climbOut') { nj.prog -= 1 / nj.H; nj.stun = 0.5; }
   if (nj.hp <= 0) {
@@ -623,7 +625,7 @@ function hitNinja(nj, byLasso) {
       const k = nj.state === 'glide' ? 0.3 : 0;
       nj.state = 'fall'; nj.vy = 2; nj.m.visible = true;
       nj.vx = (nj.vx || 0) * k + (P.x - nj.x) * 0.02; nj.vz = (nj.vz || 0) * k + (P.z - nj.z) * 0.02;
-      if (nj.y < 0.5) nj.y = 0.5;
+      if (nj.y < groundH(nj.x, nj.z) + 0.5) nj.y = groundH(nj.x, nj.z) + 0.5;
       floatText(nj.x, nj.y + 2, nj.z, '落ちた！', 'gold');
     } else capture(nj);
   } else floatText(nj.x, (nj.state === 'climb' ? nj.y : 0) + 2.5, nj.z, `あと${nj.hp}`, 'gold');
@@ -938,9 +940,10 @@ function updateCamera(dt) {
   }
   if (tx === undefined || Math.hypot(tx - P.x, tz - P.z) < G.camDist * 0.5) {
     // Q/E で回したとき: 間にビルや石垣があれば手前へ寄せる
+    const wy0 = waterY(P.x, P.z);
     for (let i = 1; i <= 16; i++) {
       const f = i / 16, sx = P.x - Math.cos(ch) * G.camDist * f, sz = P.z - Math.sin(ch) * G.camDist * f;
-      if (obst(sx, sz) + 1.2 > 3 + (ty - 3) * f) { blockF = (i - 1) / 16; break; }
+      if (obst(sx, sz) + 1.2 > wy0 + 3 + (ty - wy0 - 3) * f) { blockF = (i - 1) / 16; break; }
     }
     if (blockF >= 0) dist = Math.max(8, G.camDist * blockF - 1.5);
     tx = P.x - Math.cos(ch) * dist; tz = P.z - Math.sin(ch) * dist;
@@ -1113,7 +1116,7 @@ function updateMarkers() {
     const a = Math.atan2(worst.z - P.z, worst.x - P.x) - camHeading();
     ar.style.display = '';
     ar.style.transform = `translate(-50%,-50%) rotate(${a}rad)`;
-    $('dangerInfo').textContent = `${moatName(worst.x, worst.z)} ${Math.round(Math.hypot(worst.x - P.x, worst.z - P.z))}m　あと${Math.max(0, Math.round((1 - worst.prog) * worst.H / (worst.dote ? CFG.climbDote : CFG.climbStone)))}秒`;
+    $('dangerInfo').textContent = `${moatName(worst.x, worst.z)} ${Math.round(Math.hypot(worst.x - P.x, worst.z - P.z))}m　あと${Math.max(0, Math.round((1 - worst.prog) * (worst.H - (worst.wy || 0)) / (worst.dote ? CFG.climbDote : CFG.climbStone)))}秒`;
   } else { ar.style.display = 'none'; $('dangerInfo').textContent = ''; }
 }
 // 道案内: 忍者が出ていれば一番近い忍者へ。いなければ外堀をぐるっと回る道
@@ -1369,7 +1372,7 @@ function loop(now) {
   else CUT.boat.value.set(0, -1e5, 0);
   // 水面の映り込みには透かしを使わない
   const cb = CUT.boat.value.y; CUT.boat.value.y = -1e5;
-  water.reflect(renderer, scene, camera);
+  water.reflect(renderer, scene, camera, (G.state === 'play' || G.state === 'ending') ? waterY(P.x, P.z) : undefined);
   CUT.boat.value.y = cb;
   renderer.render(scene, camera);
 }

@@ -1,4 +1,4 @@
-// ターザン大東京 (techgymjp/tarzan) の js/city.js をそのまま使う (風雲江戸城では skipGround だけ足した)
+// ターザン大東京 (techgymjp/tarzan) の js/city.js をそのまま使う (風雲江戸城では skipGround と、地形の高さ bd.base を足した)
 // 街: PLATEAU のビルの描画・当たり判定・ロープを掛ける所の探索 (レイキャスト)
 import * as THREE from '../../vendor/three.module.min.js';
 import { CITY } from './city-data.js';
@@ -467,7 +467,7 @@ export class City {
         if (!this.inside(bd, x - sz / 2, z - sz / 2) || !this.inside(bd, x + sz / 2, z + sz / 2)) continue;
         const w = sz * (0.7 + r * 0.6);
         this.addBox(x, z, w, sz, bd.h - 0.5, bd.h + hh);
-        t.boxes.push(x, bd.h, z, w, hh, sz, r);
+        t.boxes.push(x, bd.h + (bd.base || 0), z, w, hh, sz, r);
       }
     });
     return this.tileGroup;
@@ -495,7 +495,8 @@ export class City {
       col.setRGB(c[0] * sh, c[1] * sh, c[2] * sh);
       // 窓の模様をビルごとにずらす
       const uo = Math.floor(rnd() * 8) / 8, vo = Math.floor(rnd() * 8) / 8;
-      const P = bd.pts, n = bd.n, h = bd.h;
+      // 風雲江戸城: ビルは地形の高さ (bd.base) の上に建てる
+      const P = bd.pts, n = bd.n, y0b = bd.base || 0, h = bd.h + y0b;
       let per = 0;
       const UW = glass ? 2.6 * 8 : 3.4 * 8, VH = glass ? 3.6 * 8 : 3.4 * 8;
       for (let i = 0; i < n; i++) {
@@ -508,7 +509,7 @@ export class City {
         per += L;
         const v1 = h / VH + vo;
         // (a0, b1, b0), (a0, a1, b1)
-        B.p.push(ax, 0, az, bx, h, bz, bx, 0, bz, ax, 0, az, ax, h, az, bx, h, bz);
+        B.p.push(ax, y0b, az, bx, h, bz, bx, y0b, bz, ax, y0b, az, ax, h, az, bx, h, bz);
         for (let k = 0; k < 6; k++) { B.n.push(nx, 0, nz); B.c.push(col.r, col.g, col.b); }
         B.uv.push(u0, vo, u1, v1, u1, vo, u0, vo, u0, v1, u1, v1);
       }
@@ -597,10 +598,10 @@ export class City {
         let h1 = r.h[i], h2 = r.h[i + 1];
         const L = Math.hypot(x2 - x1, z2 - z1);
         if (L < 0.1) continue;
-        const ground = Math.max(h1, h2) < 3;
+        const ground = r.g ? (r.g[i] && r.g[i + 1]) : Math.max(h1, h2) < 3;
         // 風雲江戸城: お濠 (江戸の堀を戻した所) の上の地面の道は描かない
         if (ground && this.skipGround && this.skipGround((x1 + x2) / 2, (z1 + z2) / 2)) continue;
-        if (ground) { h1 = h2 = 0.08; }
+        if (ground && !r.g) { h1 = h2 = 0.08; }
         const lx = (z2 - z1) / L * W, lz = -(x2 - x1) / L * W;
         const ex = (x2 - x1) / L * 0.6, ez = (z2 - z1) / L * 0.6; // 継ぎ目の隙間を埋める
         const A = [x1 + lx - ex, h1, z1 + lz - ez], B = [x1 - lx - ex, h1, z1 - lz - ez];

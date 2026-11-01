@@ -1,6 +1,6 @@
 // 町並み・城・門・橋・ワープ・今のビル・テックジムのアドバルーン
 import * as THREE from '../vendor/three.module.min.js';
-import { W, ll, codeAt, isWater, groundH, cellOf, LEVEL_H } from './world.js';
+import { W, ll, codeAt, isWater, groundH, cellOf, LEVEL_H, waterY, terrainH } from './world.js';
 import { M, box, HIP, GABLE, makeTenshu, makeYagura, makeGate, makeBridge, makeHall, makeSamurai } from './models.js';
 
 // ---------- 名前 (お濠・門・橋) ----------
@@ -185,7 +185,7 @@ export function buildTown(scene) {
     const px = x + (rnd(id + 1) - 0.5) * 10, pz = z + (rnd(id + 2) - 0.5) * 10;
     if (nearWater(px, pz, 6) || codeAt(px, pz) !== c) continue;
     const s = 8 + rnd(id + 3) * 7;
-    pines.push({ x: px, y: LEVEL_H[c], z: pz, sx: s * 0.8, sy: s, sz: s * 0.8, c: rnd(id + 4) < 0.5 ? 0x2c5230 : 0x3a6236 });
+    pines.push({ x: px, y: terrainH(px, pz) - 0.3, z: pz, sx: s * 0.8, sy: s, sz: s * 0.8, c: rnd(id + 4) < 0.5 ? 0x2c5230 : 0x3a6236 });
   }
   const lam = (o) => new THREE.MeshLambertMaterial(o);
   for (const [geo, list] of [[UNIT_BOX, bodies], [GABLE, roofs], [UNIT_BOX, kuraB], [GABLE, kuraR], [UNIT_BOX, walls], [UNIT_BOX, wallCaps], [UNIT_BOX, halls], [HIP, hallRoofs], [PINE, pines]]) {
@@ -200,7 +200,7 @@ export function buildTown(scene) {
 // ---------- 今の東京のビル (向き付きの箱。窓はシェーダーで描く) ----------
 export function buildModern(scene, bld) {
   const list = [];
-  for (const [h, cx, cz, w, d, a] of bld) list.push({ x: cx, y: LEVEL_H[1], z: cz, r: -a, sx: Math.max(3, w), sy: h, sz: Math.max(3, d), c: 0 });
+  for (const [h, cx, cz, w, d, a] of bld) list.push({ x: cx, y: terrainH(cx, cz) - 0.5, z: cz, r: -a, sx: Math.max(3, w), sy: h, sz: Math.max(3, d), c: 0 });
   const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
   mat.userData.night = { value: 0 };
   mat.onBeforeCompile = (sh) => {
@@ -329,7 +329,8 @@ export function buildCastle(scene, castleSegs) {
       const da = (c.a[0] - cx) ** 2 + (c.a[1] - cz) ** 2, db = (c.b[0] - cx) ** 2 + (c.b[1] - cz) ** 2;
       const inner = (ya > yb + 0.5) ? 'a' : (yb > ya + 0.5) ? 'b' : (da < db ? 'a' : 'b');
       const [p, q] = inner === 'a' ? [c.b, c.a] : [c.a, c.b];
-      const br = makeBridge(p[0], p[1], groundH(...p), q[0], q[1], groundH(...q), { width: 6, arch: Math.max(1.5, 5 - Math.min(groundH(...p), groundH(...q))) });
+      const wm = waterY((p[0] + q[0]) / 2, (p[1] + q[1]) / 2);
+      const br = makeBridge(p[0], p[1], groundH(...p), q[0], q[1], groundH(...q), { width: 6, arch: Math.max(1.5, wm + 5 - Math.min(groundH(...p), groundH(...q))) });
       scene.add(br);
       const ux = (q[0] - p[0]) / c.L, uz = (q[1] - p[1]) / c.L;
       gx = q[0] + ux * 3; gz = q[1] + uz * 3; rot = Math.atan2(-ux, -uz);
@@ -362,9 +363,10 @@ export function buildCastle(scene, castleSegs) {
     const c = crossing(x, z, 300);
     if (!c) continue;
     const ya = groundH(...c.a), yb = groundH(...c.b);
-    const br = makeBridge(c.a[0], c.a[1], ya, c.b[0], c.b[1], yb, { arch: Math.max(3, Math.min(8, c.L * 0.06)), ...opt });
+    const wm = waterY((c.a[0] + c.b[0]) / 2, (c.a[1] + c.b[1]) / 2);
+    const br = makeBridge(c.a[0], c.a[1], ya, c.b[0], c.b[1], yb, { arch: Math.max(3, Math.min(8, c.L * 0.06), wm + 5.5 - Math.min(ya, yb)), ...opt });
     scene.add(br);
-    const l = labelSprite(name, '#ffe9b0', 0.9); l.position.set((c.a[0] + c.b[0]) / 2, 16, (c.a[1] + c.b[1]) / 2); scene.add(l); labels.push(l);
+    const l = labelSprite(name, '#ffe9b0', 0.9); l.position.set((c.a[0] + c.b[0]) / 2, Math.max(ya, yb) + 14, (c.a[1] + c.b[1]) / 2); scene.add(l); labels.push(l);
   }
   return { labels, tenshu: [tx, tz] };
 }
@@ -388,7 +390,7 @@ export function buildWarps(scene) {
       const d = Math.hypot(ox - x, oz - z) || 1;
       for (let s = 0; s < 8; s++) { const nx = x - (ox - x) / d * s, nz = z - (oz - z) / d * s; if (isWater(nx, nz)) { px = nx; pz = nz; } }
       const g = new THREE.Group();
-      g.position.set(px, 0.15, pz);
+      g.position.set(px, waterY(px, pz) + 0.15, pz);
       const disc = new THREE.Mesh(new THREE.CircleGeometry(6, 32), new THREE.MeshBasicMaterial({ map: swirlTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
       disc.rotation.x = -Math.PI / 2; g.add(disc);
       const ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: 0x9ff4ff, transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false }));

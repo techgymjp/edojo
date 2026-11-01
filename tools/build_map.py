@@ -146,6 +146,8 @@ def main():
     A = np.array(img); Hh = np.array(holes); base = np.where(R == 1, I, 5)
     A[Hh == 1] = np.where(I >= 3, I, 5)[Hh == 1]
     img = Image.fromarray(A); d = ImageDraw.Draw(img)
+    # 今の水面 (戻した江戸の堀と区別する。地形の水面の高さを決めるのに使う)
+    Image.fromarray(np.where(A == 0, 255, 0).astype(np.uint8)).save(os.path.join(D, 'src', 'natural.png'))
     # 江戸の堀
     for line, width in CHANNELS:
         pts = [px(*p) for p in line]; r = width / RES / 2

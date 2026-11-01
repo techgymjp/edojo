@@ -3,9 +3,10 @@
 // ターザン大東京の座標 (原点 35.674, 139.745) を、この地図の座標 (北西の角が原点) へずらして置く
 import * as THREE from '../vendor/three.module.min.js';
 import { City } from './tokyo/city.js';
+import { CITY } from './tokyo/city-data.js';
 import { addTokyoTower, addDiet, addTechGym, addTokyoDome, addSkytree, addFuji, addDistant } from './tokyo/landmarks.js';
 import { addOchanomizu, addTokyoStation, addAkasaka, addRailways, addAkibaSigns, addNewOtani, addYotsuyaKudan, addGinzaNihonbashi, addUeno, addSensoji, addAsahi, addUenoAsakusa } from './tokyo/landmarks2.js';
-import { W, codeAt, isWater, LEVEL_H } from './world.js';
+import { W, codeAt, isWater, LEVEL_H, terrainH } from './world.js';
 
 // 窓のテクスチャ (ターザン大東京と同じ。8×8 の窓が 1 枚。lit = 夜に明かりがつく窓)
 function windowTex(kind, lit, renderer) {
@@ -64,7 +65,7 @@ export function addCutaway(mat) {
 export function buildTokyo(scene, renderer) {
   const OX = (139.745 - W.W) * W.KX, OZ = (W.N - 35.674) * W.KZ;
   const root = new THREE.Group();
-  root.position.set(OX, LEVEL_H[1], OZ);
+  root.position.set(OX, 0, OZ);
   scene.add(root);
   const mats = {
     glass: new THREE.MeshLambertMaterial({ map: windowTex('glass', false, renderer), vertexColors: true, emissiveMap: windowTex('glass', true, renderer), emissive: 0xffffff, emissiveIntensity: 0 }),
@@ -82,9 +83,25 @@ export function buildTokyo(scene, renderer) {
     if (bad(bd.cx, bd.cz) || pts.filter(([x, z]) => bad(x, z)).length >= 2) { bd.plateau = false; dropped++; }
   }
   city.skipGround = (x, z) => isWater(x + OX, z + OZ);
+  // 地形 (国土地理院の標高)。ビルは輪郭の一番低い所に建てる。道路・高架・名所は 60m 四方でならした地面の高さに乗せる
+  const Ts = (x, z) => { let s = 0; for (const dz of [-30, 0, 30]) for (const dx of [-30, 0, 30]) s += terrainH(x + OX + dx, z + OZ + dz); return s / 9; };
+  for (const bd of city.bld) {
+    if (!bd.plateau) continue;
+    let mn = 1e9;
+    for (let i = 0; i < bd.n; i++) mn = Math.min(mn, terrainH(bd.pts[i * 2] + OX, bd.pts[i * 2 + 1] + OZ));
+    bd.base = mn - 0.3;
+  }
+  // 道路: 地面の道はその場の標高の上、高架は地面からの高さ (首都高グランプリのデータは地面が 0) をならした地面に足す
+  for (const r of CITY.roads) {
+    if (r.g) continue;
+    r.g = r.h.map((v) => v < 3);
+    for (let i = 0; i < r.h.length; i++) r.h[i] = r.g[i] ? terrainH(r.x[i] + OX, r.z[i] + OZ) + 0.08 : r.h[i] + Ts(r.x[i], r.z[i]);
+  }
   city.buildMeshes(root, mats);
   addCutaway(city.boxMat);
+  const nBefore = root.children.length;
   city.buildRoads(root);
+  const roadObjs = new Set(root.children.slice(nBefore));
   // 名所 (皇居・武道館・皇居の門は江戸城にするので入れない)
   const tower = addTokyoTower(root, city);
   addDiet(root, city);
@@ -102,9 +119,37 @@ export function buildTokyo(scene, renderer) {
   const fuji = addFuji(root);
   const distant = addDistant(root);
   let tod = null;
+  // 名所・電車の高架などを地形に乗せる (ビルのタイルと道路はもう地形の高さ)
+  const box3 = new THREE.Box3(), cv = new THREE.Vector3(), sz = new THREE.Vector3(), m4 = new THREE.Matrix4(), pv = new THREE.Vector3();
+  const usedGeo = new Set();
+  root.updateMatrixWorld(true);
+  for (const ch of [...root.children]) {
+    if (ch === city.tileGroup || roadObjs.has(ch)) continue;
+    box3.setFromObject(ch); if (box3.isEmpty()) continue;
+    box3.getCenter(cv); box3.getSize(sz);
+    if (Math.max(sz.x, sz.z) < 250) { ch.position.y += Ts(cv.x - OX, cv.z - OZ); continue; }
+    // 大きなもの (高架の線路など): 頂点ごとに
+    ch.traverse((o) => {
+      if (!o.isMesh && !o.isLine) return;
+      if (o.isInstancedMesh) {
+        for (let i = 0; i < o.count; i++) { o.getMatrixAt(i, m4); pv.setFromMatrixPosition(m4); pv.applyMatrix4(o.matrixWorld); m4.elements[13] += Ts(pv.x - OX, pv.z - OZ); o.setMatrixAt(i, m4); }
+        o.instanceMatrix.needsUpdate = true; return;
+      }
+      if (usedGeo.has(o.geometry)) o.geometry = o.geometry.clone();
+      usedGeo.add(o.geometry);
+      const pa = o.geometry.attributes.position;
+      if (!pa) return;
+      const e = o.matrixWorld.elements, sy = Math.hypot(e[4], e[5], e[6]) || 1;
+      for (let i = 0; i < pa.count; i++) {
+        pv.fromBufferAttribute(pa, i).applyMatrix4(o.matrixWorld);
+        pa.setY(i, pa.getY(i) + Ts(pv.x - OX, pv.z - OZ) / sy);
+      }
+      pa.needsUpdate = true; o.geometry.computeBoundingSphere();
+    });
+  }
   // ニンジャが飛び立つビル (この地図の座標)
   const roofs = [];
-  for (const bd of city.bld) if (bd.plateau && bd.h >= 14) roofs.push({ x: bd.cx + OX, z: bd.cz + OZ, y: LEVEL_H[1], sy: bd.h, bd });
+  for (const bd of city.bld) if (bd.plateau && bd.h >= 14) roofs.push({ x: bd.cx + OX, z: bd.cz + OZ, y: bd.base || 0, sy: bd.h, bd });
   root.traverse((o) => { const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : []; for (const m of ms) if (!seen.has(m) && m.isMaterial && !m.isSpriteMaterial) { seen.add(m); addCutaway(m); } });
   console.log('tokyo: buildings', city.bld.length, 'dropped', dropped);
   return {
@@ -112,7 +157,7 @@ export function buildTokyo(scene, renderer) {
     // ある所のビルの屋上の高さ (なければ 0)
     roofAt(x, z) {
       const f = city.floorAt(x - OX, z - OZ, 1e5);
-      return f.y > 0 ? f.y + LEVEL_H[1] : 0;
+      return f.what === 'roof' && f.bd ? f.y + (f.bd.base || 0) : 0;
     },
     stream(cam, R, budget) { return city.streamTiles(cam.x - OX, cam.z - OZ, R, budget); },
     update(dt, t, night, fogColor, camera) {
