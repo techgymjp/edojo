@@ -243,8 +243,23 @@ const DOTE_LL = [
   // 千鳥ヶ淵・半蔵濠・桜田濠 (吹上・西の丸の西と南。外桜田門まで)
   cp([[150, 225], [272, 225], [272, 700], [412, 780], [432, 880], [40, 880], [40, 225]]), // 田安門・清水門のあたり (北) は石垣
   // 外堀 西 (牛込濠・新見附濠・市ヶ谷濠・真田濠・弁慶濠)
-  [[35.7050, 139.7250], [35.7050, 139.7480], [35.6990, 139.7470], [35.6900, 139.7380], [35.6790, 139.7390], [35.6760, 139.7250]],
+  // (神田川・飯田橋より北は入れない。外堀の外側の岸 (中央線ぞい) は石垣で、土手は内側 (お城の側) だけ。真田濠は両側とも土手)
+  [[35.7012, 139.7250], [35.7012, 139.7480], [35.6990, 139.7470], [35.6900, 139.7380], [35.6790, 139.7390], [35.6760, 139.7250]],
 ];
+// 外堀 西のお濠の真ん中の線 (北 → 南)。進む向きの左 (東) がお城の側
+const MOAT_W = [[35.7010, 139.7432], [35.6964, 139.7399], [35.6935, 139.7360], [35.6902, 139.7323], [35.6862, 139.7305], [35.6820, 139.7330], [35.6790, 139.7360], [35.6765, 139.7380]];
+let MOATW = null;
+function castleSide(x, z) {
+  if (!MOATW) MOATW = MOAT_W.map(([la, lo]) => ll(la, lo));
+  let best = Infinity, cr = 0;
+  for (let i = 0; i + 1 < MOATW.length; i++) {
+    const [ax, az] = MOATW[i], [bx, bz] = MOATW[i + 1], dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz;
+    const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2));
+    const d = Math.hypot(x - ax - dx * t, z - az - dz * t);
+    if (d < best) { best = d; cr = dx * (z - az) - dz * (x - ax); }
+  }
+  return cr < 0;
+}
 let DOTE = null;
 function pip(poly, x, z) {
   let c = false;
@@ -256,7 +271,12 @@ function pip(poly, x, z) {
 }
 export function isDote(x, z) {
   if (!DOTE) DOTE = DOTE_LL.map((p) => p.map(([la, lo]) => ll(la, lo)));
-  return DOTE.some((p) => pip(p, x, z));
+  if (pip(DOTE[0], x, z)) return true;
+  if (!pip(DOTE[1], x, z)) return false;
+  // 真田濠 (四谷〜喰違) は両側とも土手。ほかは内側だけ
+  const sz0 = ll(35.6900, 139.73)[1], sz1 = ll(35.6800, 139.73)[1];
+  if (z > sz0 && z < sz1) return true;
+  return castleSide(x, z);
 }
 function grassTexture() {
   const c = document.createElement('canvas'); c.width = c.height = 128;
@@ -324,7 +344,8 @@ export function buildWalls(scene) {
     const dote = isDote(mx, mz);
     if (dote) {
       // 土手: 斜面は地形 (標高) のとおり緑で描くので、水ぎわは低い草の縁だけ (短冊のような面を立てない)
-      quad(grass, ax, az, bx, bz, y0, y1, nx, nz, u0, u1, 4);
+      // 水ぎわの垂直な壁は石垣。その上の斜面 (地形) は緑の土手
+      quad(stone, ax, az, bx, bz, y0, y1, nx, nz, u0, u1, 3.2);
       if (hc === 3 || hc === 4) doteSegs.push({ ax, az, bx, bz, nx, nz, y: y1, len, off: 0 });
       return;
     }

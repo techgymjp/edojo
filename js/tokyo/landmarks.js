@@ -432,27 +432,42 @@ export function addBudokan(scene, city) {
   const oct = (profile) => new THREE.LatheGeometry(profile.map(([r, y]) => new THREE.Vector2(r, y)), 8);
   // 本体 (白い壁と窓の帯)
   const wallTex = canvasTex(512, 64, (c, w, h) => {
-    c.fillStyle = '#ece6d8';
-    c.fillRect(0, 0, w, h);
-    c.fillStyle = '#5a5246';
-    for (let x = 0; x < w; x += 32) c.fillRect(x + 6, h * 0.35, 20, h * 0.4);
+    // 写真のとおり: 上は縦の格子 (ルーバー)、その下に灰色のコンクリートの帯と柱、下はガラスの窓
+    c.fillStyle = '#d4d0c6'; c.fillRect(0, 0, w, h);
+    c.fillStyle = '#9d988e'; for (let x = 0; x < w; x += 4) c.fillRect(x, 2, 2, h * 0.36);
+    c.fillStyle = '#bcb7ad'; c.fillRect(0, h * 0.4, w, h * 0.12);
+    c.fillStyle = '#3a4048'; c.fillRect(0, h * 0.62, w, h * 0.3);
+    c.fillStyle = '#c9c4ba'; for (let x = 0; x < w; x += 64) c.fillRect(x, h * 0.5, 8, h * 0.5);
   });
   wallTex.wrapS = THREE.RepeatWrapping;
   wallTex.repeat.set(4, 1);
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(55, 56, 14, 8, 1, true), new THREE.MeshLambertMaterial({ map: wallTex, side: THREE.DoubleSide }));
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(56, 54, 14, 8, 1, true), new THREE.MeshLambertMaterial({ map: wallTex, side: THREE.DoubleSide }));
   body.position.y = 7;
   g.add(body);
-  // 大屋根: 富士山のように反った八角形 (下ほどゆるい)
-  const roofMat = new THREE.MeshLambertMaterial({ color: 0x5f6c66, side: THREE.DoubleSide });
-  g.add(new THREE.Mesh(oct([[60, 13.5], [48, 16.5], [38, 20.5], [30, 25], [23, 30]]), roofMat));
-  // 上の段 (白い胴と小屋根)
-  const drum = new THREE.Mesh(new THREE.CylinderGeometry(21, 21, 3.5, 8, 1, true), new THREE.MeshLambertMaterial({ color: 0xf2eee4, side: THREE.DoubleSide }));
-  drum.position.y = 31.6;
+  // 大屋根: 富士山のように反った八角形。緑青の淡い緑で、下ほどゆるく、軒は大きく張り出す (皇居ランナーで写真に合わせて直した)
+  const roofMat = new THREE.MeshLambertMaterial({ color: 0x7cc4a8, side: THREE.DoubleSide });
+  g.add(new THREE.Mesh(oct([[66, 14.5], [56, 16], [46, 18.5], [37, 22], [29, 26.5], [21, 32], [14.5, 37.5], [10, 41]]), roofMat));
+  // 屋根の 8 本の隅棟 (明るい緑の筋)
+  {
+    const prof = [[66, 14.6], [56, 16.1], [46, 18.6], [37, 22.1], [29, 26.6], [21, 32.1], [14.5, 37.6], [10, 41.1]];
+    const ridgeM = new THREE.MeshLambertMaterial({ color: 0xa6dcc6 });
+    for (let k = 0; k < 8; k++) {
+      const ph = k / 8 * Math.PI * 2;
+      const curve = new THREE.CatmullRomCurve3(prof.map(([r, y]) => new THREE.Vector3(r * Math.sin(ph), y + 0.3, r * Math.cos(ph))));
+      g.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 24, 0.7, 5), ridgeM));
+    }
+  }
+  // 軒の金色 (オレンジ) の帯
+  const eave = new THREE.Mesh(new THREE.CylinderGeometry(66, 66, 2.2, 8, 1, true), new THREE.MeshLambertMaterial({ color: 0xe8a020, side: THREE.DoubleSide }));
+  eave.position.y = 13.5;
+  g.add(eave);
+  // てっぺんの小さな段と、金色の擬宝珠
+  const drum = new THREE.Mesh(new THREE.CylinderGeometry(7.5, 7.5, 2.4, 8, 1, true), new THREE.MeshLambertMaterial({ color: 0x8fd0b6, side: THREE.DoubleSide }));
+  drum.position.y = 42.2;
   g.add(drum);
-  g.add(new THREE.Mesh(oct([[25, 33], [16, 36], [8, 39], [2.5, 40.6]]), roofMat));
-  // 金色の擬宝珠
+  g.add(new THREE.Mesh(oct([[10.5, 43.2], [6, 45], [2.5, 46.2]]), roofMat));
   const gold = new THREE.MeshLambertMaterial({ color: 0xe0b030, emissive: 0x3a2800 });
-  g.add(new THREE.Mesh(new THREE.LatheGeometry([[0, 40.4], [2.4, 41.2], [3.3, 42.4], [2.6, 43.8], [1.1, 44.9], [0.35, 45.6], [0, 46.3]].map(([r, y]) => new THREE.Vector2(r, y)), 16), gold));
+  g.add(new THREE.Mesh(new THREE.LatheGeometry([[0, 46], [2.4, 46.8], [3.3, 48], [2.6, 49.4], [1.1, 50.5], [0.35, 51.2], [0, 51.9]].map(([r, y]) => new THREE.Vector2(r, y)), 16), gold));
   scene.add(g);
   // 当たり判定: 八角形の柱を段々に (屋根の段に降りられる)
   const octPts = (r) => {
@@ -460,7 +475,7 @@ export function addBudokan(scene, city) {
     for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2 + Math.PI / 8; pts.push(X + Math.cos(a) * r, Z - Math.sin(a) * r); }
     return pts;
   };
-  for (const [r, y] of [[57, 14], [48, 16.5], [38, 20.5], [30, 25], [23, 30], [21, 33], [16, 36], [8, 39]]) {
+  for (const [r, y] of [[57, 14], [50, 16.5], [40, 20], [31, 25], [24, 30], [17, 36], [10, 41]]) {
     const bd = city.addPrism(octPts(r), 0, y, '日本武道館');
     bd.roof = true;
     // チェックポイントの玉は大屋根の段 (高さ25m) の東側に置く

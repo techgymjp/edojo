@@ -58,6 +58,9 @@ for X in range(int(tx(W - M)), int(tx(E + M)) + 1):
             if p.get('ftCode') != 8201: continue
             jr = str(p.get('rtCode', '')).startswith('402010')  # JR か、それ以外 (地下鉄の地上区間・私鉄)
             sta = 1 if p.get('staCode') else 0
+            rc = str(p.get('rtCode', ''))
+            # 路線: 187 山手線・126 東北本線 (京浜東北)、121 中央線、104 総武線
+            ln = 'y' if ('187' in rc or '126' in rc) else 'c' if '00121' in rc else 's' if '00104' in rc else ''
             st = p.get('railState'); lv = int(p.get('lvOrder') or 0)
             # railState: 0 普通 (地上) / 1 橋・高架 / 2 トンネル / 3 地下 / 4 雪覆い など
             if st in (2, 3) or st == 'トンネル': kind = 2
@@ -66,11 +69,11 @@ for X in range(int(tx(W - M)), int(tx(E + M)) + 1):
             n = int(p.get('snglDbl') or 2)
             for l in ls:
                 pts = [xz(X, Y, px, py, ext) for px, py in l]
-                if len(pts) >= 2: segs.append((kind, lv, pts, n, jr, sta))
+                if len(pts) >= 2: segs.append((kind, lv, pts, n, jr, sta, ln))
 sys.stderr.write(f'segments {len(segs)}\n')
 key = lambda q: (round(q[0] / 0.8), round(q[1] / 0.8))
 target, adj, pos = {}, defaultdict(set), {}
-for kind, lv, pts, n, jr, sta in segs:
+for kind, lv, pts, n, jr, sta, ln in segs:
     t = 7 + max(0, lv - 1) * 6 if kind == 1 else 0.0
     ks = [key(q) for q in pts]
     for k, q in zip(ks, pts): pos[k] = q; target[k] = max(target.get(k, -1e9), t)
@@ -83,7 +86,7 @@ while pq:
     for nb in adj[k]:
         nv = v + 0.03 * math.hypot(pos[k][0] - pos[nb][0], pos[k][1] - pos[nb][1])
         if nv < h[nb] - 1e-3: h[nb] = nv; heapq.heappush(pq, (nv, nb))
-out = [{'x': [round(q[0], 1) for q in pts], 'z': [round(q[1], 1) for q in pts], 'h': [round(h[key(q)], 2) for q in pts], 't': 1 if kind == 2 else 0, 'n': n, 'jr': 1 if jr else 0, 'sta': sta} for kind, lv, pts, n, jr, sta in segs]
+out = [{'x': [round(q[0], 1) for q in pts], 'z': [round(q[1], 1) for q in pts], 'h': [round(h[key(q)], 2) for q in pts], 't': 1 if kind == 2 else 0, 'n': n, 'jr': 1 if jr else 0, 'sta': sta, 'ln': ln} for kind, lv, pts, n, jr, sta, ln in segs]
 sys.stdout.write('// 自動生成 (tools/fetch_rail.py)。出典: 国土地理院 ベクトルタイル (railway, JR)\n')
 sys.stdout.write('export const RAIL = ' + json.dumps(out, separators=(',', ':')) + ';\n')
-sys.stderr.write(f'lines {len(out)} elevated {sum(1 for s in segs if s[0] == 1)} nonJR {sum(1 for s in segs if not s[4])} stations {sum(1 for s in segs if s[5])}\n')
+sys.stderr.write(f'lines {len(out)} elevated {sum(1 for s in segs if s[0] == 1)} nonJR {sum(1 for s in segs if not s[4])} stations {sum(1 for s in segs if s[5])} lines {dict((k, sum(1 for s in segs if s[6] == k)) for k in "ycs")}\n')

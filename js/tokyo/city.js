@@ -588,11 +588,27 @@ export class City {
       for (let k = 0; k < 3; k++) { B.n.push(...n); B.c.push(...col); }
     };
     const quad = (B, a, b, c, d, n, col) => { push(B, a, b, c, n, col); push(B, a, c, d, n, col); };
-    const W = 8.5;
+    // 風雲江戸城: 国土地理院の首都高は上り・下りが別の線なので、片側 9m 幅 (半幅 4.6m)
+    const W = this.roadHalfWidth || 8.5;
     const piers = [];
     for (const r of CITY.roads) {
       let acc = 0;
       for (let i = 0; i + 1 < r.x.length; i++) {
+        // 風雲江戸城: トンネルの入口 (坑口)。道がトンネルに入る所に、コンクリートの額と黒い口
+        if (r.t[i] !== r.t[i + 1]) {
+          const [o, t] = r.t[i] ? [i + 1, i] : [i, i + 1];
+          const ox = r.x[o], oz = r.z[o], dx = r.x[t] - ox, dz = r.z[t] - oz, dl = Math.hypot(dx, dz) || 1;
+          const ux = dx / dl, uz = dz / dl, vx = -uz, vz = ux, h = r.h[o];
+          const P = (a, b, y) => [ox + ux * a + vx * b, y, oz + uz * a + vz * b];
+          const CON = [0.66, 0.66, 0.63], BLK = [0.04, 0.04, 0.05], hw = W + 1.5;
+          // 額 (前の面・上・横)
+          quad(deck, P(1, -hw, h - 1), P(1, hw, h - 1), P(1, hw, h + 9), P(1, -hw, h + 9), [-ux, 0, -uz], CON);
+          quad(deck, P(1, -hw, h + 9), P(1, hw, h + 9), P(14, hw, h + 9), P(14, -hw, h + 9), [0, 1, 0], CON);
+          for (const sd of [-1, 1]) quad(deck, P(1, sd * hw, h - 1), P(14, sd * hw, h - 1), P(14, sd * hw, h + 9), P(1, sd * hw, h + 9), [vx * sd, 0, vz * sd], CON);
+          // 黒い口 (額の少し手前)
+          quad(deck, P(0.9, -W + 0.3, h), P(0.9, W - 0.3, h), P(0.9, W - 0.3, h + 6), P(0.9, -W + 0.3, h + 6), [-ux, 0, -uz], BLK);
+          continue;
+        }
         if (r.t[i] || r.t[i + 1]) continue;
         const x1 = r.x[i], z1 = r.z[i], x2 = r.x[i + 1], z2 = r.z[i + 1];
         let h1 = r.h[i], h2 = r.h[i + 1];
@@ -608,7 +624,15 @@ export class City {
         const C = [x2 - lx + ex, h2, z2 - lz + ez], D = [x2 + lx + ex, h2, z2 + lz + ez];
         const asphalt = [0.32, 0.32, 0.34];
         quad(deck, A, D, C, B, [0, 1, 0], asphalt);
-        if (ground) continue;
+        if (ground) {
+          // 地上・掘割の区間も、両側に 1m の壁 (ペラペラの板に見えないように)
+          for (const [P0, P1, s] of [[A, D, 1], [B, C, -1]]) {
+            const nn = [lx / W * s, 0, lz / W * s];
+            const t0 = [P0[0], P0[1] + 1, P0[2]], t1 = [P1[0], P1[1] + 1, P1[2]], b0 = [P0[0], P0[1] - 0.5, P0[2]], b1 = [P1[0], P1[1] - 0.5, P1[2]];
+            if (s > 0) quad(deck, b0, b1, t1, t0, nn, [0.7, 0.7, 0.68]); else quad(deck, b1, b0, t0, t1, nn, [0.7, 0.7, 0.68]);
+          }
+          continue;
+        }
         const wall = [0.72, 0.72, 0.7];
         // 壁高欄 (両側 1.1m) と桁の側面
         for (const [P0, P1, s] of [[A, D, 1], [B, C, -1]]) {
@@ -621,7 +645,7 @@ export class City {
         // 桁の裏
         quad(deck, [B[0], h1 - 2.2, B[2]], [C[0], h2 - 2.2, C[2]], [D[0], h2 - 2.2, D[2]], [A[0], h1 - 2.2, A[2]], [0, -1, 0], [0.5, 0.5, 0.5]);
         acc += L;
-        if (acc > 36) { acc = 0; piers.push([x1, z1, h1 - 2.2, Math.atan2(x2 - x1, z2 - z1)]); }
+        if (acc > 30) { acc = 0; piers.push([x1, z1, h1 - 2.2, Math.atan2(x2 - x1, z2 - z1)]); }
       }
     }
     const g = new THREE.BufferGeometry();
@@ -635,13 +659,20 @@ export class City {
     pg.translate(0, 0.5, 0);
     const pm = new THREE.InstancedMesh(pg, new THREE.MeshLambertMaterial({ color: 0x9a9a96 }), piers.length);
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
+    // 橋脚の上の横梁 (T 形の頭)
+    const cg = new THREE.BoxGeometry(W * 2 - 1, 1.6, 2.4); cg.translate(0, -0.8, 0);
+    const cm = new THREE.InstancedMesh(cg, new THREE.MeshLambertMaterial({ color: 0x8e8e8a }), piers.length);
     piers.forEach(([x, z, h, a], i) => {
       e.set(0, a, 0); q.setFromEuler(e);
-      m4.compose(new THREE.Vector3(x, 0, z), q, new THREE.Vector3(1, Math.max(0.5, h), 1));
+      // 風雲江戸城: 橋脚は地面 (地形の高さ) から桁の下まで
+      const base = this.groundAt ? this.groundAt(x, z) - 1 : 0;
+      m4.compose(new THREE.Vector3(x, base, z), q, new THREE.Vector3(1, Math.max(0.5, h - base), 1));
       pm.setMatrixAt(i, m4);
+      m4.compose(new THREE.Vector3(x, h, z), q, new THREE.Vector3(1, 1, 1));
+      cm.setMatrixAt(i, m4);
       // 橋脚の当たり判定
       this.addBox(x, z, 3, 3, 0, Math.max(0.5, h) - 0.3);
     });
-    scene.add(pm);
+    scene.add(pm); scene.add(cm);
   }
 }

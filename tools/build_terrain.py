@@ -113,18 +113,21 @@ for k in range(1, nl + 1):
     flat[m] = max(lv, -1.0)
 # 戻した堀: 一番近い今の水の高さ (水の中だけで広げる)
 from collections import deque
+# 真田濠 (四谷〜喰違の台地の上の堀) の範囲
+SANADA = (lat > 35.6795) & (lat < 35.6905) & (lon > 139.7270) & (lon < 139.7345)
 q = deque(zip(*np.nonzero(natl)))
 while q:
     a, b = q.popleft()
     for yy, xx in ((a + 1, b), (a - 1, b), (a, b + 1), (a, b - 1)):
-        if 0 <= yy < h and 0 <= xx < w and water[yy, xx] and np.isnan(flat[yy, xx]):
+        # 地面 (標高) が水面より 8m 以上高い堀 (真田濠など台地の上の堀) には広げない: 別の高さの水面にする
+        if 0 <= yy < h and 0 <= xx < w and water[yy, xx] and np.isnan(flat[yy, xx]) and not (SANADA[yy, xx] and Ev[yy, xx] > flat[a, b] + 8):
             flat[yy, xx] = flat[a, b]; q.append((yy, xx))
 # 今の水につながっていない戻した堀 (溜池など): かたまりごとに 1 つの高さ (まわりの道より 3.2m 低い所の低めの値)
 rest_m = water & np.isnan(flat)
 labr, nr = components(rest_m)
 for k in range(1, nr + 1):
     m = labr == k
-    flat[m] = float(np.nanpercentile((bank - 3.2)[m], 20))
+    flat[m] = min(float(np.nanpercentile((bank - 3.2)[m], 20)), float(np.nanpercentile(Ev[m], 10)) - 1.0)
 WL = np.where(water, np.where(np.isnan(flat), WL, flat), np.nan)
 WL = np.where(water, np.minimum(WL, bank - 0.5), np.nan)
 print('flat water bodies', nl)
@@ -141,6 +144,6 @@ def save(a, name):
     rgb = np.stack([(v >> 8).astype(np.uint8), (v & 255).astype(np.uint8), np.zeros_like(v, np.uint8)], -1)
     Image.fromarray(rgb, 'RGB').save(os.path.join(D, name), optimize=True)
 save(T, 'terrain.png'); save(WL, 'water.png')
-for nm, la, lo in [('本丸', 35.6870, 139.7570), ('桜田濠', 35.6795, 139.7480), ('日比谷濠', 35.6770, 139.7605), ('神田川お茶の水', 35.7006, 139.7640), ('隅田川', 35.6880, 139.7905), ('市ヶ谷濠', 35.6930, 139.7355), ('牛込濠', 35.6990, 139.7420), ('外堀東(戻した)', 35.6768, 139.7682), ('丸の内', 35.6810, 139.7660), ('九段', 35.6950, 139.7470)]:
+for nm, la, lo in [('本丸', 35.6870, 139.7570), ('桜田濠', 35.6795, 139.7480), ('日比谷濠', 35.6770, 139.7605), ('神田川お茶の水', 35.7006, 139.7640), ('隅田川', 35.6880, 139.7905), ('市ヶ谷濠', 35.6930, 139.7355), ('真田濠', 35.6855, 139.7290), ('牛込濠', 35.6990, 139.7420), ('外堀東(戻した)', 35.6768, 139.7682), ('丸の内', 35.6810, 139.7660), ('九段', 35.6950, 139.7470)]:
     j = int((N - la) * KZ / RES); i = int((lo - W) * KX / RES)
     print(nm, 'water' if water[j, i] else 'land', 'T', round(float(T[j, i]), 1), 'WL', round(float(WL[j, i]), 1))

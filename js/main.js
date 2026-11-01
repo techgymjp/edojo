@@ -1547,6 +1547,7 @@ function loop(now) {
       camera.position.lerp(new THREE.Vector3(nj.x - Math.cos(P.h) * 20, nj.y + 6, nj.z - Math.sin(P.h) * 20), 1 - Math.exp(-dt * 3));
       camera.lookAt(nj.x, nj.y, nj.z);
     } else updateCamera(dt);
+    if (window.__camOverride) { const d = window.__camOverride; camera.position.set(...d.p); camera.lookAt(...d.l); }
     updateSky();
     updateFloats(dt);
     updateHud(dt);
@@ -1583,6 +1584,6 @@ function loop(now) {
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
 requestAnimationFrame(loop);
 boot();
-window.__G = G; window.__P = P; window.__CFG = CFG; window.__ll = ll; window.__gh = groundH;
-window.__tokyo = () => tokyo; window.__W = W; window.__renderer = renderer; window.__scene = scene;
+window.__wy = waterY; window.__G = G; window.__P = P; window.__CFG = CFG; window.__ll = ll; window.__gh = groundH;
+window.__tokyo = () => tokyo; window.__cam = camera; window.__THREE = THREE; window.__W = W; window.__renderer = renderer; window.__scene = scene;
 window.__dbg = { warps: () => warps, hitNinja, spawnNinja, throwCoins, throwLasso, startGame, navi: () => navi, isWater, cellOf, step, updateNav };

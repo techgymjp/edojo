@@ -331,9 +331,9 @@ export function buildCastle(scene, castleSegs) {
   for (const [name, la, lo, kind, big] of GATES) {
     let [x, z] = ll(la, lo);
     let gx, gz, rot;
-    if (kind === 'bridge') {
-      const c = crossing(x, z, 160);
-      if (!c) continue;
+    // 橋の門で、今の水面に渡る所が見つからない (埋め立てられた堀) ときは、その場所に土橋の門として置く
+    const c = kind === 'bridge' ? crossing(x, z, 160) : null;
+    if (c) {
       const ya = groundH(...c.a), yb = groundH(...c.b);
       // 城に近い方 (または高い方) に門
       const da = (c.a[0] - cx) ** 2 + (c.a[1] - cz) ** 2, db = (c.b[0] - cx) ** 2 + (c.b[1] - cz) ** 2;
@@ -348,7 +348,7 @@ export function buildCastle(scene, castleSegs) {
     } else {
       // 土橋: 陸が一番長く続く向き
       const p = codeAt(x, z) === 0 ? nearestCell(x, z, (a, b) => !isWater(a, b), 40) : [x, z];
-      if (!p) continue;
+      if (!p) { if (typeof window !== 'undefined') (window.__gatesMissing ||= []).push(name); continue; }
       [x, z] = p;
       let best = null;
       for (let a = 0; a < 180; a += 5) {
@@ -367,6 +367,7 @@ export function buildCastle(scene, castleSegs) {
     g.position.set(gx, groundH(gx, gz), gz);
     g.rotation.y = rot;
     scene.add(g);
+    if (typeof window !== 'undefined') (window.__gates ||= []).push([name, Math.round(gx), Math.round(gz), +groundH(gx, gz).toFixed(1), kind, Math.round(Math.hypot(gx - ll(la, lo)[0], gz - ll(la, lo)[1]))]);
     const l = labelSprite(name, '#ffe9b0', 0.9); l.position.set(gx, groundH(gx, gz) + 20, gz); scene.add(l); labels.push(l);
   }
   for (const [name, la, lo, opt] of BRIDGES) {
