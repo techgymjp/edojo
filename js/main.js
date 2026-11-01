@@ -965,11 +965,13 @@ function throwCoins() {
       }
       const m = new THREE.Group();
       const head = new THREE.Mesh(coinHeadGeo, coinBeamMat); head.scale.setScalar(1.1);
-      m.add(head, new THREE.Mesh(coinBeamGeo, coinBeamMat));
-      // 海賊王の船よりカメラが近いので、形はそのままで 0.4 倍、手の少し先から
+      const tail = new THREE.Mesh(coinBeamGeo, coinBeamMat); tail.scale.z = 0.001;
+      m.add(head, tail);
+      // 海賊王の船よりカメラが近いので、形はそのままで 0.4 倍、手の少し先から。
+      // 軌跡は撃った所より後ろへは伸ばさない (後ろからビームが来るように見えないように)
       m.scale.setScalar(0.4); p.addScaledVector(dir, 2.5);
       m.position.copy(p); m.lookAt(p.clone().add(dir)); scene.add(m);
-      G.coins.push({ m, p: p.clone(), v: dir.multiplyScalar(CFG.coinSpeed), tg, g: 1.2, life: CFG.coinRange / CFG.coinSpeed + 0.12 });
+      G.coins.push({ m, tail, p0: p.clone(), p: p.clone(), v: dir.multiplyScalar(CFG.coinSpeed), tg, g: 1.2, life: CFG.coinRange / CFG.coinSpeed + 0.12 });
       A.gun(k === 0 ? 0.55 : 0.4);
     }, k * 70);
   }
@@ -1014,6 +1016,7 @@ function updateWeapons(dt) {
     if (c.g) c.v.y -= c.g * dt;
     c.p.addScaledVector(c.v, dt);
     c.m.position.copy(c.p); c.m.lookAt(c.p.clone().add(c.v));
+    if (c.tail && c.p0) c.tail.scale.z = Math.max(0.001, Math.min(1, c.p.distanceTo(c.p0) / (26 * 0.4)));
     // 速いので、このフレームで進んだ線分と忍者の近さで当たりを見る
     for (const nj of (c.tg ? [c.tg] : G.ninjas)) {
       if (!['roof', 'glide', 'bamboo', 'emerge', 'climb', 'swim1', 'emerge1', 'climbOut', 'run', 'walk', 'walkin'].includes(nj.state)) continue;
