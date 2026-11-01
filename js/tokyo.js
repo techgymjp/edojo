@@ -167,56 +167,117 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
       pa.needsUpdate = true; o.geometry.computeBoundingSphere();
     });
   }
-  // 今の橋: 国土地理院の道路の線 (ターザン大東京の road-data) が水を渡る所に、道の幅のコンクリートの橋
+  // ---- 今の橋と川沿いの道: 国土地理院の道路の線 (ターザン大東京の road-data) から ----
+  //  橋: 道が川・お濠を横切る所に、車道 (アスファルトと白線)・歩道・欄干・街灯・桁・橋脚
+  //  道: 川から 250m 以内の道を地面に描く (橋の先に道が続いて見えるように)
   {
-    const P = [], N = [], add = (a, b, c, n) => { P.push(...a, ...b, ...c); for (let k = 0; k < 3; k++) N.push(...n); };
-    const quad = (a, b, c, d, n) => { add(a, b, c, n); add(a, c, d, n); };
-    let nb = 0;
+    const P = [], N = [], C = [];
+    const tri = (a, b, c, n, col) => { P.push(...a, ...b, ...c); for (let k = 0; k < 3; k++) { N.push(...n); C.push(...col); } };
+    const quad = (a, b, c, d, n, col) => { tri(a, b, c, n, col); tri(a, c, d, n, col); };
+    // 向き (ux, uz) の箱 (中心 x,z、長さ L、幅 w、y0〜y1)
+    const boxU = (x, z, ux, uz, L, w, y0, y1, col, colTop = col) => {
+      const vx = -uz, vz = ux, hl = L / 2, hw = w / 2;
+      const pt = (s, t, y) => [x + ux * s + vx * t, y, z + uz * s + vz * t];
+      quad(pt(-hl, -hw, y1), pt(-hl, hw, y1), pt(hl, hw, y1), pt(hl, -hw, y1), [0, 1, 0], colTop);
+      quad(pt(-hl, hw, y0), pt(hl, hw, y0), pt(hl, hw, y1), pt(-hl, hw, y1), [vx, 0, vz], col);
+      quad(pt(hl, -hw, y0), pt(-hl, -hw, y0), pt(-hl, -hw, y1), pt(hl, -hw, y1), [-vx, 0, -vz], col);
+      quad(pt(hl, hw, y0), pt(hl, -hw, y0), pt(hl, -hw, y1), pt(hl, hw, y1), [ux, 0, uz], col);
+      quad(pt(-hl, -hw, y0), pt(-hl, hw, y0), pt(-hl, hw, y1), pt(-hl, -hw, y1), [-ux, 0, -uz], col);
+    };
+    const ASP = [0.24, 0.24, 0.26], WALK = [0.62, 0.6, 0.56], WHITE = [0.92, 0.92, 0.88], CON = [0.66, 0.66, 0.64], GIRDER = [0.42, 0.5, 0.58], DARK = [0.25, 0.26, 0.28], LAMP = [1.0, 0.95, 0.75];
     const isCastle = (x, z) => { const c = codeAt(x, z); return c === 3 || c === 4; };
+    let nb = 0, nroad = 0;
     for (const r of ROADS) {
-      const wdt = Math.max(8, r[0]);
-      // 2m ごとに点を取る (この地図の座標)
+      const wdt = Math.max(8, r[0]), walk = Math.min(4, wdt * 0.18);
       const pts = [];
       for (let i = 1; i + 3 < r.length; i += 2) {
         const x1 = r[i] / 2 + OX, z1 = r[i + 1] / 2 + OZ, x2 = r[i + 2] / 2 + OX, z2 = r[i + 3] / 2 + OZ, L = Math.hypot(x2 - x1, z2 - z1);
-        for (let d = 0; d < L; d += 2) pts.push([x1 + (x2 - x1) * d / L, z1 + (z2 - z1) * d / L]);
+        for (let d = 0; d < L; d += 4) pts.push([x1 + (x2 - x1) * d / L, z1 + (z2 - z1) * d / L]);
       }
+      if (pts.length < 2) continue;
+      // どこが橋か
+      const bridge = new Uint8Array(pts.length);
       let k = 0;
       while (k < pts.length) {
         if (!isWater(...pts[k])) { k++; continue; }
         let e = k; while (e < pts.length && isWater(...pts[e])) e++;
-        const a = Math.max(0, k - 2), b = Math.min(pts.length - 1, e + 1);
-        // 川を横切る所だけ (道が川に沿っている所や、岸をかすめるだけの所には橋を架けない)
         const mi = Math.floor((k + e) / 2), [qx, qz] = pts[mi], [rx, rz] = pts[Math.min(pts.length - 1, mi + 1)], rl = Math.hypot(rx - qx, rz - qz) || 1;
         const px_ = -(rz - qz) / rl, pz_ = (rx - qx) / rl;
         const across = isWater(qx + px_ * 12, qz + pz_ * 12) && isWater(qx - px_ * 12, qz - pz_ * 12);
-        if (across && k > 0 && e < pts.length && (e - k) * 2 >= 8 && (e - k) * 2 < 400 && !isCastle(...pts[a]) && !isCastle(...pts[b])) {
-          const span = pts.slice(a, b + 1);
+        if (across && k > 0 && e < pts.length && (e - k) * 4 >= 8 && (e - k) * 4 < 400 && !isCastle(...pts[k - 1]) && !isCastle(...pts[e])) {
+          const a = Math.max(0, k - 2), b = Math.min(pts.length - 1, e + 1);
           const ya = terrainH(...pts[a]), yb = terrainH(...pts[b]);
           let wmax = -1e9; for (let q = k; q < e; q++) wmax = Math.max(wmax, waterY(...pts[q]));
-          const deck = Math.max(Math.max(ya, yb) + 0.2, wmax + 4.5);
-          for (let q = 0; q + 1 < span.length; q++) {
-            const [x1, z1] = span[q], [x2, z2] = span[q + 1], L = Math.hypot(x2 - x1, z2 - z1) || 1;
-            const nx = -(z2 - z1) / L * wdt / 2, nz = (x2 - x1) / L * wdt / 2, ux = (x2 - x1) / L * 0.3, uz = (z2 - z1) / L * 0.3;
-            const A1 = [x1 + nx - ux, deck, z1 + nz - uz], B1 = [x1 - nx - ux, deck, z1 - nz - uz], C1 = [x2 - nx + ux, deck, z2 - nz + uz], D1 = [x2 + nx + ux, deck, z2 + nz + uz];
-            quad(A1, D1, C1, B1, [0, 1, 0]);
-            const lo = (p) => [p[0], deck - 1.6, p[2]], hi = (p) => [p[0], deck + 1.1, p[2]];
-            quad(lo(A1), lo(D1), hi(D1), hi(A1), [nx, 0, nz]); quad(lo(C1), lo(B1), hi(B1), hi(C1), [-nx, 0, -nz]);
-            quad(lo(B1), lo(C1), lo(D1), lo(A1), [0, -1, 0]);
+          const deck = Math.max(Math.max(ya, yb) + 0.3, wmax + 4.5);
+          const spanL = (e - k) * 4;
+          for (let q = a; q < b; q++) {
+            bridge[q] = 1;
+            const [x1, z1] = pts[q], [x2, z2] = pts[q + 1], L = Math.hypot(x2 - x1, z2 - z1) || 1, ux = (x2 - x1) / L, uz = (z2 - z1) / L;
+            const cx = (x1 + x2) / 2, cz = (z1 + z2) / 2, vx = -uz, vz = ux;
+            // 車道・白線・歩道
+            boxU(cx, cz, ux, uz, L + 0.2, wdt - walk * 2, deck - 0.3, deck, CON, ASP);
+            if (q % 2 === 0) boxU(cx, cz, ux, uz, 2.2, 0.25, deck, deck + 0.02, WHITE);
+            for (const sd of [-1, 1]) {
+              const ox = vx * sd * (wdt / 2 - walk / 2), oz = vz * sd * (wdt / 2 - walk / 2);
+              boxU(cx + ox, cz + oz, ux, uz, L + 0.2, walk, deck - 0.3, deck + 0.25, CON, WALK);
+              // 欄干 (低い壁と上の手すり)
+              const rx2 = vx * sd * (wdt / 2 - 0.15), rz2 = vz * sd * (wdt / 2 - 0.15);
+              boxU(cx + rx2, cz + rz2, ux, uz, L + 0.2, 0.3, deck + 0.25, deck + 1.1, CON);
+              boxU(cx + rx2, cz + rz2, ux, uz, L + 0.2, 0.45, deck + 1.1, deck + 1.25, WHITE);
+              // 街灯 (20m ごと)
+              if (q % 5 === 0 && q > a && q < b - 1) {
+                boxU(cx + rx2 * 0.98, cz + rz2 * 0.98, ux, uz, 0.25, 0.25, deck + 0.25, deck + 7, DARK);
+                boxU(cx + rx2 * 0.9, cz + rz2 * 0.9, ux, uz, 0.6, 1.2, deck + 6.8, deck + 7.1, DARK, LAMP);
+              }
+            }
+            // 桁 (青みの鋼の桁) と裏
+            for (const sd of [-1, 1]) {
+              const ox = vx * sd * (wdt / 2 - 0.4), oz = vz * sd * (wdt / 2 - 0.4);
+              boxU(cx + ox, cz + oz, ux, uz, L + 0.2, 0.8, deck - 2.2, deck - 0.3, GIRDER);
+            }
+            boxU(cx, cz, ux, uz, L + 0.2, wdt - 1.2, deck - 1.6, deck - 0.3, DARK);
+          }
+          // 橋脚 (長い橋は 30m ごとに 2 本の柱)
+          if (spanL > 32) for (let q = k + 7; q < e - 3; q += 8) {
+            const [x1, z1] = pts[q], [x2, z2] = pts[q + 1], L = Math.hypot(x2 - x1, z2 - z1) || 1, ux = (x2 - x1) / L, uz = (z2 - z1) / L;
+            const wy = waterY(x1, z1);
+            for (const sd of [-1, 1]) boxU(x1 - uz * sd * wdt * 0.3, z1 + ux * sd * wdt * 0.3, ux, uz, 1.6, 1.6, wy - 2, deck - 2.2, CON);
+            boxU(x1, z1, ux, uz, 1.8, wdt * 0.8, deck - 3, deck - 2.2, CON);
           }
           nb++;
         }
         k = e;
       }
+      // 川沿いの道 (地面に沿わせて描く)
+      for (let q = 0; q + 1 < pts.length; q++) {
+        if (bridge[q]) continue;
+        const [x1, z1] = pts[q], [x2, z2] = pts[q + 1];
+        if (isWater(x1, z1) || isWater(x2, z2) || isCastle(x1, z1) || !nearWaterGrid(x1, z1, 250)) continue;
+        const L = Math.hypot(x2 - x1, z2 - z1) || 1, ux = (x2 - x1) / L, uz = (z2 - z1) / L, vx = -uz, vz = ux;
+        const h1 = terrainH(x1, z1) + 0.12, h2 = terrainH(x2, z2) + 0.12, hw = wdt / 2, iw = hw - walk;
+        const e1 = 0.3, ex = ux * e1, ez = uz * e1;
+        const S = (x, z, t, h) => [x + vx * t, h, z + vz * t];
+        quad(S(x1 - ex, z1 - ez, -iw, h1), S(x1 - ex, z1 - ez, iw, h1), S(x2 + ex, z2 + ez, iw, h2), S(x2 + ex, z2 + ez, -iw, h2), [0, 1, 0], ASP);
+        for (const sd of [-1, 1]) quad(S(x1 - ex, z1 - ez, sd < 0 ? -hw : iw, h1 + 0.15), S(x1 - ex, z1 - ez, sd < 0 ? -iw : hw, h1 + 0.15), S(x2 + ex, z2 + ez, sd < 0 ? -iw : hw, h2 + 0.15), S(x2 + ex, z2 + ez, sd < 0 ? -hw : iw, h2 + 0.15), [0, 1, 0], WALK);
+        if (q % 2 === 0 && wdt >= 12) quad(S(x1, z1, -0.12, h1 + 0.02), S(x1, z1, 0.12, h1 + 0.02), S((x1 + x2) / 2, (z1 + z2) / 2, 0.12, (h1 + h2) / 2 + 0.02), S((x1 + x2) / 2, (z1 + z2) / 2, -0.12, (h1 + h2) / 2 + 0.02), [0, 1, 0], WHITE);
+        nroad++;
+      }
+    }
+    // 上向きの面の向きをそろえる (裏返った三角形を直す)
+    for (let i = 0; i < P.length; i += 9) {
+      const ax = P[i + 3] - P[i], ay = P[i + 4] - P[i + 1], az = P[i + 5] - P[i + 2], bx = P[i + 6] - P[i], by = P[i + 7] - P[i + 1], bz = P[i + 8] - P[i + 2];
+      const nx = ay * bz - az * by, ny = az * bx - ax * bz, nz = ax * by - ay * bx;
+      if (nx * N[i] + ny * N[i + 1] + nz * N[i + 2] < 0) for (let k = 0; k < 3; k++) { const t = P[i + 3 + k]; P[i + 3 + k] = P[i + 6 + k]; P[i + 6 + k] = t; }
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
     g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
-    const bm = new THREE.MeshLambertMaterial({ color: 0x9a9c9e, side: THREE.DoubleSide });
-    addCutaway(bm);
+    g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
+    g.computeBoundingSphere();
+    const bm = new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 });
     const mesh = new THREE.Mesh(g, bm); mesh.frustumCulled = false;
     scene.add(mesh);
-    console.log('modern bridges', nb);
+    console.log('modern bridges', nb, 'road segs', nroad, 'tris', P.length / 9);
   }
   // ニンジャが飛び立つビル (この地図の座標)
   const roofs = [];

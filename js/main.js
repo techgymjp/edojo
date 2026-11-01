@@ -29,7 +29,7 @@ export const CFG = {
   run: 9,             // 外堀を越えたあと、ビルの屋根伝いに走る速さ (m/s)
   hp: 3,              // 投げ銭で何枚当てれば捕まるか (竹筒・登っている忍者)
   coinRange: 38, coinCd: 0.75, coinSpeed: 65,
-  lassoRange: 140, lassoCd: 2.2, lassoCatch: 5,
+  lassoRange: 140, lassoCd: 2.2, lassoCatch: 9,
   gears: [-5, 0, 12, 20, 28],
   accel0: 5, accelGrow: 4, accelMax: 14, vmax: 50, vback: -8, brake: 18, drag: 0.12, // 上を長押しで加速 (m/s²)
   jump0: 7, jumpBoost: 26, jumpHold: 0.5, gravity: 22,     // ジャンプ (長押しで高く)
@@ -330,7 +330,7 @@ function spawnNinja(plan) {
   m.rotation.y = Math.atan2(lx - roof.x, lz - roof.z);
   scene.add(m);
   const bam = makeBamboo(); bam.visible = false; bam.scale.setScalar(CFG.ninjaScale); scene.add(bam);
-  const marker = document.createElement('div'); marker.className = 'nmark'; marker.innerHTML = '<b>!</b><i><s></s></i>';
+  const marker = document.createElement('div'); marker.className = 'nmark down'; marker.innerHTML = '▼';
   $('marks').appendChild(marker);
   const nj = {
     id: G.spawned, m, bam, marker, state: 'roof', t: rand(...CFG.roofTime), hp: 1,
@@ -338,7 +338,6 @@ function spawnNinja(plan) {
   };
   G.ninjas.push(nj);
   G.spawned++;
-  floatText(roof.x, y0 + 4, roof.z, '曲者！', 'red');
   A.sfx('bell', 0.35, 1.2);
   return true;
 }
@@ -360,7 +359,6 @@ function updateNinja(nj, dt) {
         nj.state = 'glide'; nj.hp = 1;
         const d = Math.hypot(nj.lx - nj.sx, nj.lz - nj.sz);
         nj.T = clamp(d / CFG.glideSpeed, 1.4, 3.2); nj.t = nj.T;
-        floatText(nj.x, nj.y + 3, nj.z, 'ムササビの術！', 'purple');
         A.sfx('whoosh', 0.5, 0.8);
       }
       break;
@@ -378,7 +376,6 @@ function updateNinja(nj, dt) {
         nj.m.visible = false;
         splash(nj.x, nj.z, 1.6);
         A.dodon(); A.sfx('splash1', 0.8);
-        floatText(nj.x, 6, nj.z, 'どどん！ 水遁の術', 'blue');
       }
       break;
     }
@@ -389,14 +386,12 @@ function updateNinja(nj, dt) {
         nj.state = 'swim1'; nj.hp = CFG.hp;
         nj.bam.visible = true; nj.bam.position.set(nj.x, waterY(nj.x, nj.z) - 1, nj.z); nj.pop = 0.35;
         A.pyokon();
-        floatText(nj.x, 3, nj.z, 'ぴょこん', 'green');
         break;
       }
       if (nj.t <= 0) {
         nj.state = 'bamboo'; nj.hp = CFG.hp;
         nj.bam.visible = true; nj.bam.position.set(nj.x, waterY(nj.x, nj.z) - 1, nj.z); nj.pop = 0.35;
         A.pyokon();
-        floatText(nj.x, 3, nj.z, 'ぴょこん', 'green');
       }
       break;
     }
@@ -490,7 +485,6 @@ function updateNinja(nj, dt) {
         nj.m.visible = false;
         splash(nj.x, nj.z, 1.6);
         A.dodon(); A.sfx('splash1', 0.8);
-        floatText(nj.x, 6, nj.z, 'どどん！ 水遁の術', 'blue');
         alertMsg(`忍者が${moatName(nj.x, nj.z) || '内堀'}に飛び込んだ！`);
       }
       break;
@@ -519,8 +513,21 @@ function updateNinja(nj, dt) {
       nj.vy -= 20 * dt;
       nj.y += nj.vy * dt; nj.x += nj.vx * dt; nj.z += nj.vz * dt;
       nj.m.position.set(nj.x, nj.y, nj.z);
-      nj.m.rotation.x += dt * 6;
-      if (nj.y <= groundH(nj.x, nj.z)) { splash(nj.x, nj.z, 1.2); A.sfx('splash0', 0.6); capture(nj, true); }
+      nj.m.rotation.x += dt * 7;
+      const wy = isWater(nj.x, nj.z) ? waterY(nj.x, nj.z) : waterY(nj.tx, nj.tz);
+      if (nj.vy < 0 && nj.y <= wy) {
+        // ドボン
+        splash(nj.x, nj.z, 2.2); splash(nj.x + 1.5, nj.z - 1, 1.2);
+        A.dodon(); A.sfx('splash1', 0.9);
+        nj.state = 'sink'; nj.t = 1.2; nj.y = wy;
+      }
+      break;
+    }
+    case 'sink': {
+      nj.y -= dt * 3;
+      nj.m.position.set(nj.x, nj.y, nj.z);
+      nj.m.rotation.x += dt * 2;
+      if (nj.t <= 0) { nj.state = 'gone'; scene.remove(nj.m); scene.remove(nj.bam); nj.marker.remove(); }
       break;
     }
     case 'bound': {
@@ -559,7 +566,6 @@ function startClimb(nj, c) {
   splash(nj.x, nj.z, 0.8);
   A.sfx('splash2', 0.6);
   const where = moatName(wx, wz);
-  floatText(wx, nj.H + 3, wz, nj.dote ? '土手を這い上がる！' : '石垣を登る！', 'red');
   alertMsg(`${where ? where + 'で' : ''}忍者が${nj.dote ? '土手を這い上がって' : '石垣を登って'}いる！`);
   A.sfx('bell', 0.6);
 }
@@ -602,7 +608,6 @@ function startClimbOut(nj) {
   nj.bam.visible = false;
   splash(nj.x, nj.z, 0.8);
   A.sfx('splash2', 0.5);
-  floatText(wx, nj.H + 3, wz, '外堀を越えるぞ！', 'red');
 }
 function nearestLand(x, z) {
   for (let r = 3; r < 40; r += 3) for (let a = 0; a < 16; a++) {
@@ -621,36 +626,31 @@ function startRun(nj) {
   A.sfx('bell', 0.5, 1.1);
 }
 
+// 投げ銭か投げ輪が当たれば、それで終わり: お濠へドボン
 function hitNinja(nj, byLasso) {
   if (!['roof', 'glide', 'bamboo', 'emerge', 'climb', 'swim1', 'emerge1', 'climbOut', 'run'].includes(nj.state)) return;
-  if (byLasso) { capture(nj); return; }
-  nj.hp--;
   A.sfx('hit', 0.6, 1.3);
-  if (nj.state === 'climb') { nj.prog -= 2 / Math.max(1, nj.H - nj.wy); nj.stun = 0.5; }
-  if (nj.state === 'bamboo' || nj.state === 'swim1') { nj.stun = 0.7; }
-  if (nj.state === 'climbOut') { nj.prog -= 1 / nj.H; nj.stun = 0.5; }
-  if (nj.hp <= 0) {
-    if (['glide', 'climb', 'roof', 'emerge', 'run', 'climbOut', 'emerge1'].includes(nj.state)) {
-      // 落ちる
-      const k = nj.state === 'glide' ? 0.3 : 0;
-      nj.state = 'fall'; nj.vy = 2; nj.m.visible = true;
-      nj.vx = (nj.vx || 0) * k + (P.x - nj.x) * 0.02; nj.vz = (nj.vz || 0) * k + (P.z - nj.z) * 0.02;
-      if (nj.y < groundH(nj.x, nj.z) + 0.5) nj.y = groundH(nj.x, nj.z) + 0.5;
-      floatText(nj.x, nj.y + 2, nj.z, '落ちた！', 'gold');
-    } else capture(nj);
-  } else floatText(nj.x, (nj.state === 'climb' ? nj.y : 0) + 2.5, nj.z, `あと${nj.hp}`, 'gold');
-}
-
-function capture(nj, fromFall) {
-  if (nj.state === 'bound' || nj.state === 'gone') return;
   const c = ninjaCenter(nj);
-  nj.cx = c.x; nj.cy = Math.max(0, c.y); nj.cz = c.z; nj.bt = G.t;
-  nj.state = 'bound';
   G.captured++;
   A.hyoshigi(); A.sfx('kill', 0.5);
-  floatText(c.x, c.y + 3, c.z, '御用だ！', 'gold', true);
+  nj.m.visible = true; nj.bam.visible = false; nj.marker.style.display = 'none';
+  poseNinja(nj.m, 'stun', G.t);
+  if (['bamboo', 'swim1', 'dive'].includes(nj.state)) {
+    // 水の中: 水しぶきを上げて浮かび、沈む
+    nj.x = c.x; nj.z = c.z; nj.y = waterY(c.x, c.z) + 1; nj.vy = 7; nj.vx = nj.vz = 0; nj.tx = c.x; nj.tz = c.z;
+    splash(c.x, c.z, 1.4);
+  } else {
+    // 一番近い水へ放物線で落ちる
+    let [tx, tz] = isWater(c.x, c.z) ? [c.x, c.z] : (nearestWater(c.x, c.z) || [c.x, c.z]);
+    const T = clamp(Math.hypot(tx - c.x, tz - c.z) / 25, 0.6, 1.6);
+    nj.x = c.x; nj.y = c.y; nj.z = c.z; nj.tx = tx; nj.tz = tz;
+    nj.vx = (tx - c.x) / T; nj.vz = (tz - c.z) / T;
+    nj.vy = (waterY(tx, tz) - c.y + 0.5 * 20 * T * T) / T;
+  }
+  nj.state = 'fall';
   if (G.captured >= CFG.total) finish(true);
 }
+function capture(nj) { hitNinja(nj, true); }
 
 function intrude(nj) {
   if (G.state !== 'play') return;
@@ -700,7 +700,6 @@ function throwCoins() {
       A.chirin(k);
     }, k * 110);
   }
-  if (!tg) floatText(P.x + Math.cos(P.h) * 10, 4, P.z + Math.sin(P.h) * 10, '近くに忍者がいない', 'gray');
 }
 const ropeMat = new THREE.LineBasicMaterial({ color: 0xd8b070 });
 function throwLasso() {
@@ -712,7 +711,7 @@ function throwLasso() {
   let aim;
   if (tg) {
     const c = ninjaCenter(tg), d = c.distanceTo(p), T = 0.25 + d / 60;
-    aim = c.add(new THREE.Vector3(tg.vx || 0, 0, tg.vz || 0).multiplyScalar(tg.state === 'glide' || tg.state === 'bamboo' ? T : 0));
+    aim = c.add(new THREE.Vector3(tg.vx || 0, 0, tg.vz || 0).multiplyScalar(['glide', 'bamboo', 'swim1', 'run'].includes(tg.state) ? T : 0));
     if (tg.state === 'glide') aim.y = Math.max(0.5, aim.y - (tg.sy / tg.T) * T);
   } else {
     aim = new THREE.Vector3(P.x + Math.cos(P.h) * 60, 0, P.z + Math.sin(P.h) * 60);
@@ -732,7 +731,7 @@ function bez(l, s) {
 function updateWeapons(dt) {
   for (const c of G.coins) {
     c.life -= dt;
-    if (c.tg && c.tg.state !== 'gone' && c.tg.state !== 'bound' && c.tg.state !== 'fall') {
+    if (c.tg && !['gone', 'bound', 'fall', 'sink'].includes(c.tg.state)) {
       const want = ninjaCenter(c.tg).sub(c.p).normalize().multiplyScalar(CFG.coinSpeed);
       c.v.lerp(want, Math.min(1, dt * 10));
     } else c.v.y -= 9.8 * dt;
@@ -761,7 +760,6 @@ function updateWeapons(dt) {
         hitNinja(tg, true);
       } else {
         if (l.to.y < 1) { splash(l.to.x, l.to.z, 0.6); A.sfx('splash0', 0.4); }
-        floatText(l.to.x, l.to.y + 3, l.to.z, tg ? '外れた！' : '空振り', 'gray');
       }
     }
     if (l.done && s <= 0) { scene.remove(l.line); scene.remove(l.loop); l.dead = true; }
@@ -814,7 +812,8 @@ function updateFloats(dt) {
   G.floats = G.floats.filter((f) => !f.dead);
 }
 let alertTimer = 0;
-function alertMsg(t) { const a = $('alert'); a.textContent = t; a.classList.add('show'); alertTimer = 4; }
+// 帯の知らせは出さない (キャラの動きと道案内だけで遊ぶ)
+function alertMsg(t) {}
 
 // ---------- 小舟 ----------
 function updateBoat(dt) {
@@ -1107,7 +1106,7 @@ function drawMinimap() {
   const X = (x, z) => { const [a, b] = xzToMap(x, z); return [(a - cx) * s + c.width / 2, (b - cy) * s + c.height / 2]; };
   for (const w of warps) for (const e of [w.a, w.b]) { const [a, b] = X(e.x, e.z); g.fillStyle = '#0cc'; g.fillRect(a - 5, b - 5, 10, 10); }
   for (const nj of G.ninjas) {
-    if (nj.state === 'gone' || nj.state === 'bound') continue;
+    if (['gone', 'bound', 'fall', 'sink'].includes(nj.state)) continue;
     const danger = nj.state === 'climb' || nj.state === 'emerge';
     if (danger && Math.floor(G.t * 4) % 2) continue;
     const [a, b] = X(nj.x, nj.z);
@@ -1137,20 +1136,16 @@ function updateMarkers() {
   let worst = null;
   for (const nj of G.ninjas) {
     const el = nj.marker;
-    // 水の中の忍者は、水面から出ている竹筒だけ (目印は出さない)
-    if (!['roof', 'glide', 'emerge', 'climb', 'emerge1', 'climbOut', 'run'].includes(nj.state)) { el.style.display = 'none'; continue; }
-    const c = ninjaCenter(nj); c.y += nj.state === 'bamboo' ? 2.5 : 2.6;
-    const danger = nj.state === 'climb' || nj.state === 'emerge';
-    if (danger && (!worst || nj.prog > (worst.prog || 0))) worst = nj;
+    if ((nj.state === 'climb' || nj.state === 'emerge') && (!worst || nj.prog > (worst.prog || 0))) worst = nj;
+    // 印は水遁の術 (水の中で竹筒だけ) のときの ▼ だけ。ほかはキャラの動きを見る
+    if (nj.state !== 'bamboo' && nj.state !== 'swim1') { el.style.display = 'none'; continue; }
+    const c = ninjaCenter(nj); c.y += 3;
     tmpV.copy(c).project(camera);
-    const d = c.distanceTo(camera.position);
-    if (tmpV.z > 1 || Math.abs(tmpV.x) > 1.1 || Math.abs(tmpV.y) > 1.1 || (d > 2500 && !danger)) { el.style.display = 'none'; continue; }
+    if (tmpV.z > 1 || Math.abs(tmpV.x) > 1.1 || Math.abs(tmpV.y) > 1.1 || c.distanceTo(camera.position) > 900) { el.style.display = 'none'; continue; }
     el.style.display = '';
-    el.className = 'nmark ' + (danger ? 'danger' : nj.state) + (hidden(c) ? ' behind' : '');
+    el.className = 'nmark down';
     el.style.left = ((tmpV.x + 1) / 2 * innerWidth) + 'px';
     el.style.top = ((1 - tmpV.y) / 2 * innerHeight) + 'px';
-    el.querySelector('s').style.width = danger ? (Math.min(1, nj.prog || 0) * 100) + '%' : (Math.min(1, nj.hp / CFG.hp) * 100) + '%';
-    el.querySelector('b').textContent = danger ? '登' : nj.state === 'run' ? '走' : nj.state === 'climbOut' || nj.state === 'emerge1' ? '越' : nj.state === 'glide' ? '飛' : '!';
   }
   // 一番危ない忍者への矢印
   const ar = $('dangerArrow');
@@ -1199,7 +1194,7 @@ function updateNav() {
   // 忍者が出ていれば一番近い忍者を、いなければ外堀を回る道の次の地点を指す
   let ninja = null, nd = 1e18;
   for (const nj of G.ninjas) {
-    if (['gone', 'bound', 'in', 'fall'].includes(nj.state)) continue;
+    if (['gone', 'bound', 'in', 'fall', 'sink'].includes(nj.state)) continue;
     const d = Math.hypot(nj.x - P.x, nj.z - P.z) * (nj.state === 'climb' || nj.state === 'emerge' ? 0.4 : 1);
     if (d < nd) { nd = d; ninja = nj; }
   }
@@ -1232,7 +1227,7 @@ function updateNav() {
       for (const q of path) if (clear(cellX(q), cellZ(q))) { tx = cellX(q); tz = cellZ(q); }
     }
     const dn = Math.hypot(R[i].x - P.x, R[i].z - P.z);
-    label = `外堀を進め　次は${R[i].n}（約${dn >= 1000 ? (Math.round(dn / 100) / 10) + 'km' : Math.round(dn / 10) * 10 + 'm'}）`;
+    label = `${R[i].n}（約${dn >= 1000 ? (Math.round(dn / 100) / 10) + 'km' : Math.round(dn / 10) * 10 + 'm'}）`;
   } else {
     const best = ninja;
     tx = best.x; tz = best.z;
@@ -1349,7 +1344,7 @@ function step(dt) {
     G.coinCd = Math.max(0, G.coinCd - dt); G.lassoCd = Math.max(0, G.lassoCd - dt);
     // 出現
     // 小舟が近づくと、潜伏していた忍者がムササビの術で現れる。しばらく誰も出ていなければ一番近い所から
-    const active = G.ninjas.filter((n) => !['gone', 'bound', 'in'].includes(n.state)).length;
+    const active = G.ninjas.filter((n) => !['gone', 'bound', 'in', 'fall', 'sink'].includes(n.state)).length;
     if (G.hidden && G.hidden.length && active < CFG.maxActive && G.t >= G.nextSpawn) {
       const i = G.hidden.findIndex((p) => Math.hypot(cellX(p.land) - P.x, cellZ(p.land) - P.z) < CFG.wakeDist);
       if (i >= 0) { spawnNinja(G.hidden.splice(i, 1)[0]); G.nextSpawn = G.t + 2; G.lastSpawn = G.t; }
