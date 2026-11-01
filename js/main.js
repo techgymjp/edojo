@@ -36,6 +36,7 @@ export const CFG = {
   gears: [-5, 0, 12, 20, 28],
   accel0: 5, accelGrow: 4, accelMax: 14, vmax: 50, vback: -8, brake: 18, drag: 0.12, // 上を長押しで加速 (m/s²)
   jump0: 7, jumpBoost: 26, jumpHold: 0.5, gravity: 22,     // ジャンプ (長押しで高く)
+  throwArc: 70,       // 前に投げられる範囲 (舳先から左右の角度、度)
   maxEscape: 5,       // 外堀を渡り切られて取り逃がすと負けになる人数
   boatJumpSpeed: 18,  // これより速いと舟ごと跳ぶ (m/s)
   ninjaScale: 4,    // 忍者を大きめに (遠くからでも見えるように)
@@ -786,7 +787,10 @@ function pickTarget(maxR, minR = 0) {
   let best = null, bd = 1e9;
   for (const nj of G.ninjas) {
     if (!['roof', 'glide', 'bamboo', 'emerge', 'climb', 'swim1', 'emerge1', 'climbOut', 'run', 'walk'].includes(nj.state)) continue;
-    const d = ninjaCenter(nj).distanceTo(hp);
+    const c = ninjaCenter(nj), d = c.distanceTo(hp);
+    // 前にしか投げられない: 舳先の向きから左右 CFG.throwArc (度) の中にいる忍者だけ
+    const ang = Math.abs(angDiff(Math.atan2(c.z - P.z, c.x - P.x), P.h));
+    if (ang > CFG.throwArc * Math.PI / 180) continue;
     if (d >= minR && d <= maxR && d < bd) { bd = d; best = nj; }
   }
   return best;
