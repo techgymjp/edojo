@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""国土地理院ベクトルタイルの railway から、JR の線路 (地上・高架・トンネル) を取り出し js/rail-data.js を作る。
-  railState 1 = 高架 (lvOrder で段)、3 = 地上 (普通の線路)、トンネル (ftCode 2804) は描かない。
+"""国土地理院ベクトルタイルの railway から、JR・地下鉄の地上区間・私鉄の線路 (地上・高架。トンネルは除く) と駅を取り出し js/rail-data.js を作る。
+  railState 0 = 地上、1 = 橋・高架 (lvOrder で段)、2 = トンネル・3 = 地下 (描かない)。
   rtCode の先頭 6 桁 402010 = JR (国土地理院の路線コード)。
   高さ: 高架は 7 + 段 × 6m、地上は 0。境目は勾配 3% でならす。座標はターザン大東京と同じ (原点 35.674, 139.745)
 出典: 国土地理院 ベクトルタイル (railway)
@@ -56,19 +56,21 @@ for X in range(int(tx(W - M)), int(tx(E + M)) + 1):
         if not d: continue
         for p, ls, ext in feats(d):
             if p.get('ftCode') != 8201: continue
-            if not str(p.get('rtCode', '')).startswith('402010'): continue  # JR だけ
+            jr = str(p.get('rtCode', '')).startswith('402010')  # JR か、それ以外 (地下鉄の地上区間・私鉄)
+            sta = 1 if p.get('staCode') else 0
             st = p.get('railState'); lv = int(p.get('lvOrder') or 0)
-            if st == 4 or st == 'トンネル': kind = 2
+            # railState: 0 普通 (地上) / 1 橋・高架 / 2 トンネル / 3 地下 / 4 雪覆い など
+            if st in (2, 3) or st == 'トンネル': kind = 2
             elif st == 1 or lv > 0: kind = 1
             else: kind = 0
             n = int(p.get('snglDbl') or 2)
             for l in ls:
                 pts = [xz(X, Y, px, py, ext) for px, py in l]
-                if len(pts) >= 2: segs.append((kind, lv, pts, n))
+                if len(pts) >= 2: segs.append((kind, lv, pts, n, jr, sta))
 sys.stderr.write(f'segments {len(segs)}\n')
 key = lambda q: (round(q[0] / 0.8), round(q[1] / 0.8))
 target, adj, pos = {}, defaultdict(set), {}
-for kind, lv, pts, n in segs:
+for kind, lv, pts, n, jr, sta in segs:
     t = 7 + max(0, lv - 1) * 6 if kind == 1 else 0.0
     ks = [key(q) for q in pts]
     for k, q in zip(ks, pts): pos[k] = q; target[k] = max(target.get(k, -1e9), t)
@@ -81,7 +83,7 @@ while pq:
     for nb in adj[k]:
         nv = v + 0.03 * math.hypot(pos[k][0] - pos[nb][0], pos[k][1] - pos[nb][1])
         if nv < h[nb] - 1e-3: h[nb] = nv; heapq.heappush(pq, (nv, nb))
-out = [{'x': [round(q[0], 1) for q in pts], 'z': [round(q[1], 1) for q in pts], 'h': [round(h[key(q)], 2) for q in pts], 't': 1 if kind == 2 else 0, 'n': n} for kind, lv, pts, n in segs]
+out = [{'x': [round(q[0], 1) for q in pts], 'z': [round(q[1], 1) for q in pts], 'h': [round(h[key(q)], 2) for q in pts], 't': 1 if kind == 2 else 0, 'n': n, 'jr': 1 if jr else 0, 'sta': sta} for kind, lv, pts, n, jr, sta in segs]
 sys.stdout.write('// 自動生成 (tools/fetch_rail.py)。出典: 国土地理院 ベクトルタイル (railway, JR)\n')
 sys.stdout.write('export const RAIL = ' + json.dumps(out, separators=(',', ':')) + ';\n')
-sys.stderr.write(f'lines {len(out)} elevated {sum(1 for s in segs if s[0] == 1)} tunnel {sum(1 for s in segs if s[0] == 2)}\n')
+sys.stderr.write(f'lines {len(out)} elevated {sum(1 for s in segs if s[0] == 1)} nonJR {sum(1 for s in segs if not s[4])} stations {sum(1 for s in segs if s[5])}\n')

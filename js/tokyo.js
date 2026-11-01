@@ -96,6 +96,33 @@ function buildRail(root, city, OX, OZ) {
       }
     }
   }
+  // 駅のホーム: 駅の区間 (sta) の線路の両側に、ホームと屋根
+  const PLAT = [0.78, 0.76, 0.72], ROOFC = [0.4, 0.45, 0.5], EDGE = [0.95, 0.85, 0.2];
+  const boxQ = (cx, cz, ux, uz, L, w, y0, y1, col) => {
+    const vx = -uz, vz = ux, hl = L / 2, hw = w / 2, P2 = (a, b, y) => [cx + ux * a + vx * b, y, cz + uz * a + vz * b];
+    quad(P2(-hl, -hw, y1), P2(-hl, hw, y1), P2(hl, hw, y1), P2(hl, -hw, y1), [0, 1, 0], col);
+    quad(P2(-hl, hw, y0), P2(hl, hw, y0), P2(hl, hw, y1), P2(-hl, hw, y1), [vx, 0, vz], col);
+    quad(P2(hl, -hw, y0), P2(-hl, -hw, y0), P2(-hl, -hw, y1), P2(hl, -hw, y1), [-vx, 0, -vz], col);
+  };
+  let nplat = 0;
+  for (const r of RAIL) {
+    if (r.t || !r.sta) continue;
+    const Wd = r.n >= 4 ? 9 : 5;
+    for (let i = 0; i + 1 < r.x.length; i++) {
+      const x1 = r.x[i], z1 = r.z[i], x2 = r.x[i + 1], z2 = r.z[i + 1], L = Math.hypot(x2 - x1, z2 - z1);
+      if (L < 2) continue;
+      const ux = (x2 - x1) / L, uz = (z2 - z1) / L, cx = (x1 + x2) / 2, cz = (z1 + z2) / 2;
+      const y = (gy(x1, z1) + r.h[i] + gy(x2, z2) + r.h[i + 1]) / 2 + 0.2;
+      for (const sd of [-1, 1]) {
+        const ox = -uz * sd * (Wd / 2 + 2.2), oz = ux * sd * (Wd / 2 + 2.2);
+        boxQ(cx + ox, cz + oz, ux, uz, L + 0.3, 4, y - 0.2, y + 1.1, PLAT);
+        boxQ(cx - uz * sd * (Wd / 2 + 0.4), cz + ux * sd * (Wd / 2 + 0.4), ux, uz, L + 0.3, 0.4, y + 1.1, y + 1.12, EDGE);
+        boxQ(cx + ox, cz + oz, ux, uz, L + 0.3, 5, y + 4.6, y + 4.9, ROOFC);
+        if (i % 2 === 0) boxQ(cx + ox, cz + oz, ux, uz, 0.3, 0.3, y + 1.1, y + 4.6, ROOFC);
+      }
+      nplat++;
+    }
+  }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(deck.p, 3));
   g.setAttribute('normal', new THREE.Float32BufferAttribute(deck.n, 3));
@@ -111,7 +138,7 @@ function buildRail(root, city, OX, OZ) {
   // 電車: 線をつないだ長い道筋を走らせる
   const k = (x, z) => Math.round(x / 2) + ',' + Math.round(z / 2);
   const ends = new Map(), used = new Set();
-  RAIL.forEach((r, i) => { if (r.t) return; for (const e of [0, 1]) { const j = e ? r.x.length - 1 : 0, kk = k(r.x[j], r.z[j]); if (!ends.has(kk)) ends.set(kk, []); ends.get(kk).push(i); } });
+  RAIL.forEach((r, i) => { if (r.t) return; for (const e of [0, 1]) { const j = e ? r.x.length - 1 : 0, kk = r.jr + ':' + k(r.x[j], r.z[j]); if (!ends.has(kk)) ends.set(kk, []); ends.get(kk).push(i); } });
   const chains = [];
   RAIL.forEach((r, i) => {
     if (r.t || used.has(i)) return;
@@ -120,7 +147,7 @@ function buildRail(root, city, OX, OZ) {
     for (const dir of [1, -1]) {
       for (let guard = 0; guard < 200; guard++) {
         const last = dir > 0 ? pts[pts.length - 1] : pts[0];
-        const cand = (ends.get(k(last[0], last[1])) || []).filter((q) => !used.has(q));
+        const cand = (ends.get(r.jr + ':' + k(last[0], last[1])) || []).filter((q) => !used.has(q));
         if (!cand.length) break;
         const q = cand[0], rq = RAIL[q]; used.add(q);
         let add = rq.x.map((x, j) => [x, rq.z[j], rq.h[j]]);
@@ -130,17 +157,18 @@ function buildRail(root, city, OX, OZ) {
       }
     }
     let L = 0; for (let j = 1; j < pts.length; j++) L += Math.hypot(pts[j][0] - pts[j - 1][0], pts[j][1] - pts[j - 1][1]);
-    chains.push({ pts, L });
+    chains.push({ pts, L, jr: r.jr });
   });
   chains.sort((a, b) => b.L - a.L);
   const COLORS = [0xf5c400, 0xf15a22, 0x9acd32, 0x00b2e5, 0xf5c400, 0x9acd32];
   const lines = [];
-  for (const ch of chains.slice(0, 6)) {
-    if (ch.L < 600) break;
+  const pick = [...chains.filter((c) => c.jr).slice(0, 6), ...chains.filter((c) => !c.jr && c.L > 300).slice(0, 3)];
+  for (const ch of pick) {
+    if (ch.L < 300) continue;
     const seg = []; let s0 = 0;
     for (let j = 0; j + 1 < ch.pts.length; j++) { const [x1, z1, h1] = ch.pts[j], [x2, z2, h2] = ch.pts[j + 1], len = Math.hypot(x2 - x1, z2 - z1); seg.push({ x1, z1, h1, x2, z2, h2, len, s: s0 }); s0 += len; }
     const at = (d) => { d = Math.max(0, Math.min(ch.L, d)); for (const q of seg) if (d <= q.s + q.len) { const t = (d - q.s) / (q.len || 1); return [q.x1 + (q.x2 - q.x1) * t, q.z1 + (q.z2 - q.z1) * t, Math.atan2(q.x2 - q.x1, q.z2 - q.z1), q.h1 + (q.h2 - q.h1) * t]; } const q = seg[seg.length - 1]; return [q.x2, q.z2, 0, q.h2]; };
-    const col = COLORS[lines.length % COLORS.length];
+    const col = ch.jr ? COLORS[lines.length % COLORS.length] : 0xe60012; // 地下鉄 (丸ノ内線など) は赤
     const cars = [];
     for (let c = 0; c < 8; c++) {
       const g2 = new THREE.Group();
@@ -149,16 +177,16 @@ function buildRail(root, city, OX, OZ) {
       const win = new THREE.Mesh(new THREE.BoxGeometry(3.0, 0.9, 18).translate(0, 3.0, 0), new THREE.MeshLambertMaterial({ color: 0x2d3a48 }));
       g2.add(body, band, win); root.add(g2); cars.push(g2);
     }
-    lines.push({ line: { L: ch.L, at }, cars, speed: 14, d: ch.L * Math.random(), dir: Math.random() < 0.5 ? 1 : -1 });
+    lines.push({ line: { L: ch.L, at }, cars, speed: 14, d: Math.min(ch.L - 20, 170 + (ch.L - 190) * Math.random()), dir: Math.random() < 0.5 ? 1 : -1 });
   }
-  console.log('rail lines', RAIL.length, 'chains', chains.length, 'trains', lines.length, 'piers', piers.length);
+  console.log('platform segs', nplat, 'rail lines', RAIL.length, 'chains', chains.length, 'trains', lines.length, 'piers', piers.length);
   return {
     lines, rl: [],
     update(dt) {
       for (const t of lines) {
         t.d += t.speed * t.dir * dt;
         if (t.d > t.line.L - 10) { t.d = t.line.L - 10; t.dir = -1; }
-        if (t.d < 170) { t.d = 170; t.dir = 1; }
+        if (t.d < Math.min(170, t.line.L / 2)) { t.d = Math.min(170, t.line.L / 2); t.dir = 1; }
         t.cars.forEach((c, i) => { const [x, z, rot, h] = t.line.at(t.d - i * 20 * t.dir); c.position.set(x, gy(x, z) + h + 0.2, z); c.rotation.y = rot; });
       }
     },
