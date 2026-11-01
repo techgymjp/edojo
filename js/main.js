@@ -1372,7 +1372,7 @@ function drawMinimap() {
     for (const [a, b] of [[a1, b1], [a2, b2]]) { g.fillStyle = '#e01818'; g.strokeStyle = '#fff'; g.lineWidth = 2; g.beginPath(); g.arc(a, b, 6, 0, Math.PI * 2); g.fill(); g.stroke(); }
   }
   for (const nj of G.ninjas) {
-    if (['gone', 'bound', 'fall', 'sink'].includes(nj.state)) continue;
+    if (['gone', 'bound', 'fall', 'sink', 'wait'].includes(nj.state)) continue;
     const danger = nj.state === 'climb' || nj.state === 'emerge';
     if (danger && Math.floor(G.t * 4) % 2) continue;
     const [a, b] = X(nj.x, nj.z);
