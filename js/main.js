@@ -269,7 +269,7 @@ function buildNav() {
     const x = cellX(c), z = cellZ(c);
     let md = 1e9;
     for (let i = 0; i < ring.length; i++) md = Math.min(md, segD(x, z, ring[i], ring[(i + 1) % ring.length]));
-    if (md < 45) outerLand.push(c);
+    if (md < 90) outerLand.push(c);
   }
   // 内堀に飛び込む所: 内郭・本丸の石垣から 9〜75m の水
   const innerEntry = [];
@@ -472,12 +472,21 @@ function updateNinja(nj, dt) {
       break;
     }
     case 'walk': {
-      const dx = nj.lx - nj.x, dz = nj.lz - nj.z, l = Math.hypot(dx, dz);
-      if (l < 8) { escape(nj); break; }
+      // ビルをよけた道: 歩く道の地図で、今いるます目より近いとなりへ
+      const F = walkField();
+      { const i = Math.floor(nj.x / F.C), j = Math.floor(nj.z / F.C), k = j * F.gw + i, d0 = F.dist[k];
+        if (d0 >= 0) {
+          if (d0 <= 2 || codeAt(nj.x, nj.z) === 3 || codeAt(nj.x, nj.z) === 4) { escape(nj); break; }
+          let best = -1, bd = d0;
+          for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) { const nk = (j + dj) * F.gw + i + di, dd = F.dist[nk]; if (dd >= 0 && dd < bd) { bd = dd; best = nk; } }
+          if (best >= 0) { nj.lx = (best % F.gw + 0.5) * F.C; nj.lz = (((best / F.gw) | 0) + 0.5) * F.C; }
+        } }
+      const dx = nj.lx - nj.x, dz = nj.lz - nj.z, l = Math.hypot(dx, dz) || 1;
+      if (Math.hypot(nj.lx - nj.x, nj.lz - nj.z) < 0.5 && F.dist[Math.floor(nj.z / F.C) * F.gw + Math.floor(nj.x / F.C)] < 0) { escape(nj); break; }
       const sp = nj.walkSp || CFG.walk;
       nj.vx = dx / l * sp; nj.vz = dz / l * sp;
       nj.x += nj.vx * dt; nj.z += nj.vz * dt;
-      nj.y = terrainH(nj.x, nj.z);
+      nj.y = groundH(nj.x, nj.z);
       nj.m.position.set(nj.x, nj.y, nj.z);
       nj.m.rotation.set(0, Math.atan2(dx, dz), 0);
       poseNinja(nj.m, 'walk', G.t * 1.5 + nj.id);
@@ -687,6 +696,49 @@ function hitNinja(nj, byLasso) {
 function capture(nj) { hitNinja(nj, true); }
 
 // 外堀を渡り切ったら消える (取り逃し)。CFG.maxEscape 人取り逃したら負け
+// 歩く道: 8m のます目で、描いているビルの中と水は通れない。内堀の岸からの距離 (歩いた道のり) の地図を一度だけ作る
+let WF = null;
+function walkField() {
+  if (WF) return WF;
+  const C = 8, gw = Math.ceil(W.sizeX / C), gh = Math.ceil(W.sizeZ / C), n = gw * gh;
+  const block = new Uint8Array(n);
+  const mark = (x, z) => { const i = Math.floor(x / C), j = Math.floor(z / C); if (i >= 0 && j >= 0 && i < gw && j < gh) block[j * gw + i] = 1; };
+  // ターザン大東京のビル (描いているもの)
+  const T = tokyo, city = T.city;
+  for (const bd of city.bld) {
+    if (!bd.plateau) continue;
+    for (let x = bd.minx; x <= bd.maxx; x += C / 2) for (let z = bd.minz; z <= bd.maxz; z += C / 2) if (city.inside(bd, x, z)) mark(x + T.OX, z + T.OZ);
+  }
+  // 箱のビル
+  for (const b of modern.list) {
+    const cs = Math.cos(-b.r), sn = Math.sin(-b.r);
+    for (let u = -b.sx / 2; u <= b.sx / 2; u += C / 2) for (let v = -b.sz / 2; v <= b.sz / 2; v += C / 2) mark(b.x + u * cs - v * sn, b.z + u * sn + v * cs);
+  }
+  // 水は通れない (内堀の岸は目的地)
+  const dist = new Int32Array(n).fill(-1), q = new Int32Array(n);
+  let qh = 0, qt = 0;
+  for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) {
+    const k = j * gw + i, x = (i + 0.5) * C, z = (j + 0.5) * C;
+    if (isWater(x, z)) { block[k] = 2; continue; }
+    const c = codeAt(x, z);
+    if (c === 3 || c === 4) { block[k] = 0; dist[k] = 0; q[qt++] = k; } // お城の区域 (内堀の内側) に着いたら目的地
+  }
+  // 目的地は内堀に面した所だけ: お城の区域のます目のうち、お城の外側の水 (内堀) に接している所から広げる
+  while (qh < qt) {
+    const k = q[qh++], i = k % gw, j = (k / gw) | 0, d = dist[k] + 1;
+    for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+      const ii = i + di, jj = j + dj; if (ii < 0 || jj < 0 || ii >= gw || jj >= gh) continue;
+      const nk = jj * gw + ii;
+      if (dist[nk] >= 0) continue;
+      // 内堀を渡る: 水のます目は、お城の区域から 120m 以内なら通れる (内堀の水)
+      if (block[nk] === 2 && d > 15) continue;
+      if (block[nk] === 1) continue;
+      dist[nk] = d; q[qt++] = nk;
+    }
+  }
+  WF = { C, gw, gh, dist };
+  return WF;
+}
 // 上陸した忍者は、一番近い内堀へ歩いて向かう。内堀の岸に着いたら取り逃し
 function startWalk(nj) {
   let best = -1, bd = 1e18;
@@ -694,7 +746,8 @@ function startWalk(nj) {
   if (best < 0) { escape(nj); return; }
   nj.lx = cellX(best); nj.lz = cellZ(best);
   // 内堀まで CFG.walkTime 秒ほどかけて歩く (遠いほど速歩き)
-  nj.walkSp = Math.max(CFG.walk, Math.sqrt(bd) / CFG.walkTime);
+  const F = walkField(), k0 = Math.floor(nj.z / F.C) * F.gw + Math.floor(nj.x / F.C), dd = F.dist[k0] >= 0 ? F.dist[k0] * F.C * 1.1 : Math.sqrt(bd);
+  nj.walkSp = Math.max(CFG.walk, dd / CFG.walkTime);
   nj.state = 'walk';
 }
 function escape(nj) {
