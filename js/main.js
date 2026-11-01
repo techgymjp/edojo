@@ -1244,7 +1244,8 @@ function drawMinimap() {
   let inner = false;
   for (const r of [20, 60, 110, 150]) { for (let a = 0; a < 12 && !inner; a++) { const c = codeAt(P.x + Math.cos(a * Math.PI / 6) * r, P.z + Math.sin(a * Math.PI / 6) * r); if (c === 3 || c === 4) inner = true; } if (inner) break; }
   // 本丸の近くのお濠では、さらに倍 (4 倍)
-  const HONMARU_MOATS = ['平川濠', '大手濠', '桔梗濠', '蓮池濠', '乾濠', '天神濠', '白鳥濠', '和田倉濠', '二重橋濠', '蛤濠', '清水濠', '道灌濠'];
+  // 本丸のまわりのお濠 (平川濠・天神濠・白鳥濠・蓮池濠・乾濠・蛤濠・桔梗濠・大手濠) では 4 倍
+  const HONMARU_MOATS = ['平川濠', '天神濠', '白鳥濠', '蓮池濠', '乾濠', '蛤濠', '桔梗濠', '大手濠'];
   const nearHon = inner && HONMARU_MOATS.includes(moatName(P.x, P.z));
   // 2 倍にする所: 日本橋川 (小石川門の三崎橋から呉服橋・常盤橋まで)、弁慶濠から先 (溜池・外濠・道三濠)
   // 外堀の全体の地図のまま: 神田川、隅田川、牛込濠〜市ヶ谷濠〜真田濠、日本橋川の常盤橋より下流
