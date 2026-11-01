@@ -6,6 +6,7 @@ import { makeBoat, animateBoat, makeNinja, poseNinja, makeBamboo, makeCoin } fro
 import * as A from './audio.js';
 import { Fireworks } from './fireworks.js';
 import { buildTokyo, addCutaway, CUT } from './tokyo.js';
+import { mergeStatic } from './merge.js';
 
 const $ = (id) => document.getElementById(id);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -33,17 +34,18 @@ export const CFG = {
   accel0: 5, accelGrow: 4, accelMax: 14, vmax: 50, vback: -8, brake: 18, drag: 0.12, // 上を長押しで加速 (m/s²)
   jump0: 7, jumpBoost: 26, jumpHold: 0.5, gravity: 22,     // ジャンプ (長押しで高く)
   boatJumpSpeed: 18,  // これより速いと舟ごと跳ぶ (m/s)
+  ninjaScale: 2.4,    // 忍者を大きめに (遠くからでも見えるように)
 };
 
 // ---------- 描画の準備 ----------
 const canvas = $('game');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.25));
 renderer.setSize(innerWidth, innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.3, 12000);
-scene.fog = new THREE.Fog(0x8090a8, 400, 3200);
+const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.5, 12000);
+scene.fog = new THREE.Fog(0x8090a8, 300, 2000);
 const hemi = new THREE.HemisphereLight(0xdfe8ff, 0x50483c, 1.1);
 scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xffd0a0, 1.6);
@@ -65,7 +67,7 @@ scene.add(moon);
 const G = {
   state: 'loading', t: 0, captured: 0, spawned: 0, nextSpawn: 0, st: 100, stDelay: 0,
   name: '平次', ninjas: [], coins: [], lassos: [], fx: [], floats: [], coinCd: 0, lassoCd: 0, throwT: 0,
-  warpCd: 0, camYaw: 0, camDist: 42, lastMouse: -99, mouseDir: null, endT: 0, result: null, intruder: null,
+  warpCd: 0, camYaw: 0, camDist: 30, lastMouse: -99, mouseDir: null, endT: 0, result: null, intruder: null,
 };
 const P = { x: 0, z: 0, h: 0, v: 0, gear: 1, roll: 0, dashT: 0 };
 let boat, water, modern, castle, warps = [], balloon, navi, fw, tokyo;
@@ -158,7 +160,10 @@ async function boot() {
     addCutaway(modern.mat);
     $('loadtext').textContent = '江戸城を建てています……';
     await frame();
+    const before = new Set(scene.children);
     castle = buildCastle(scene, segs.castleSegs);
+    // 城・門・櫓・御殿は動かないので、材質ごとに 1 つにまとめて軽くする
+    console.log('merge castle', mergeStatic(scene, scene.children.filter((c) => !before.has(c))));
     warps = buildWarps(scene);
     navi = buildNav();
     fw = new Fireworks(scene, 2.5, false);
@@ -319,11 +324,12 @@ function spawnNinja(plan) {
   const roof = plan.roof, land = plan.land;
   const lx = cellX(land), lz = cellZ(land);
   const m = makeNinja();
+  m.scale.setScalar(CFG.ninjaScale);
   const y0 = roof.y + roof.sy;
   m.position.set(roof.x, y0, roof.z);
   m.rotation.y = Math.atan2(lx - roof.x, lz - roof.z);
   scene.add(m);
-  const bam = makeBamboo(); bam.visible = false; scene.add(bam);
+  const bam = makeBamboo(); bam.visible = false; bam.scale.setScalar(CFG.ninjaScale); scene.add(bam);
   const marker = document.createElement('div'); marker.className = 'nmark'; marker.innerHTML = '<b>!</b><i><s></s></i>';
   $('marks').appendChild(marker);
   const nj = {
@@ -340,7 +346,7 @@ function spawnNinja(plan) {
 function ninjaCenter(nj) {
   if (nj.state === 'bamboo' || nj.state === 'dive' || nj.state === 'swim1') return new THREE.Vector3(nj.x, waterY(nj.x, nj.z) + 0.8, nj.z);
   if (nj.state === 'glide') return new THREE.Vector3(nj.x, nj.y, nj.z);
-  return new THREE.Vector3(nj.x, nj.y + 1, nj.z);
+  return new THREE.Vector3(nj.x, nj.y + 1 * CFG.ninjaScale, nj.z);
 }
 
 function updateNinja(nj, dt) {
@@ -731,7 +737,7 @@ function updateWeapons(dt) {
     } else c.v.y -= 9.8 * dt;
     c.p.addScaledVector(c.v, dt);
     c.m.position.copy(c.p); c.m.rotation.x += dt * 20; c.m.rotation.y += dt * 13;
-    if (c.tg && ['roof', 'glide', 'bamboo', 'emerge', 'climb', 'swim1', 'emerge1', 'climbOut', 'run'].includes(c.tg.state) && ninjaCenter(c.tg).distanceTo(c.p) < 1.6) {
+    if (c.tg && ['roof', 'glide', 'bamboo', 'emerge', 'climb', 'swim1', 'emerge1', 'climbOut', 'run'].includes(c.tg.state) && ninjaCenter(c.tg).distanceTo(c.p) < 3) {
       hitNinja(c.tg, false); c.life = 0;
       spark(c.p);
     }
@@ -990,7 +996,7 @@ function updateCamera(dt) {
   camera.position.z += (tz - camera.position.z) * k;
   camera.position.y += (ty - camera.position.y) * k;
   if (G.shake > 0) { G.shake -= dt; camera.position.x += rand(-0.3, 0.3); camera.position.y += rand(-0.2, 0.2); }
-  camera.lookAt(P.x + Math.cos(P.h) * 20, waterY(P.x, P.z) + 3.5, P.z + Math.sin(P.h) * 20);
+  camera.lookAt(P.x + Math.cos(P.h) * 55, waterY(P.x, P.z) + 3, P.z + Math.sin(P.h) * 55);
 }
 
 // ---------- 空の色: 暮れ六つから始まり、10 分で 1 日 (夜 → 朝 → 昼 → 夕方) ----------
@@ -1137,7 +1143,7 @@ function updateMarkers() {
     if (danger && (!worst || nj.prog > (worst.prog || 0))) worst = nj;
     tmpV.copy(c).project(camera);
     const d = c.distanceTo(camera.position);
-    if (tmpV.z > 1 || Math.abs(tmpV.x) > 1.1 || Math.abs(tmpV.y) > 1.1 || (d > 700 && !danger)) { el.style.display = 'none'; continue; }
+    if (tmpV.z > 1 || Math.abs(tmpV.x) > 1.1 || Math.abs(tmpV.y) > 1.1 || (d > 2500 && !danger)) { el.style.display = 'none'; continue; }
     el.style.display = '';
     el.className = 'nmark ' + (danger ? 'danger' : nj.state) + (hidden(c) ? ' behind' : '');
     el.style.left = ((tmpV.x + 1) / 2 * innerWidth) + 'px';
@@ -1398,7 +1404,7 @@ function loop(now) {
   water.update(now / 1000);
   tokyo.update(dt, now / 1000, modern.mat.userData.night.value, scene.fog.color, camera);
   // 見える範囲の街のタイルを組み立てる
-  { const t0 = performance.now(); while (tokyo.stream(camera.position, 2600, 1) > 0 && performance.now() - t0 < 5); }
+  { const t0 = performance.now(); while (tokyo.stream(camera.position, 1800, 1) > 0 && performance.now() - t0 < 4); }
   for (const w of warps) for (const e of [w.a, w.b]) e.disc.rotation.z = now / 400;
   I.pressed.clear();
   // 建物の透かし: 遊んでいるときだけ (カメラ → 小舟の主人公)
@@ -1406,7 +1412,8 @@ function loop(now) {
   else CUT.boat.value.set(0, -1e5, 0);
   // 水面の映り込みには透かしを使わない
   const cb = CUT.boat.value.y; CUT.boat.value.y = -1e5;
-  water.reflect(renderer, scene, camera, (G.state === 'play' || G.state === 'ending') ? waterY(P.x, P.z) : undefined);
+  // 映り込みは 2 フレームに 1 回 (軽くする)
+  if ((G.frame = (G.frame || 0) + 1) % 2 === 0) water.reflect(renderer, scene, camera, (G.state === 'play' || G.state === 'ending') ? waterY(P.x, P.z) : undefined);
   CUT.boat.value.y = cb;
   renderer.render(scene, camera);
 }
@@ -1414,4 +1421,5 @@ addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; cam
 requestAnimationFrame(loop);
 boot();
 window.__G = G; window.__P = P; window.__CFG = CFG; window.__ll = ll; window.__gh = groundH;
+window.__tokyo = () => tokyo; window.__renderer = renderer; window.__scene = scene;
 window.__dbg = { spawnNinja, throwCoins, throwLasso, startGame, navi: () => navi, isWater, cellOf, step, updateNav };

@@ -131,7 +131,7 @@ function quadXZ(x0, z0, x1, z1, y) {
 // 地面: 国土地理院の標高で起伏を付けたメッシュ (6m 格子)。水の所は描かない。お城の急な斜面は石垣の色
 export function buildGround(scene) {
   const { tex, lvTex } = makeGroundTextures();
-  const G = 6, nx = Math.ceil(W.sizeX / G) + 1, nz = Math.ceil(W.sizeZ / G) + 1;
+  const G = 10, nx = Math.ceil(W.sizeX / G) + 1, nz = Math.ceil(W.sizeZ / G) + 1;
   const pos = new Float32Array(nx * nz * 3), uv = new Float32Array(nx * nz * 2);
   for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
     const x = Math.min(W.sizeX, i * G), z = Math.min(W.sizeZ, j * G), k = j * nx + i;
@@ -474,7 +474,7 @@ export function buildWater(scene) {
   const gmesh = { visible: true };
   const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
   const mirrorCam = new THREE.PerspectiveCamera();
-  const rScale = isTouch ? 0.33 : 0.5;
+  const rScale = isTouch ? 0.25 : 0.35;
   const _v = new THREE.Vector3(), _t = new THREE.Vector3(), _n = new THREE.Vector3(0, 1, 0), _rm = new THREE.Matrix4(), _la = new THREE.Vector3();
   const _plane = new THREE.Plane(), _clip = new THREE.Vector4(), _q = new THREE.Vector4(), P = new THREE.Vector3(0, 0, 0);
   let mirrorY = null;
@@ -518,7 +518,7 @@ export function buildWater(scene) {
       pm[2] = _clip.x; pm[6] = _clip.y; pm[10] = _clip.z + 1 - 0.003; pm[14] = _clip.w;
       mesh.visible = false; gmesh.visible = false;
       const fogFar = scene.fog.far;
-      scene.fog.far = Math.min(fogFar, 1200);
+      scene.fog.far = Math.min(fogFar, 800);
       renderer.setRenderTarget(rt);
       renderer.clear();
       renderer.render(scene, mirrorCam);

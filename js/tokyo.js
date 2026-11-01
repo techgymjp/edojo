@@ -8,6 +8,7 @@ import { ROADS } from './tokyo/road-data.js';
 import { addTokyoTower, addDiet, addTechGym, addTokyoDome, addSkytree, addFuji, addDistant } from './tokyo/landmarks.js';
 import { addOchanomizu, addTokyoStation, addAkasaka, addRailways, addAkibaSigns, addNewOtani, addYotsuyaKudan, addGinzaNihonbashi, addUeno, addSensoji, addAsahi, addUenoAsakusa } from './tokyo/landmarks2.js';
 import { W, codeAt, isWater, LEVEL_H, terrainH, waterY } from './world.js';
+import { mergeStatic } from './merge.js';
 
 // 窓のテクスチャ (ターザン大東京と同じ。8×8 の窓が 1 枚。lit = 夜に明かりがつく窓)
 function windowTex(kind, lit, renderer) {
@@ -200,9 +201,22 @@ export function buildTokyo(scene, renderer) {
   const roofs = [];
   for (const bd of city.bld) if (bd.plateau && bd.h >= 14) roofs.push({ x: bd.cx + OX, z: bd.cz + OZ, y: bd.base || 0, sy: bd.h, bd });
   root.traverse((o) => { const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : []; for (const m of ms) if (!seen.has(m) && m.isMaterial && !m.isSpriteMaterial) { seen.add(m); addCutaway(m); } });
+  // 名所・高架の線路などの動かないものを、材質ごとに 1 つにまとめる (電車・遠景・アドバルーンは除く)
+  {
+    const skip = new Set();
+    if (rails && rails.lines) for (const t of rails.lines) for (const c of t.cars) skip.add(c);
+    const roots = [];
+    for (const ch of root.children) {
+      if (ch === city.tileGroup) continue;
+      box3.setFromObject(ch);
+      if (!box3.isEmpty()) { box3.getSize(sz); if (Math.max(sz.x, sz.z) > 9000 || sz.y > 450) continue; }
+      roots.push(ch);
+    }
+    console.log('merge tokyo', mergeStatic(scene, roots, skip));
+  }
   console.log('tokyo: buildings', city.bld.length, 'dropped', dropped);
   return {
-    city, root, OX, OZ, roofs,
+    city, root, OX, OZ, roofs, rails: () => rails,
     // ある所のビルの屋上の高さ (なければ 0)
     roofAt(x, z) {
       const f = city.floorAt(x - OX, z - OZ, 1e5);

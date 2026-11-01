@@ -407,7 +407,7 @@ export function addRailways(scene, city) {
     { line: ueno, cars: train(scene, 0x00b2e5, 10), speed: 15, d: ueno.L * 0.8, dir: -1 },
   ];
   return {
-    sobu: sobu.at(sobu.L * 0.42), manseibashi: chuo.at(chuo.L * 0.62), stations,
+    sobu: sobu.at(sobu.L * 0.42), manseibashi: chuo.at(chuo.L * 0.62), stations, lines,
     // 電車を行ったり来たりさせる
     update(dt) {
       for (const t of lines) {
