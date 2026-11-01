@@ -997,7 +997,7 @@ function throwLasso() {
   const loop = new THREE.Mesh(new THREE.TorusGeometry(1.4, 0.08, 6, 20), new THREE.MeshBasicMaterial({ color: 0xe8c080 }));
   scene.add(loop);
   // シュートかカーブで横に曲がって飛ぶ
-  G.lassos.push({ line, loop, from: p, to: aim, apex: 1 + d * 0.06, side: (Math.random() < 0.5 ? -1 : 1) * d * 0.35, T: 0.35 + d / 55, t: 0, tg, done: false });
+  G.lassos.push({ line, loop, from: p, to: aim, apex: 4 + d * 0.22, side: (Math.random() < 0.5 ? -1 : 1) * d * 0.07, T: 0.35 + d / 55, t: 0, tg, done: false });
 }
 function bez(l, s) {
   const p = new THREE.Vector3().lerpVectors(l.from, l.to, s);
