@@ -19,7 +19,7 @@ export const CFG = {
   wakeSpan: 600,      // この秒数 (10 分) のあいだに、全員がランダムな時刻で動き出す
   maxActive: 4,       // 同時に出る数の上限
   firstAt: 4,         // 最初の忍者 (秒)
-  wakeDist: 220,      // 小舟がこれだけ近づくと、潜伏していた忍者が現れる (m)
+  wakeDist: 220,      // 小舟がこれだけ近づくと、時刻の前でも潜伏していた忍者が誘い出されて飛ぶ (m)
   idleSpawn: 35,      // 誰も出ていないまま、これだけたつと一番近い忍者が現れる (秒)
   gap0: 17, gap1: 9,  // 出てくる間隔 (最初 → 最後)
   roofTime: [0.3, 0.6], // ビルの上で構える時間
@@ -374,7 +374,8 @@ function updateNinja(nj, dt) {
       // 外堀の外のビルの屋上で待ち伏せ。小舟が近くに来たら構えて飛ぶ
       // 小舟とは関係なく、決められた時刻 (10 分のあいだのランダム) に動き出す
       if (nj.wakeAt === undefined) nj.wakeAt = 3 + Math.random() * (CFG.wakeSpan - 3);
-      if (G.t >= nj.wakeAt) { nj.m.visible = true; nj.state = 'roof'; nj.t = rand(...CFG.roofTime); if (Math.hypot(nj.x - P.x, nj.z - P.z) < 400) A.sfx('bell', 0.35, 1.2); break; }
+      // 決められた時刻か、小舟が近く (220m 以内) に来たら誘い出されて飛ぶ
+      if (G.t >= nj.wakeAt || Math.hypot(nj.lx - P.x, nj.lz - P.z) < CFG.wakeDist) { nj.m.visible = true; nj.state = 'roof'; nj.t = rand(...CFG.roofTime); if (Math.hypot(nj.x - P.x, nj.z - P.z) < 400) A.sfx('bell', 0.35, 1.2); break; }
       // 遠くの屋上の忍者は描かない (88 人いるので軽くする)
       nj.m.visible = Math.hypot(nj.x - P.x, nj.z - P.z) < 700;
       if (!nj.m.visible) break;
