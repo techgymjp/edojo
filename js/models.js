@@ -235,6 +235,11 @@ export function poseNinja(n, mode, t) {
   if (mode === 'glide') {
     u.body.rotation.x = 1.25; // うつぶせで滑空
     u.armR.rotation.set(0, 0, 1.45); u.armL.rotation.set(0, 0, -1.45);
+  } else if (mode === 'walk') {
+    // 前かがみで忍び足
+    const s = Math.sin(t * 6);
+    u.body.rotation.x = 0.35;
+    u.armR.rotation.set(-0.8 + s * 0.6, 0, 0); u.armL.rotation.set(-0.8 - s * 0.6, 0, 0);
   } else if (mode === 'climb') {
     const s = Math.sin(t * 8);
     u.armR.rotation.set(-2.6 + s * 0.4, 0, 0); u.armL.rotation.set(-2.6 - s * 0.4, 0, 0);
