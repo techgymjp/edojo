@@ -305,6 +305,13 @@ export function nearCastle(x, z) {
 
 // ---------- 石垣 (段の境目を marching squares で線にして、縦の面を立てる) ----------
 // 返り値: 城の塀の線 (櫓を置く所を選ぶのに使う)
+// 地面のメッシュ (16m 格子、三角形 a-c-b / b-c-d) の上の高さ
+function groundMeshH(x, z) {
+  const G = 16, i = Math.floor(x / G), j = Math.floor(z / G), fx = x / G - i, fz = z / G - j;
+  const h = (ii, jj) => terrainH(Math.min(W.sizeX, ii * G), Math.min(W.sizeZ, jj * G));
+  const a = h(i, j), b = h(i + 1, j), c = h(i, j + 1), d = h(i + 1, j + 1);
+  return fx + fz < 1 ? a + (b - a) * fx + (c - a) * fz : d + (c - d) * (1 - fx) + (b - d) * (1 - fz);
+}
 export function buildWalls(scene) {
   const w = W.w, h = W.h, L = W.lv, R = W.res;
   const grass = { p: [], n: [], uv: [] }, stone = { p: [], n: [], uv: [] }, conc = { p: [], n: [], uv: [] }, wallTop = { p: [], n: [], uv: [] }, cap = { p: [], n: [], uv: [] };
@@ -335,7 +342,8 @@ export function buildWalls(scene) {
     const modern = (hc === 5 || codeAt(mx + nx * R * 0.6, mz + nz * R * 0.6) === 5 && hc === 0) && !nearCastle(mx, mz);
     // 水面の少し下から、岸の地面の高さまで
     const y0 = waterY(mx, mz) - 2.5;
-    const y1 = terrainH(hx, hz) + 0.05;
+    // 岸の上の高さは、地面のメッシュ (16m 格子) と同じ高さ (3m ごとの細かい凸凹で石垣の上がぎざぎざにならないように)
+    const y1 = groundMeshH(hx, hz) + 0.05;
     if (y1 - y0 < 0.3) return;
     // 縦の模様が切れにくいよう、u は向きに沿った世界座標
     const tu = Math.abs(dx) > Math.abs(dz) ? 1 : 0;

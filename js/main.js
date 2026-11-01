@@ -36,7 +36,7 @@ export const CFG = {
   coinRange: 40, coinCd: 0.9, coinSpeed: 55, // ぜに: 40m 以内の一番近い忍者
   lassoMin: 30, lassoRange: 150, lassoCd: 2.2, lassoCatch: 9, // なわ: 30〜150m の一番近い忍者
   gears: [-5, 0, 12, 20, 28],
-  accel0: 5, accelGrow: 4, accelMax: 14, vmax: 50, vback: -8, brake: 18, drag: 0.12, // 上を長押しで加速 (m/s²)
+  accel0: 5, accelGrow: 5, accelMax: 20, vmax: 66.7, vback: -8, brake: 18, drag: 0.12, // 上を長押しで加速 (m/s²)
   jump0: 7, jumpBoost: 26, jumpHold: 0.5, gravity: 22,     // ジャンプ (長押しで高く)
   throwArc: 70,       // 前に投げられる範囲 (舳先から左右の角度、度)
   maxEscape: 5,       // 外堀を渡り切られて取り逃がすと負けになる人数
@@ -74,7 +74,7 @@ scene.add(moon);
 const G = {
   state: 'loading', t: 0, captured: 0, spawned: 0, nextSpawn: 0, st: 100, stDelay: 0,
   name: '平次', ninjas: [], coins: [], lassos: [], fx: [], floats: [], coinCd: 0, lassoCd: 0, throwT: 0,
-  warpCd: 0, camYaw: 0, camDist: 7, lastMouse: -99, mouseDir: null, endT: 0, result: null, intruder: null,
+  warpCd: 0, camYaw: 0, camMode: 0, camDist: 7, lastMouse: -99, mouseDir: null, endT: 0, result: null, intruder: null,
 };
 const P = { x: 0, z: 0, h: 0, v: 0, gear: 1, roll: 0, dashT: 0 };
 let boat, water, modern, castle, warps = [], balloon, navi, fw, tokyo;
@@ -138,6 +138,7 @@ const holdBtn = (id, on, off) => {
   b.addEventListener('mouseup', () => off && off());
   b.addEventListener('mouseleave', () => off && off());
 };
+document.getElementById('btnCam')?.addEventListener('click', (e) => { e.stopPropagation(); toggleCam(); });
 holdBtn('btnJump', () => { I.tJump = true; }, () => { I.tJump = false; });
 holdBtn('btnLasso', () => I.pressed.add('Lasso'));
 holdBtn('btnCoin', () => I.pressed.add('Coin'));
@@ -1149,6 +1150,12 @@ function updateCamera(dt) {
   camera.position.y += (ty - camera.position.y) * k;
   if (G.shake > 0) { G.shake -= dt; camera.position.x += rand(-0.3, 0.3); camera.position.y += rand(-0.2, 0.2); }
   camera.lookAt(P.x + Math.cos(P.h) * 60, waterY(P.x, P.z) + 5, P.z + Math.sin(P.h) * 60);
+  if (G.camMode === 1) {
+    // 見下ろし: 後ろ 50m・高さ 50m
+    const wy0 = waterY(P.x, P.z), ch2 = camHeading();
+    camera.position.set(P.x - Math.cos(ch2) * 50, wy0 + 50, P.z - Math.sin(ch2) * 50);
+    camera.lookAt(P.x + Math.cos(ch2) * 40, wy0, P.z + Math.sin(ch2) * 40);
+  }
 }
 
 // ---------- 空の色: 明け六つ (朝) から始まり、10 分で 1 日 (昼 → 夕方 → 夜) ----------
@@ -1234,9 +1241,11 @@ function buildMinimap() {
   // 外堀の輪がちょうど入る倍率
   let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
   for (const [x, z] of W.ring) { const [a, b] = xzToMap(x, z); x0 = Math.min(x0, a); y0 = Math.min(y0, b); x1 = Math.max(x1, a); y1 = Math.max(y1, b); }
+  // 隅田川の東岸と、南 (汐留・浜離宮) まで入るように、右と下を広げる
+  for (const [la, lo] of [[35.6560, 139.7960], [35.6560, 139.7600]]) { const [a, b] = xzToMap(...ll(la, lo)); x1 = Math.max(x1, a); y1 = Math.max(y1, b); }
   mm.fit = Math.min(c.width / (x1 - x0 + 60), c.height / (y1 - y0 + 60));
   mm.ringC = [(x0 + x1) / 2, (y0 + y1) / 2];
-  Object.assign(mm, { c, map, over, zoom: mm.fit });
+  Object.assign(mm, { c, map, over, zoom: mm.fit * 2 });
 }
 function drawMinimap() {
   const { c } = mm, g = c.getContext('2d');
@@ -1252,15 +1261,16 @@ function drawMinimap() {
   // 外堀の全体の地図のまま: 神田川、隅田川、牛込濠〜市ヶ谷濠〜真田濠、日本橋川の常盤橋より下流
   const mn = moatName(P.x, P.z), lonP = W.W + P.x / W.KX;
   const west = ['弁慶濠', '溜池', '外濠', '道三濠'].includes(mn) || (mn === '日本橋川' && lonP < 139.7715);
-  const want = mm.fit * (nearHon ? 4 : (inner || west) ? 2 : 1);
+  // 全体の地図はやめて、いつも 2 倍 (自分が真ん中・向いている方が上)。江戸城の近く (内堀) では 4 倍
+  const want = mm.fit * (inner || nearHon ? 4 : 2);
   mm.zoom += (want - mm.zoom) * 0.08;
-  const t = Math.min(1, (mm.zoom - mm.fit) / mm.fit); // 0: 全体 1: 拡大
+  const t = 1; // いつも自分が真ん中
   const [pmx, pmy] = xzToMap(P.x, P.z);
   // 中心: 全体のときは外堀の輪の中心、拡大したら自分
   const cx = mm.ringC[0] + (pmx - mm.ringC[0]) * clamp(t, 0, 1), cy = mm.ringC[1] + (pmy - mm.ringC[1]) * clamp(t, 0, 1);
   const s = mm.zoom;
   // 拡大しているときは、自分が真ん中で、向いている方角が上
-  const wantRot = t > 0.5 ? -Math.PI / 2 - P.h : 0;
+  const wantRot = -Math.PI / 2 - P.h;
   mm.rot = (mm.rot || 0) + angDiff(wantRot, mm.rot || 0) * 0.15;
   const rot = mm.rot, rc = Math.cos(rot), rs = Math.sin(rot);
   g.setTransform(1, 0, 0, 1, 0, 0);
@@ -1581,28 +1591,10 @@ function loop(now) {
   if ((G.frame = (G.frame || 0) + 1) % 3 === 0) water.reflect(renderer, scene, camera, (G.state === 'play' || G.state === 'ending') ? waterY(P.x, P.z) : undefined);
   CUT.boat.value.y = cb;
   renderer.render(scene, camera);
-  // ワイプ (右上): プレイヤーの後ろ 50m・高さ 50m から見下ろす (地形などの確かめ用。V で消す・出す)
-  const wf = document.getElementById('wipe');
-  if (wf) wf.style.display = (G.state === 'play' && wipeOn) ? 'block' : 'none';
-  if (G.state === 'play' && wipeOn && wf) {
-    const r = wf.getBoundingClientRect(), H = innerHeight;
-    const wy0 = waterY(P.x, P.z);
-    wipeCam.position.set(P.x - Math.cos(P.h) * 50, wy0 + 50, P.z - Math.sin(P.h) * 50);
-    wipeCam.lookAt(P.x + Math.cos(P.h) * 40, wy0, P.z + Math.sin(P.h) * 40);
-    wipeCam.aspect = r.width / r.height; wipeCam.updateProjectionMatrix();
-    renderer.setScissorTest(true);
-    renderer.setViewport(r.left, H - r.bottom, r.width, r.height);
-    renderer.setScissor(r.left, H - r.bottom, r.width, r.height);
-    const ac = renderer.autoClear; renderer.autoClear = true;
-    renderer.render(scene, wipeCam);
-    renderer.autoClear = ac;
-    renderer.setScissorTest(false);
-    renderer.setViewport(0, 0, innerWidth, innerHeight);
-  }
 }
-const wipeCam = new THREE.PerspectiveCamera(55, 16 / 9, 1, 6000);
-let wipeOn = true;
-addEventListener('keydown', (e) => { if (e.code === 'KeyV') wipeOn = !wipeOn; });
+// 視点の切り替え (視ボタン・C キー): 0 = 小舟の後ろのローアングル、1 = 後ろ 50m・高さ 50m から見下ろす
+const toggleCam = () => { G.camMode = G.camMode ? 0 : 1; camInit = false; };
+addEventListener('keydown', (e) => { if (e.code === 'KeyC') toggleCam(); });
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
 requestAnimationFrame(loop);
 boot();

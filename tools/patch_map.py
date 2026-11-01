@@ -15,6 +15,7 @@ KX, KZ, RES, N0, W0 = w['KX'], w['KZ'], w['res'], w['N'], w['W']
 cell = lambda la, lo: (int((N0 - la) * KZ / RES), int((lo - W0) * KX / RES))
 CARVE = [  # (緯度, 経度) → (緯度, 経度), 幅 m
     ((35.6738, 139.7834), (35.6718, 139.7834), 12),  # 新川の河口 → 隅田川
+    ((35.6924, 139.7363), (35.6913, 139.7349), 22),  # 市ヶ谷: 新見附濠 ↔ 市ヶ谷濠 (市ヶ谷橋の下)
 ]
 FILL = [(35.6628, 139.7667), (35.6635, 139.7683), (35.6628, 139.7696)]  # 汐留のまん中の池 (三角・丸)
 img = Image.fromarray(A); d = ImageDraw.Draw(img)
@@ -39,6 +40,15 @@ for la, lo in FILL:
     if len(seen) >= 20000: print('too big, skip', la, lo); continue
     for y, x in seen: A[y, x] = 5
     print('filled', la, lo, len(seen))
+# 丘の上を通ってしまった想像の堀 (溜池の水路が日枝神社の山王の丘を切っている所) を陸に戻す: 半径の中で岸の高さが高い水のマス
+HILL = [((35.6748, 139.7397), 110, 16)]  # (中心, 半径 m, この高さ m より高い岸)
+Tp = np.array(Image.open(os.path.join(D, 'terrain.png')).convert('RGB')).astype(float); TH = (Tp[..., 0] * 256 + Tp[..., 1]) / 200 - 20
+for (la, lo), rad, thr in HILL:
+    y0, x0 = cell(la, lo); r = int(rad / RES); nfill = 0
+    for y in range(y0 - r, y0 + r + 1):
+        for x in range(x0 - r, x0 + r + 1):
+            if (y - y0) ** 2 + (x - x0) ** 2 <= r * r and A[y, x] == 0 and TH[y, x] > thr: A[y, x] = 5; nfill += 1
+    print('hill fill', la, lo, nfill)
 Image.fromarray(A).save(os.path.join(D, 'map.png'), optimize=True)
 # 水でないマスに端があるワープ、両端が同じ水面のワープは消す
 lab = np.zeros(A.shape, np.int32); n = 0

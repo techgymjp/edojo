@@ -645,7 +645,7 @@ export class City {
           else quad(deck, bot1, bot0, top0, top1, nn, wall);
         }
         // 桁の裏
-        quad(deck, [B[0], h1 - 2.2, B[2]], [C[0], h2 - 2.2, C[2]], [D[0], h2 - 2.2, D[2]], [A[0], h1 - 2.2, A[2]], [0, -1, 0], [0.5, 0.5, 0.5]);
+        quad(deck, [B[0], h1 - 2.2, B[2]], [C[0], h2 - 2.2, C[2]], [D[0], h2 - 2.2, D[2]], [A[0], h1 - 2.2, A[2]], [0, -1, 0], [0.8, 0.8, 0.78]);
         acc += L;
         if (acc > 30) { acc = 0; piers.push([x1, z1, h1 - 2.2, Math.atan2(x2 - x1, z2 - z1)]); }
       }

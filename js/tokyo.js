@@ -159,7 +159,7 @@ function buildRail(root, city, OX, OZ) {
             const up = (q) => [q[0], q[1] + 1.2, q[2]], dn = (q) => [q[0], q[1] - 1.8, q[2]];
             quad(dn(P0), dn(P1), up(P1), up(P0), [nx * sd, 0, nz * sd], SIDE);
           }
-          quad([B[0], y1 - 1.8, B[2]], [C[0], y2 - 1.8, C[2]], [D[0], y2 - 1.8, D[2]], [A[0], y1 - 1.8, A[2]], [0, -1, 0], [0.45, 0.45, 0.44]);
+          quad([B[0], y1 - 1.8, B[2]], [C[0], y2 - 1.8, C[2]], [D[0], y2 - 1.8, D[2]], [A[0], y1 - 1.8, A[2]], [0, -1, 0], [0.8, 0.8, 0.78]);
           acc += L;
           if (acc > 25) { acc = 0; piers.push([x1, z1, g1 - 1, y1 - 1.8]); }
         } else {
@@ -648,9 +648,11 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
       quad(pt(hl, hw, y0), pt(hl, -hw, y0), pt(hl, -hw, y1), pt(hl, hw, y1), [ux, 0, uz], col);
       quad(pt(-hl, -hw, y0), pt(-hl, hw, y0), pt(-hl, hw, y1), pt(-hl, -hw, y1), [-ux, 0, -uz], col);
       // 底の面 (橋をくぐるとき、下から見て天井が透けないように)
-      quad(pt(-hl, -hw, y0), pt(hl, -hw, y0), pt(hl, hw, y0), pt(-hl, hw, y0), [0, -1, 0], col);
+      quad(pt(-hl, -hw, y0), pt(hl, -hw, y0), pt(hl, hw, y0), pt(-hl, hw, y0), [0, -1, 0], UNDER);
     };
     const RAIL = [0.35, 0.4, 0.45], ASP = [0.24, 0.24, 0.26], WALK = [0.62, 0.6, 0.56], WHITE = [0.92, 0.92, 0.88], CON = [0.66, 0.66, 0.64], GIRDER = [0.62, 0.66, 0.7], DARK = [0.25, 0.26, 0.28], LAMP = [1.0, 0.95, 0.75];
+    // 橋の裏 (下を向いた面) は明るいコンクリート (水の照り返しで明るく見える)
+    const UNDER = [0.82, 0.82, 0.8];
     const isCastle = (x, z) => { const c = codeAt(x, z); return c === 3 || c === 4; };
     let nb = 0, nroad = 0;
     for (const r of ROADS) {
@@ -661,6 +663,17 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
         for (let d = 0; d < L; d += 4) pts.push([x1 + (x2 - x1) * d / L, z1 + (z2 - z1) * d / L]);
       }
       if (pts.length < 2) continue;
+      // 道の線が水の上で切れている (国土地理院のデータで橋の途中で線が終わる。新大橋・清洲橋など) ときは、
+      // 同じ向きにまっすぐ延ばして向こう岸まで渡す (400m まで)
+      for (const end of [1, 0]) {
+        const n0 = pts.length, [ex, ez] = end ? pts[n0 - 1] : pts[0], [px, pz] = end ? pts[n0 - 2] : pts[1];
+        if (!isWater(ex, ez)) continue;
+        const dl = Math.hypot(ex - px, ez - pz) || 1, ux = (ex - px) / dl, uz = (ez - pz) / dl, add = [];
+        let landed = false;
+        for (let d = 4; d <= 400; d += 4) { const q = [ex + ux * d, ez + uz * d]; add.push(q); if (!isWater(...q)) { for (let k = 1; k <= 3; k++) add.push([q[0] + ux * 4 * k, q[1] + uz * 4 * k]); landed = true; break; } }
+        if (!landed) continue;
+        if (end) pts.push(...add); else pts.unshift(...add.reverse());
+      }
       // どこが橋か
       const bridge = new Uint8Array(pts.length);
       let k = 0;
