@@ -57,9 +57,8 @@ CHANNELS = [
     ([(35.6683, 139.7553), (35.6693, 139.7520), (35.6697, 139.7495), (35.6703, 139.7468), (35.6712, 139.7445)], 40),
     # 溜池 (広い)
     ([(35.6712, 139.7445), (35.6728, 139.7418), (35.6748, 139.7395), (35.6765, 139.7378), (35.6778, 139.7366)], 75),
-    ([(35.6778, 139.7366), (35.6793, 139.7352)], 35),
     # 真田濠 (弁慶濠の西の端 → 喰違 → 四谷 → 市ヶ谷濠)
-    ([(35.6800, 139.7330), (35.6820, 139.7330), (35.6838, 139.7320), (35.6862, 139.7305), (35.6885, 139.7310),
+    ([(35.6830, 139.7323), (35.6838, 139.7320), (35.6862, 139.7305), (35.6885, 139.7310),
       (35.6903, 139.7324)], 45),
     # 道三堀 (和田倉濠 → 外堀)
     ([(35.6836, 139.7624), (35.6845, 139.7655), (35.6855, 139.7690), (35.6860, 139.7710)], 24),
@@ -338,7 +337,7 @@ def main():
             warps.append([round(xa * RES + RES / 2, 1), round(ya * RES + RES / 2, 1), round(xb * RES + RES / 2, 1), round(yb * RES + RES / 2, 1)])
             print('outer warp', (la0, lo0), '->', (la1, lo1), round(best[0] ** 0.5 * RES), 'm')
     # 実際はつながっていない外堀どうし (真田濠 ↔ 弁慶濠・赤坂見附) には必ずワープを置く
-    for (la0, lo0), (la1, lo1) in [((35.6818, 139.7322), (35.6790, 139.7352)), ((35.6860, 139.7456), (35.6845, 139.7456)), ((35.6798, 139.7612), (35.6779, 139.7612))]:
+    for (la0, lo0), (la1, lo1) in [((35.6822, 139.7310), (35.6806, 139.7323)), ((35.6790, 139.7353), (35.6768, 139.7378)), ((35.6860, 139.7456), (35.6845, 139.7456)), ((35.6798, 139.7612), (35.6779, 139.7612))]:
         a, b = snapc(la0, lo0), snapc(la1, lo1)
         if a and b and a != b:
             warps.append([round(a[1] * RES + RES / 2, 1), round(a[0] * RES + RES / 2, 1), round(b[1] * RES + RES / 2, 1), round(b[0] * RES + RES / 2, 1)])
@@ -348,7 +347,9 @@ def main():
     world = {'W': W, 'E': E, 'S': S, 'N': N, 'KX': KX, 'KZ': KZ, 'res': RES, 'w': w, 'h': h,
              'ring': [[round(v, 1) for v in xz(*p)] for p in RING], 'warps': warps}
     # ワープの整理: 25m 未満のすき間は水でつなぐ (ワープにしない)。ほぼ同じ所の重なったワープは短い方だけ残す
-    short = [wp for wp in warps if math.hypot(wp[2] - wp[0], wp[3] - wp[1]) < 25]
+    # (水でつなぐのはお城の区域の中のすき間だけ。外堀の土橋・見附はワープのまま)
+    inI = lambda x, z: I[min(h - 1, int(z / RES)), min(w - 1, int(x / RES))] >= 3
+    short = [wp for wp in warps if math.hypot(wp[2] - wp[0], wp[3] - wp[1]) < 25 and inI(wp[0], wp[1]) and inI(wp[2], wp[3])]
     if short:
         img4 = Image.fromarray(A); d4 = ImageDraw.Draw(img4)
         for x1, z1, x2, z2 in short:
@@ -356,12 +357,12 @@ def main():
         A = np.array(img4)
         Image.fromarray(A).save(os.path.join(D, 'map.png'), optimize=True)
     keep = []
-    for wp in sorted([wp for wp in warps if math.hypot(wp[2] - wp[0], wp[3] - wp[1]) >= 25], key=lambda w: math.hypot(w[2] - w[0], w[3] - w[1])):
+    for wp in sorted([wp for wp in warps if wp not in short], key=lambda w: math.hypot(w[2] - w[0], w[3] - w[1])):
         mx, mz = (wp[0] + wp[2]) / 2, (wp[1] + wp[3]) / 2
         if any(math.hypot(mx - (k[0] + k[2]) / 2, mz - (k[1] + k[3]) / 2) < 80 for k in keep): continue
         keep.append(wp)
     print('warps kept', len(keep), 'joined by water', len(short))
-    world['warps'] = keep
+    world['warps'] = [k for k in keep if math.hypot(k[2] - k[0], k[3] - k[1]) > 5]
     json.dump(world, open(os.path.join(D, 'world.json'), 'w'))
     # ---- 今の建物 (輪の外だけ。0.5m 単位の整数、[高さ, x0, z0, x1, z1 ...]) ----
     out = []

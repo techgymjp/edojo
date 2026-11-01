@@ -119,6 +119,12 @@ while q:
     for yy, xx in ((a + 1, b), (a - 1, b), (a, b + 1), (a, b - 1)):
         if 0 <= yy < h and 0 <= xx < w and water[yy, xx] and np.isnan(flat[yy, xx]):
             flat[yy, xx] = flat[a, b]; q.append((yy, xx))
+# 今の水につながっていない戻した堀 (溜池など): かたまりごとに 1 つの高さ (まわりの道より 3.2m 低い所の低めの値)
+rest_m = water & np.isnan(flat)
+labr, nr = components(rest_m)
+for k in range(1, nr + 1):
+    m = labr == k
+    flat[m] = float(np.nanpercentile((bank - 3.2)[m], 20))
 WL = np.where(water, np.where(np.isnan(flat), WL, flat), np.nan)
 WL = np.where(water, np.minimum(WL, bank - 0.5), np.nan)
 print('flat water bodies', nl)

@@ -193,7 +193,7 @@ export function buildGround(scene) {
         bool doteC = fract(lvv) > 0.25 && fract(lvv) < 0.75;
         float steep = (lvv > 2.5 && !doteC) ? smoothstep(0.82, 0.6, vUp) : smoothstep(0.985, 0.9, vUp);
         vec3 stoneC = vec3(0.52, 0.5, 0.46) * (0.85 + 0.15 * fract(sin(dot(floor(vMapUv * 4000.0), vec2(12.9898, 78.233))) * 43758.5453));
-        diffuseColor.rgb = mix(diffuseColor.rgb, (lvv > 2.5 && !doteC) ? stoneC : vec3(0.32, 0.45, 0.25), steep);`);
+        diffuseColor.rgb = mix(diffuseColor.rgb, (lvv > 2.5 && !doteC) ? stoneC : vec3(0.3, 0.68, 0.18), steep);`);
   };
   for (const g of geos) { const mesh = new THREE.Mesh(g, m); mesh.matrixAutoUpdate = false; scene.add(mesh); CHUNKS.push(mesh); }
   // 範囲の外は 4 枚で囲む
@@ -261,8 +261,8 @@ export function isDote(x, z) {
 function grassTexture() {
   const c = document.createElement('canvas'); c.width = c.height = 128;
   const g = c.getContext('2d');
-  g.fillStyle = '#5f8a3e'; g.fillRect(0, 0, 128, 128);
-  for (let i = 0; i < 900; i++) { const v = Math.random(); g.fillStyle = `rgba(${60 + v * 60},${100 + v * 60},${40 + v * 30},0.5)`; g.fillRect(Math.random() * 128, Math.random() * 128, 1, 3); }
+  g.fillStyle = '#4fae2a'; g.fillRect(0, 0, 128, 128);
+  for (let i = 0; i < 900; i++) { const v = Math.random(); g.fillStyle = `rgba(${60 + v * 50},${150 + v * 70},${30 + v * 30},0.5)`; g.fillRect(Math.random() * 128, Math.random() * 128, 1, 3); }
   const t = new THREE.CanvasTexture(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace;
   return t;
@@ -323,23 +323,9 @@ export function buildWalls(scene) {
     if (hc === 5) bankSegs.push({ ax, az, bx, bz, nx, nz });
     const dote = isDote(mx, mz);
     if (dote) {
-      // 土手: 下を外 (水の方) へずらした斜面。水から一番上まで 1 枚で (途中の段は作らない)
-      const yb = waterY(mx, mz) - 0.5;
-      // 斜面の向きは端点ごとに段の値の傾きから決める (隣の面とすき間なくつながる)
-      const dn = (x, z) => {
-        const gx = landBilinear(x + 4.5, z) - landBilinear(x - 4.5, z), gz = landBilinear(x, z + 4.5) - landBilinear(x, z - 4.5);
-        const l = Math.hypot(gx, gz);
-        return l < 1e-3 ? [nx, nz] : [-gx / l, -gz / l];
-      };
-      const off = Math.min(6, (y1 - yb) * 0.6);
-      let [anx, anz] = dn(ax, az), [bnx, bnz] = dn(bx, bz);
-      let A0 = [ax + anx * off, az + anz * off], B0 = [bx + bnx * off, bz + bnz * off], A1 = [ax, az], B1 = [bx, bz];
-      if (-(bz - az) * nx + (bx - ax) * nz < 0) { [A0, B0] = [B0, A0]; [A1, B1] = [B1, A1]; [anx, anz, bnx, bnz] = [bnx, bnz, anx, anz]; }
-      const sl = Math.hypot(off, y1 - yb) || 1, ny = off / sl, nh = (y1 - yb) / sl;
-      grass.p.push(A0[0], yb, A0[1], B0[0], yb, B0[1], B1[0], y1, B1[1], A0[0], yb, A0[1], B1[0], y1, B1[1], A1[0], y1, A1[1]);
-      for (const [qx, qz] of [[anx, anz], [bnx, bnz], [bnx, bnz], [anx, anz], [bnx, bnz], [anx, anz]]) grass.n.push(qx * nh, ny, qz * nh);
-      grass.uv.push(u0, 0, u1, 0, u1, 2, u0, 0, u1, 2, u0, 2);
-      if (hc === 3 || hc === 4) doteSegs.push({ ax, az, bx, bz, nx, nz, y: y1, len, off });
+      // 土手: 斜面は地形 (標高) のとおり緑で描くので、水ぎわは低い草の縁だけ (短冊のような面を立てない)
+      quad(grass, ax, az, bx, bz, y0, y1, nx, nz, u0, u1, 4);
+      if (hc === 3 || hc === 4) doteSegs.push({ ax, az, bx, bz, nx, nz, y: y1, len, off: 0 });
       return;
     }
     // 石垣でない岸 (今の街の護岸) は緑の草

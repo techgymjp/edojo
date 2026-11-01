@@ -1246,7 +1246,11 @@ function drawMinimap() {
   // 本丸の近くのお濠では、さらに倍 (4 倍)
   const HONMARU_MOATS = ['平川濠', '大手濠', '桔梗濠', '蓮池濠', '乾濠', '天神濠', '白鳥濠', '和田倉濠', '二重橋濠', '蛤濠', '清水濠', '道灌濠'];
   const nearHon = inner && HONMARU_MOATS.includes(moatName(P.x, P.z));
-  const want = mm.fit * (nearHon ? 4 : inner ? 2 : 1);
+  // 外堀の西 (赤坂門・溜池 〜 市ヶ谷・牛込 〜 小石川門) も 2 倍
+  const WEST = ['溜池', '弁慶濠', '真田濠', '市ヶ谷濠', '新見附濠', '牛込濠', '飯田濠'];
+  const mn = moatName(P.x, P.z), lonP = W.W + P.x / W.KX;
+  const west = WEST.includes(mn) || (mn === '外濠' && lonP < 139.752) || ((mn === '神田川' || mn === '日本橋川') && lonP < 139.7535);
+  const want = mm.fit * (nearHon ? 4 : (inner || west) ? 2 : 1);
   mm.zoom += (want - mm.zoom) * 0.08;
   const t = Math.min(1, (mm.zoom - mm.fit) / mm.fit); // 0: 全体 1: 拡大
   const [pmx, pmy] = xzToMap(P.x, P.z);
