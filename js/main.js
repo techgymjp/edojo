@@ -33,6 +33,7 @@ export const CFG = {
   gears: [-5, 0, 12, 20, 28],
   accel0: 5, accelGrow: 4, accelMax: 14, vmax: 50, vback: -8, brake: 18, drag: 0.12, // 上を長押しで加速 (m/s²)
   jump0: 7, jumpBoost: 26, jumpHold: 0.5, gravity: 22,     // ジャンプ (長押しで高く)
+  maxEscape: 5,       // 外堀を渡り切られて取り逃がすと負けになる人数
   boatJumpSpeed: 18,  // これより速いと舟ごと跳ぶ (m/s)
   ninjaScale: 4,    // 忍者を大きめに (遠くからでも見えるように)
 };
@@ -458,9 +459,9 @@ function updateNinja(nj, dt) {
     case 'swim1': {
       if (nj.stun <= 0) {
         const tgt = nj.path && nj.path.length ? nj.path[0] : null;
-        if (!tgt) { startClimbOut(nj); break; }
+        if (!tgt) { escape(nj); break; }
         const tx = cellX(tgt), tz = cellZ(tgt), dx = tx - nj.x, dz = tz - nj.z, l = Math.hypot(dx, dz);
-        if (l < 2) { nj.path.shift(); if (!nj.path.length) { startClimbOut(nj); break; } }
+        if (l < 2) { nj.path.shift(); if (!nj.path.length) { escape(nj); break; } }
         else { const sp = CFG.swim; nj.vx = dx / l * sp; nj.vz = dz / l * sp; nj.x += nj.vx * dt; nj.z += nj.vz * dt; }
       }
       nj.pop = Math.max(0, (nj.pop || 0) - dt);
@@ -673,10 +674,20 @@ function hitNinja(nj, byLasso) {
     nj.vy = (waterY(tx, tz) - c.y + 0.5 * 20 * T * T) / T;
   }
   nj.state = 'fall';
-  if (G.captured >= CFG.total) finish(true);
+  if (G.captured + (G.escaped || 0) >= CFG.total) finish(true);
 }
 function capture(nj) { hitNinja(nj, true); }
 
+// 外堀を渡り切ったら消える (取り逃し)。CFG.maxEscape 人取り逃したら負け
+function escape(nj) {
+  if (G.state !== 'play') return;
+  splash(nj.x, nj.z, 0.6);
+  nj.state = 'gone'; scene.remove(nj.m); scene.remove(nj.bam); nj.marker.remove();
+  G.escaped = (G.escaped || 0) + 1;
+  A.sfx('bell', 0.5, 0.8);
+  if (G.escaped >= CFG.maxEscape) { G.intruder = { x: nj.x, z: nj.z, y: nj.y }; finish(false); }
+  else if (G.captured + G.escaped >= CFG.total) finish(true);
+}
 function intrude(nj) {
   if (G.state !== 'play') return;
   nj.state = 'in';
@@ -1286,7 +1297,7 @@ function startGame() {
   for (const nj of G.ninjas) { scene.remove(nj.m); scene.remove(nj.bam); nj.marker.remove(); }
   for (const c of G.coins) scene.remove(c.m);
   for (const l of G.lassos) { scene.remove(l.line); scene.remove(l.loop); }
-  Object.assign(G, { lastSpawn: 0, forceSpawn: 120, t: 0, captured: 0, spawned: 0, nextSpawn: CFG.firstAt, st: 100, ninjas: [], coins: [], lassos: [], coinCd: 0, lassoCd: 0, warpCd: 0, camYaw: 0, intruder: null, result: null });
+  Object.assign(G, { escaped: 0, lastSpawn: 0, forceSpawn: 120, t: 0, captured: 0, spawned: 0, nextSpawn: CFG.firstAt, st: 100, ninjas: [], coins: [], lassos: [], coinCd: 0, lassoCd: 0, warpCd: 0, camYaw: 0, intruder: null, result: null });
   G.name = ($('nameInput').value || '平次').slice(0, 10);
   $('hudName').textContent = G.name;
   // 浅草橋の手前 (神田川) から、外堀・内堀の方 (西) へ向いて
@@ -1331,7 +1342,7 @@ function showResult() {
   $('rTitle').textContent = `${G.name}　「${title}」`;
   $('rCap').textContent = `${n} / ${CFG.total} 人`;
   $('rTime').textContent = `${Math.floor(G.t / 60)}分${Math.floor(G.t % 60)}秒`;
-  $('rNote').textContent = win ? '江戸城は今夜も安泰。' : `${moatName(G.intruder?.x || 0, G.intruder?.z || 0)}から忍び込まれた……`;
+  $('rNote').textContent = win ? `取り逃し ${G.escaped || 0} 人。江戸城は今日も安泰。` : `${CFG.maxEscape} 人に外堀を渡られた……`;
 }
 
 $('btnStart').onclick = startGame;
@@ -1433,5 +1444,5 @@ addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; cam
 requestAnimationFrame(loop);
 boot();
 window.__G = G; window.__P = P; window.__CFG = CFG; window.__ll = ll; window.__gh = groundH;
-window.__tokyo = () => tokyo; window.__renderer = renderer; window.__scene = scene;
+window.__tokyo = () => tokyo; window.__W = W; window.__renderer = renderer; window.__scene = scene;
 window.__dbg = { spawnNinja, throwCoins, throwLasso, startGame, navi: () => navi, isWater, cellOf, step, updateNav };

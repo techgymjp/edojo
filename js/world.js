@@ -339,7 +339,8 @@ export function buildWalls(scene) {
       if (hc === 3 || hc === 4) doteSegs.push({ ax, az, bx, bz, nx, nz, y: y1, len, off });
       return;
     }
-    if (modern) quad(conc, ax, az, bx, bz, y0 - 0.01, y1, nx, nz, u0, u1, 4);
+    // 石垣でない岸 (今の街の護岸) は緑の草
+    if (modern) quad(grass, ax, az, bx, bz, y0 - 0.01, y1, nx, nz, u0, u1, 4);
     else quad(stone, ax, az, bx, bz, y0, y1, nx, nz, u0, u1, 3.2);
     // 城 (内郭・本丸) の石垣の上には白い土塀
     if (!modern && (hc === 3 || hc === 4)) {
