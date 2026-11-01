@@ -121,8 +121,55 @@ for (ka, kb), (d2, ya, xa, yb, xb) in pairs.items():
     dr.line([(xa, ya), (xb, yb)], fill=0, width=max(3, int(12 / RES))); ncut += 1
     print('cut under road', round(N0 - yc * RES / KZ, 4), round(W0 + xc * RES / KX, 4), round(d2 ** 0.5 * RES), 'm')
 A = np.array(img)
+# 真田濠は一本 (四谷から喰違見附へ)。想像で引いた東の枝 (二手に分かれて中洲ができた所) は陸に戻す:
+# (35.6858, 139.73095) と (35.6829, 139.73195) を結ぶ線より東の水
+nfill = 0
+for y in range(cell(35.6858, 0)[0], cell(35.6826, 0)[0] + 1):
+    la_ = N0 - (y + 0.5) * RES / KZ
+    t_ = (35.6858 - la_) / (35.6858 - 35.6829)
+    lo_line = 139.73095 + (139.73195 - 139.73095) * t_
+    for x in range(cell(0, lo_line)[1] + 1, cell(0, 139.7335)[1]):
+        if A[y, x] == 0: A[y, x] = 5; nfill += 1
+print('真田濠の東の枝を陸に', nfill)
+# 溜池は一つの広い池 (赤坂見附から虎ノ門の方へ)。二手に分かれた細い水路と中島・横の切れ端を直す
+def box_set(la0, la1, lo0, lo1, frm, to, cond=None):
+    n_ = 0
+    for y in range(cell(la1, 0)[0], cell(la0, 0)[0] + 1):
+        for x in range(cell(0, lo0)[1], cell(0, lo1)[1] + 1):
+            if A[y, x] == frm and (cond is None or cond[y, x]): A[y, x] = to; n_ += 1
+    return n_
+# 細い西の水路: 広い池の南西の岸 ((35.67383, 139.7403) と (35.67091, 139.7449) を結ぶ線) より南西の水を陸に
+nT = 0
+for y in range(cell(35.6745, 0)[0], cell(35.6697, 0)[0] + 1):
+    la_ = N0 - (y + 0.5) * RES / KZ
+    for x in range(cell(0, 139.7370)[1], cell(0, 139.7452)[1] + 1):
+        lo_ = W0 + (x + 0.5) * RES / KX
+        # 線の南西側: 線上の同じ緯度の経度より西
+        t_ = (35.67383 - la_) / (35.67383 - 35.67091); lo_line = 139.7403 + (139.7449 - 139.7403) * t_
+        if lo_ < lo_line - 0.00005 and A[y, x] == 0: A[y, x] = 5; nT += 1
+# 中島 (池の中に囲まれた陸) は水に
+y0_, x0_ = cell(35.6762, 139.7370); y1_, x1_ = cell(35.6740, 139.7392)
+subL = A[y0_:y1_, x0_:x1_] != 0
+outL = np.zeros_like(subL); qq = deque()
+for yy in range(subL.shape[0]):
+    for xx in (0, subL.shape[1] - 1):
+        if subL[yy, xx] and not outL[yy, xx]: outL[yy, xx] = True; qq.append((yy, xx))
+for xx in range(subL.shape[1]):
+    for yy in (0, subL.shape[0] - 1):
+        if subL[yy, xx] and not outL[yy, xx]: outL[yy, xx] = True; qq.append((yy, xx))
+while qq:
+    yy, xx = qq.popleft()
+    for a2, b2 in ((yy + 1, xx), (yy - 1, xx), (yy, xx + 1), (yy, xx - 1)):
+        if 0 <= a2 < subL.shape[0] and 0 <= b2 < subL.shape[1] and subL[a2, b2] and not outL[a2, b2]: outL[a2, b2] = True; qq.append((a2, b2))
+isl = subL & ~outL
+A[y0_:y1_, x0_:x1_][isl] = 0
+print('溜池: 西の細い水路を陸に', nT, '中島を水に', int(isl.sum()), '横の切れ端を陸に', box_set(35.6743, 35.6753, 139.7399, 139.7438, 0, 5))
+img = Image.fromarray(A); dr = ImageDraw.Draw(img)
+for (a_, b_, wd_) in [((35.67480, 139.73820), (35.67380, 139.74030), 45), ((35.67700, 139.73720), (35.67430, 139.73930), 55), ((35.67400, 139.73980), (35.67080, 139.74520), 60)]:  # 溜池を広い一つの池に
+    ya_, xa_ = cell(*a_); yb_, xb_ = cell(*b_); dr.line([(xa_, ya_), (xb_, yb_)], fill=0, width=int(wd_ / RES))
+A = np.array(img)
 # 丘の上を通ってしまった想像の堀 (溜池の水路が日枝神社の山王の丘を切っている所) を陸に戻す: 半径の中で岸の高さが高い水のマス
-HILL = [((35.6748, 139.7397), 110, 16)]  # (中心, 半径 m, この高さ m より高い岸)
+HILL = [((35.6748, 139.7397), 60, 16)]  # (中心, 半径 m, この高さ m より高い岸)
 Tp = np.array(Image.open(os.path.join(D, 'terrain.png')).convert('RGB')).astype(float); TH = (Tp[..., 0] * 256 + Tp[..., 1]) / 200 - 20
 for (la, lo), rad, thr in HILL:
     y0, x0 = cell(la, lo); r = int(rad / RES); nfill = 0
@@ -191,7 +238,7 @@ w['warps'] = [[*snapw(k[0], k[1]), *snapw(k[2], k[3])] for k in w['warps']]
 MOVE = [((35.6924, 139.7548), (35.69269, 139.75533)),
         ((35.6841, 139.7556), (35.68300, 139.75586)),
         ((35.6823, 139.7553), (35.68262, 139.75600)),
-        ((35.6822, 139.7310), (35.68351, 139.73229)), ((35.6806, 139.7323), (35.68096, 139.73239)),  # 喰違見附の両側
+        ((35.68351, 139.73229), (35.68200, 139.73160)), ((35.6822, 139.7310), (35.68200, 139.73160)), ((35.6806, 139.7323), (35.68096, 139.73239)),  # 喰違見附の両側
         ((35.6848, 139.7454), (35.68428, 139.74515)), ((35.6832, 139.7451), (35.68335, 139.74510))]  # 半蔵門の土橋 (35.6839) の両側  # 坂下門: 蛤濠の南西の端 ↔ 二重橋濠  # 清水濠の側を雉子橋御門のそばへ
 for (la0, lo0), (la1, lo1) in MOVE:
     x0, z0 = (lo0 - W0) * KX, (N0 - la0) * KZ; x1, z1 = snapw((lo1 - W0) * KX, (N0 - la1) * KZ)
