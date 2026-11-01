@@ -18,7 +18,7 @@ export const CFG = {
   total: 20,          // 忍者の数
   maxActive: 4,       // 同時に出る数の上限
   firstAt: 4,         // 最初の忍者 (秒)
-  wakeDist: 330,      // 小舟がこれだけ近づくと、潜伏していた忍者が現れる (m)
+  wakeDist: 220,      // 小舟がこれだけ近づくと、潜伏していた忍者が現れる (m)
   idleSpawn: 35,      // 誰も出ていないまま、これだけたつと一番近い忍者が現れる (秒)
   gap0: 17, gap1: 9,  // 出てくる間隔 (最初 → 最後)
   roofTime: [0.3, 0.6], // ビルの上で構える時間
@@ -341,14 +341,7 @@ function spawnNinja(plan) {
     if (bi < 0) return false;
     plan = G.hidden.splice(bi, 1)[0];
   }
-  let roof = plan.roof, land = plan.land;
-  // 小舟の前方 (着くころに小舟が来る所) の水に飛び込み、その近くのビルから飛ぶ
-  const ahead = aheadCell(Math.max(90, Math.abs(P.v) * 3.5 + 50));
-  if (ahead >= 0) {
-    const ax = cellX(ahead), az = cellZ(ahead);
-    const c = allRoofs().filter((b) => b.sy >= 15 && b.sy <= 60 && Math.hypot(b.x - ax, b.z - az) > 35 && Math.hypot(b.x - ax, b.z - az) < 140);
-    if (c.length) { roof = c[(Math.random() * c.length) | 0]; land = ahead; }
-  }
+  const roof = plan.roof, land = plan.land;
   const lx = cellX(land), lz = cellZ(land);
   const m = makeNinja();
   m.scale.setScalar(CFG.ninjaScale);
@@ -360,12 +353,11 @@ function spawnNinja(plan) {
   const marker = document.createElement('div'); marker.className = 'nmark down'; marker.innerHTML = '▼';
   $('marks').appendChild(marker);
   const nj = {
-    id: G.spawned, m, bam, marker, state: 'roof', t: rand(...CFG.roofTime), hp: 1,
+    id: G.spawned, m, bam, marker, state: 'wait', t: 0, hp: 1,
     x: roof.x, y: y0, z: roof.z, sx: roof.x, sy: y0, sz: roof.z, lx, lz, vx: 0, vz: 0, stun: 0, outer: true,
   };
   G.ninjas.push(nj);
   G.spawned++;
-  A.sfx('bell', 0.35, 1.2);
   return true;
 }
 
@@ -380,6 +372,14 @@ function updateNinja(nj, dt) {
   nj.t -= dt;
   if (nj.stun > 0) nj.stun -= dt;
   switch (nj.state) {
+    case 'wait': {
+      // 外堀の外のビルの屋上で待ち伏せ。小舟が近くに来たら構えて飛ぶ
+      poseNinja(nj.m, 'roof', G.t);
+      nj.m.rotation.y = Math.atan2(P.x - nj.x, P.z - nj.z);
+      const active = G.ninjas.filter((n) => ['roof', 'glide', 'dive', 'swim1', 'emerge1', 'climbOut'].includes(n.state)).length;
+      if (Math.hypot(nj.lx - P.x, nj.lz - P.z) < CFG.wakeDist && active < CFG.maxActive) { nj.state = 'roof'; nj.t = rand(...CFG.roofTime); A.sfx('bell', 0.35, 1.2); }
+      break;
+    }
     case 'roof': {
       poseNinja(nj.m, 'roof', G.t);
       if (nj.t <= 0) {
@@ -1223,7 +1223,7 @@ function updateNav() {
   // 忍者が出ていれば一番近い忍者を、いなければ外堀を回る道の次の地点を指す
   let ninja = null, nd = 1e18;
   for (const nj of G.ninjas) {
-    if (['gone', 'bound', 'in', 'fall', 'sink'].includes(nj.state)) continue;
+    if (['gone', 'bound', 'in', 'fall', 'sink', 'wait'].includes(nj.state)) continue;
     const d = Math.hypot(nj.x - P.x, nj.z - P.z) * (nj.state === 'climb' || nj.state === 'emerge' ? 0.4 : 1);
     if (d < nd) { nd = d; ninja = nj; }
   }
@@ -1313,6 +1313,7 @@ function startGame() {
   G.navStage = 'route'; G.wpi = 0;
   { const R = routePoints(); P.h = Math.atan2(R[0].z - P.z, R[0].x - P.x); }
   G.hidden = planNinjas();
+  while (G.hidden.length) spawnNinja(G.hidden.shift());
   camInit = false; trail.length = 0;
   $('title').classList.add('hidden'); $('result').classList.add('hidden'); $('pause').classList.add('hidden');
   $('hud').classList.remove('hidden');
@@ -1372,14 +1373,7 @@ function step(dt) {
     I.pressed.delete('KeyJ'); I.pressed.delete('Coin'); I.pressed.delete('KeyK'); I.pressed.delete('Lasso'); I.pressed.delete('KeyW'); I.pressed.delete('KeyS'); I.pressed.delete('ArrowUp'); I.pressed.delete('ArrowDown');
     G.coinCd = Math.max(0, G.coinCd - dt); G.lassoCd = Math.max(0, G.lassoCd - dt);
     // 出現
-    // 小舟が近づくと、潜伏していた忍者がムササビの術で現れる。しばらく誰も出ていなければ一番近い所から
-    const active = G.ninjas.filter((n) => !['gone', 'bound', 'in', 'fall', 'sink'].includes(n.state)).length;
-    if (G.hidden && G.hidden.length && active < CFG.maxActive && G.t >= G.nextSpawn) {
-      // 小舟の前方 (画面に入る所) に飛び込む忍者から現れる
-      const i = G.hidden.findIndex((p) => { const dx = cellX(p.land) - P.x, dz = cellZ(p.land) - P.z, d = Math.hypot(dx, dz); return d < CFG.wakeDist && d > 60 && (dx * Math.cos(P.h) + dz * Math.sin(P.h)) / d > 0.5; });
-      if (i >= 0) { spawnNinja(G.hidden.splice(i, 1)[0]); G.nextSpawn = G.t + 2; G.lastSpawn = G.t; }
-      else if ((active === 0 && G.t - (G.lastSpawn || 0) > CFG.idleSpawn) || G.t >= G.forceSpawn) { spawnNinja(); G.nextSpawn = G.t + 2; G.lastSpawn = G.t; G.forceSpawn = G.t + CFG.idleSpawn * 2; }
-    }
+    // 忍者は最初から外堀の外のビルの屋上で待っている (startGame で置く)。小舟が近くに来たら飛び込む ('wait')
     const climbing = G.ninjas.some((n) => n.state === 'climb' || n.state === 'emerge');
     A.playBgm(climbing ? 'bgmBattle' : 'bgmSea');
   } else {

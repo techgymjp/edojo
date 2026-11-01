@@ -4,7 +4,8 @@
 import * as THREE from '../vendor/three.module.min.js';
 import { City } from './tokyo/city.js';
 import { CITY } from './tokyo/city-data.js';
-import { ROADS } from './tokyo/road-data.js';
+import { ROADS, HIGHWAYS } from './tokyo/road-data.js';
+import { SHUTOKO } from './shutoko-data.js';
 import { addTokyoTower, addDiet, addTechGym, addTokyoDome, addSkytree, addFuji, addDistant } from './tokyo/landmarks.js';
 import { addOchanomizu, addTokyoStation, addAkasaka, addRailways, addAkibaSigns, addNewOtani, addYotsuyaKudan, addGinzaNihonbashi, addUeno, addSensoji, addAsahi, addUenoAsakusa } from './tokyo/landmarks2.js';
 import { W, codeAt, isWater, LEVEL_H, terrainH, waterY, nearWaterGrid } from './world.js';
@@ -75,6 +76,11 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
     office: new THREE.MeshLambertMaterial({ map: windowTex('office', false, renderer), vertexColors: true, emissiveMap: windowTex('office', true, renderer), emissive: 0xffffff, emissiveIntensity: 0 }),
     roof: new THREE.MeshLambertMaterial({ vertexColors: true }),
   };
+  // 首都高は国土地理院の道路データ (地上・高架・トンネル) で取り直したもの (js/shutoko-data.js) に置き換える
+  CITY.roads.length = 0;
+  for (const r of SHUTOKO) CITY.roads.push({ x: r.x.slice(), z: r.z.slice(), h: r.h.slice(), t: r.t.slice() });
+  HIGHWAYS.length = 0;
+  const r_noJoin = true;
   const city = new City();
   for (const m of Object.values(mats)) addCutaway(m);
   // 水 (戻した江戸の堀を含む) と皇居ゾーン (江戸城) に建つビルは描かない
@@ -124,6 +130,7 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
         const la = Math.hypot(a.dx, a.dz) || 1, lb = Math.hypot(b.dx, b.dz) || 1;
         if ((a.dx * gx + a.dz * gz) / la / g < 0.85 || (-b.dx * gx - b.dz * gz) / lb / g < 0.85) continue;
         if (!isWater(a.x + gx / 2 + OX, a.z + gz / 2 + OZ)) continue;
+        if (r_noJoin) continue; // 国土地理院の首都高はつながっているので、つなぎは足さない
         const hh = Math.max(a.h, b.h, 6);
         add.push({ x: [a.x, b.x], z: [a.z, b.z], h: [hh, hh], t: [0, 0], joinDone: true });
       }
