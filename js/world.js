@@ -152,7 +152,7 @@ export function cullChunks(cam, R = 2300) {
 export function buildGround(scene) {
   const { tex, lvTex } = makeGroundTextures();
   // 640m 四方のかたまりに分ける (見えているかたまりだけ描く)
-  const G = 10, CH = 64, nx = Math.ceil(W.sizeX / G) + 1, nz = Math.ceil(W.sizeZ / G) + 1;
+  const G = 16, CH = 40, nx = Math.ceil(W.sizeX / G) + 1, nz = Math.ceil(W.sizeZ / G) + 1;
   const geos = [];
   for (let cj = 0; cj < nz - 1; cj += CH) for (let ci = 0; ci < nx - 1; ci += CH) {
     const ex = Math.min(nx - 1, ci + CH), ez = Math.min(nz - 1, cj + CH), cw = ex - ci + 1, chh = ez - cj + 1;
@@ -560,7 +560,7 @@ export function buildWater(scene) {
       pm[2] = _clip.x; pm[6] = _clip.y; pm[10] = _clip.z + 1 - 0.003; pm[14] = _clip.w;
       mesh.visible = false; gmesh.visible = false;
       const fogFar = scene.fog.far;
-      scene.fog.far = Math.min(fogFar, 800);
+      scene.fog.far = Math.min(fogFar, 600);
       renderer.setRenderTarget(rt);
       renderer.clear();
       renderer.render(scene, mirrorCam);

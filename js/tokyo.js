@@ -108,7 +108,13 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
   // 道路: 地面の道はその場の標高の上、高架は地面からの高さ (首都高グランプリのデータは地面が 0) をならした地面に足す
   for (const r of CITY.roads) {
     if (r.g) continue;
-    r.g = r.h.map((v) => v < 3);
+    // 地面の道 (高さ 3m 未満)。ただし川の上の点は橋として扱い、前後の高架の高さでつなぐ
+    r.g = r.h.map((v, i) => v < 3 && !isWater(r.x[i] + OX, r.z[i] + OZ));
+    for (let i = 0; i < r.h.length; i++) {
+      if (r.g[i] || r.h[i] >= 3) continue;
+      let a = i, b = i; while (a > 0 && !r.g[a] && r.h[a] < 3) a--; while (b < r.h.length - 1 && !r.g[b] && r.h[b] < 3) b++;
+      r.h[i] = Math.max(r.h[a], r.h[b], 3);
+    }
     for (let i = 0; i < r.h.length; i++) r.h[i] = r.g[i] ? terrainH(r.x[i] + OX, r.z[i] + OZ) + 0.08 : r.h[i] + Ts(r.x[i], r.z[i]);
   }
   city.buildMeshes(root, mats);
@@ -235,7 +241,7 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
     // ある所のビルの屋上の高さ (なければ 0)
     roofAt(x, z) {
       const f = city.floorAt(x - OX, z - OZ, 1e5);
-      return f.what === 'roof' && f.bd ? f.y + (f.bd.base || 0) : 0;
+      return f.what === 'roof' && f.bd && f.bd.plateau ? f.y + (f.bd.base || 0) : 0; // 描いているビルの屋根だけ
     },
     stream(cam, R, budget) { return city.streamTiles(cam.x - OX, cam.z - OZ, R, budget); },
     update(dt, t, night, fogColor, camera) {

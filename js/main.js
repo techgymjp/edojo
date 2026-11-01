@@ -44,8 +44,8 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, 1.25));
 renderer.setSize(innerWidth, innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.5, 12000);
-scene.fog = new THREE.Fog(0x8090a8, 300, 2000);
+const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.5, 11000);
+scene.fog = new THREE.Fog(0x8090a8, 250, 1400);
 const hemi = new THREE.HemisphereLight(0xdfe8ff, 0x50483c, 1.1);
 scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xffd0a0, 1.6);
@@ -479,7 +479,8 @@ function updateNinja(nj, dt) {
       }
       const yt = Math.max(groundH(nj.x, nj.z), N.roofAt(nj.x, nj.z), isWater(nj.x, nj.z) ? waterY(nj.x, nj.z) + 0.2 : 0);
       nj.y += (yt - nj.y) * Math.min(1, dt * (yt > nj.y ? 9 : 5));
-      nj.m.position.set(nj.x, nj.y + Math.abs(Math.sin(G.t * 9 + nj.id)) * 0.5, nj.z);
+      // 屋根から屋根へ大きく跳ねながら走る (ビルの陰に隠れないように)
+      nj.m.position.set(nj.x, nj.y + Math.abs(Math.sin(G.t * 2.2 + nj.id)) * 9, nj.z);
       nj.m.rotation.set(0, Math.atan2(dx, dz), 0);
       poseNinja(nj.m, 'climb', G.t * 1.5);
       nj.m.userData.body.rotation.x = 0.5;
@@ -1402,10 +1403,10 @@ function loop(now) {
     updateSky();
   }
   water.update(now / 1000, skyMat.uniforms.hor.value, scene.fog, camera);
-  cullChunks(camera.position, 2300);
+  cullChunks(camera.position, 1500);
   tokyo.update(dt, now / 1000, modern.mat.userData.night.value, scene.fog.color, camera);
   // 見える範囲の街のタイルを組み立てる
-  { const t0 = performance.now(); while (tokyo.stream(camera.position, 1800, 1) > 0 && performance.now() - t0 < 4); }
+  { const t0 = performance.now(); while (tokyo.stream(camera.position, 1200, 1) > 0 && performance.now() - t0 < 4); }
   for (const w of warps) for (const e of [w.a, w.b]) e.disc.rotation.z = now / 400;
   I.pressed.clear();
   // 建物の透かし: 遊んでいるときだけ (カメラ → 小舟の主人公)
