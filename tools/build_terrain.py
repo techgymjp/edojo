@@ -144,6 +144,50 @@ castle = (A == 3) | (A == 4)
 Es = box(Ev, 1, land)
 T = np.where(land, np.where(castle, Ev, Es), bank).astype(np.float32)
 
+# 真田濠の東の土手 (濠とソフィア通りのあいだの緑道): 水ぎわから斜めに上がり、土手の上 (道より 2m 高い) を通ってソフィア通りへ下りる
+ax_, az_ = 139.72990, 35.68575; bx_, bz_ = 139.73225, 35.68170
+px_ = (lon - ax_) * KX; pz_ = (lat - az_) * KZ; vx_ = (bx_ - ax_) * KX; vz_ = (bz_ - az_) * KZ
+tt_ = np.clip((px_ * vx_ + pz_ * vz_) / (vx_ * vx_ + vz_ * vz_), 0, 1)
+qx_, qz_ = px_ - vx_ * tt_, pz_ - vz_ * tt_
+dd_ = np.hypot(qx_, qz_)
+east_ = (vx_ * qz_ - vz_ * qx_) > 0  # 緯度は北が正 (z と逆) なので、東側はこの符号
+# ソフィア通りの線 (緯度ごとの経度) より西
+SO = [(35.6857, 139.73165), (35.6849, 139.73130), (35.6814, 139.73340)]
+so_lon = np.interp(lat, [SO[2][0], SO[1][0], SO[0][0]], [SO[2][1], SO[1][1], SO[0][1]])
+ds_ = (so_lon - lon) * KX  # ソフィア通りまでの距離 (m、西が正)
+band_ = east_ & (dd_ > 30) & (ds_ > 0) & land & ((lat > 35.6814) & (lat < 35.6857))
+if band_.any():
+    wl_s = float(np.nanmedian(WL[water & SANADA])) if (water & SANADA).any() else 15.5
+    street = float(np.nanpercentile(T[band_], 70))
+    top = street + 2.0
+    up = np.clip((dd_ - 30) / 40, 0, 1)          # 30m〜70m で水ぎわから土手の上へ
+    down = np.clip(1 - ds_ / 14, 0, 1)            # ソフィア通りの手前 14m で土手の上から道へ
+    prof = (wl_s + 1.0) + (top - wl_s - 1.0) * (up * up * (3 - 2 * up))
+    prof = prof * (1 - down) + T * down
+    T = np.where(band_, prof, T).astype(np.float32)
+    print('真田濠の東の土手', int(band_.sum()), 'water', round(wl_s, 1), 'top', round(top, 1))
+# 真田濠のまわりは石垣なし: 西 (外堀通り側)・南 (喰違見附側) も、水ぎわから 25m かけて勾配のある土手で上がる
+pxs = (lon - 139.72990) * KX; pzs = (lat - 35.68575) * KZ; vxs = (139.73230 - 139.72990) * KX; vzs = (35.68120 - 35.68575) * KZ
+ts = (pxs * vxs + pzs * vzs) / (vxs * vxs + vzs * vzs)
+dist_w = np.full((h, w), np.inf, np.float32)
+# 水からの距離 (m): 真田濠のまわりの窓だけで幅優先
+y0s, y1s = int((N - 35.6870) * KZ / RES), int((N - 35.6805) * KZ / RES); x0s, x1s = int((139.7285 - W) * KX / RES), int((139.7345 - W) * KX / RES)
+from collections import deque as _dq
+qq = _dq()
+for yy in range(y0s, y1s):
+    for xx in range(x0s, x1s):
+        if water[yy, xx] and SANADA[yy, xx]: dist_w[yy, xx] = 0; qq.append((yy, xx))
+while qq:
+    a, b = qq.popleft(); dv = dist_w[a, b] + RES
+    if dv > 40: continue
+    for yy, xx in ((a + 1, b), (a - 1, b), (a, b + 1), (a, b - 1)):
+        if y0s <= yy < y1s and x0s <= xx < x1s and land[yy, xx] and dv < dist_w[yy, xx]: dist_w[yy, xx] = dv; qq.append((yy, xx))
+ring = land & (dist_w < 25) & (ts > -0.08) & (ts < 1.12)
+if ring.any():
+    wl_s = float(np.nanmedian(WL[water & SANADA]))
+    k = np.clip(dist_w / 25, 0, 1); k = k * k * (3 - 2 * k)
+    T = np.where(ring, np.minimum(T, (wl_s + 0.8) + (T - wl_s - 0.8) * k), T).astype(np.float32)
+    print('真田濠のまわりの土手の斜面', int(ring.sum()))
 def save(a, name):
     v = np.clip(np.round((a + 20) * 200), 0, 65535).astype(np.uint32)
     rgb = np.stack([(v >> 8).astype(np.uint8), (v & 255).astype(np.uint8), np.zeros_like(v, np.uint8)], -1)

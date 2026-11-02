@@ -108,13 +108,30 @@ const GROUND_RGB = [
 function hash(i) { i = (i ^ 61) ^ (i >>> 16); i *= 9; i ^= i >>> 4; i *= 0x27d4eb2d; i ^= i >>> 15; return (i >>> 0) / 4294967296; }
 
 // 真田濠のまわりの緑: 東は土手の緑道、西は外堀通りの向こうの緑地
+// ソフィア通り (新宿通りから紀尾井坂まで)
+const SOPHIA = [[35.6857, 139.73165], [35.6849, 139.73130], [35.6814, 139.73340]];
+function westOfSophia(x, z) {
+  // 同じ高さ (z) のソフィア通りの x より西か
+  const P = SOPHIA.map(([la, lo]) => ll(la, lo));
+  for (let i = 0; i + 1 < P.length; i++) {
+    const [x1, z1] = P[i], [x2, z2] = P[i + 1];
+    if ((z - z1) * (z - z2) <= 0) { const t = (z - z1) / ((z2 - z1) || 1); return x < x1 + (x2 - x1) * t; }
+  }
+  return false;
+}
+// 真田濠 (四谷〜喰違) のまわり
+export function inSanada(x, z) {
+  const [ax, az] = ll(35.68575, 139.72990), [bx, bz] = ll(35.68120, 139.73230);
+  const vx = bx - ax, vz = bz - az, t = ((x - ax) * vx + (z - az) * vz) / (vx * vx + vz * vz);
+  return t > -0.08 && t < 1.1 && Math.hypot(x - ax - vx * t, z - az - vz * t) < 120;
+}
 export function sanadaGreen(x, z) {
   const [ax, az] = ll(35.68575, 139.72990), [bx, bz] = ll(35.68170, 139.73225);
   const vx = bx - ax, vz = bz - az, L2 = vx * vx + vz * vz, t = ((x - ax) * vx + (z - az) * vz) / L2;
-  if (t < -0.02 || t > 1.02) return false;
+  if (t < -0.02 || t > 1.08) return false;
   const px = x - ax - vx * t, pz = z - az - vz * t, d = Math.hypot(px, pz);
-  // 東側 (ソフィア通りまでの緑道) は 112m まで、西側 (外堀通り 405 の向こうの緑地: 若葉東公園・迎賓館の前庭のあたり) は 170m まで
-  return (vx * pz - vz * px) < 0 ? d > 36 && d < 112 : d > 36 && d < 170;
+  // 東側はソフィア通りまでの土手の緑道、西側は外堀通り (405) の向こうの緑地 (若葉東公園・迎賓館の前庭のあたり) まで
+  return (vx * pz - vz * px) < 0 ? d > 36 && westOfSophia(x, z) : d > 36 && d < 170;
 }
 function makeGroundTextures() {
   const n = W.w * W.h;
@@ -364,7 +381,8 @@ export function buildWalls(scene) {
     if (hc === 5) bankSegs.push({ ax, az, bx, bz, nx, nz });
     const dote = isDote(mx, mz);
     if (dote) {
-      // 土手: 斜面は地形 (標高) のとおり緑で描くので、水ぎわは低い草の縁だけ (短冊のような面を立てない)
+      // 真田濠は石垣なし: 岸は全部、勾配のついた緑の土手 (地形を水ぎわまで下げてある)。水ぎわは低い草の縁だけ
+      if (inSanada(mx, mz)) { quad(grass, ax, az, bx, bz, y0, Math.min(y1, waterY(mx, mz) + 0.6), nx, nz, u0, u1, 4); return; }
       // 水ぎわの垂直な壁は石垣。その上の斜面 (地形) は緑の土手
       quad(stone, ax, az, bx, bz, y0, y1, nx, nz, u0, u1, 3.2);
       if (hc === 3 || hc === 4) doteSegs.push({ ax, az, bx, bz, nx, nz, y: y1, len, off: 0 });

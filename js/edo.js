@@ -89,7 +89,7 @@ export const GATES = [
   ['神田橋門', 35.6895, 139.7635, 'bridge', 1], ['常盤橋門', 35.6859, 139.7704, 'bridge', 1], ['呉服橋門', 35.6830, 139.7722, 'bridge', 1],
   ['鍛冶橋門', 35.6768, 139.7682, 'bridge', 1], ['数寄屋橋門', 35.6728, 139.7631, 'bridge', 1], ['山下門', 35.6700, 139.7597, 'bridge', 1],
   ['幸橋門', 35.6683, 139.7553, 'bridge', 1], ['虎ノ門', 35.6697, 139.7495, 'dobashi', 1], ['赤坂門', 35.6778, 139.7366, 'bridge', 1],
-  ['喰違見附', 35.68125, 139.73270, 'dobashi', 0], ['四谷門', 35.6862, 139.7305, 'dobashi', 1], ['市ヶ谷門', 35.6915, 139.7365, 'dobashi', 1],
+  ['喰違見附', 35.681278, 139.732250, 'dobashi', 0], ['四谷門', 35.6862, 139.7305, 'dobashi', 1], ['市ヶ谷門', 35.6915, 139.7365, 'dobashi', 1],
   ['牛込門', 35.7015, 139.7438, 'bridge', 1], ['小石川門', 35.7027, 139.7515, 'bridge', 1], ['筋違橋門', 35.6975, 139.7710, 'bridge', 1],
   ['浅草橋門', 35.6965, 139.7855, 'bridge', 1], ['芝口見附', 35.6658, 139.7598, 'bridge', 0], ['内桜田門', 35.6838, 139.7582, 'dobashi', 0],
 ];
@@ -376,6 +376,8 @@ export function buildCastle(scene, castleSegs) {
   const [cx, cz] = [tx, tz];
   for (const [name, la, lo, kind, big] of GATES) {
     // 外桜田門 (桜田門) は皇居ランナーと同じ枡形 (土橋の先の高麗門と、右奥の石垣の上の渡櫓門) で作る
+    // 喰違見附: 広重の絵のとおり、土手の上の冠木門と板塀、低い石垣、松
+    if (name === '喰違見附') { const r = buildKuichigai(scene, la, lo); const l = labelSprite(name, '#ffe9b0', 0.9); l.position.set(r[0], r[2] + 22, r[1]); scene.add(l); labels.push(l); continue; }
     if (name === '外桜田門') { const r = buildMasugata(scene, 35.67756, 139.75223); const l = labelSprite(name, '#ffe9b0', 0.9); l.position.set(r[0], r[2] + 22, r[1]); scene.add(l); labels.push(l); if (typeof window !== 'undefined') (window.__gates ||= []).push([name, Math.round(r[0]), Math.round(r[1])]); continue; }
     let [x, z] = ll(la, lo);
     let gx, gz, rot;
@@ -501,6 +503,38 @@ function buildMasugata(scene, lat, lon) {
   const yr = new THREE.Mesh(masuHip, roofM); yr.scale.set(25, 6.5, 43); yr.position.set(24, 19.2, -16); g.add(yr);
   box(g, 30, 6.5, 4, 50, -0.5, 2, stone);
   for (const sx of [-1, 1]) { const gd = makeSamurai('guard'); gd.position.set(sx * 4.6, 0, 2.2); gd.scale.setScalar(0.9); g.add(gd); }
+  scene.add(g);
+  return [gx, gz, base];
+}
+
+// ---------- 喰違見附 (広重「喰違い外」のとおり): 草の土手の上に冠木門、両わきに板塀、門の脇に低い石垣、まわりに松 ----------
+function buildKuichigai(scene, lat, lon) {
+  const [gx, gz] = ll(lat, lon);
+  const base = groundH(gx, gz);
+  const g = new THREE.Group();
+  g.position.set(gx, base, gz);
+  g.rotation.y = -0.55; // 道 (土橋) は北西〜南東
+  const wood = M(0x5a4636), dark = M(0x3a2c22), stone = M(0x8f8a80), roofM = M(0x4a5054), path = M(0x9a8f78), pine = M(0x2f5a2c), trunk = M(0x5a4030);
+  // 冠木門 (2 本の柱と冠木、小さな屋根)
+  for (const sx of [-1, 1]) box(g, 0.5, 5, 0.5, sx * 2.4, 0, 0, dark);
+  box(g, 6.2, 0.5, 0.6, 0, 4.6, 0, dark);
+  const r = new THREE.Mesh(new THREE.ConeGeometry(Math.SQRT1_2, 1, 4, 1).rotateY(Math.PI / 4), roofM); r.scale.set(7.4, 1.3, 2.2); r.position.y = 5.75; g.add(r);
+  // 両わきの板塀 (縦の板)
+  for (const sx of [-1, 1]) {
+    box(g, 9, 2.6, 0.25, sx * 7.4, 0, 0, wood);
+    for (let k = 0; k < 9; k++) box(g, 0.12, 2.9, 0.35, sx * (3.4 + k), 0, 0, dark);
+  }
+  // 門の右脇の低い石垣
+  box(g, 6, 2.2, 3, 9, 0, -2.6, stone);
+  // 門の前後の土の道
+  box(g, 4.4, 0.15, 30, 0, -0.05, 0, path);
+  // 松 (土手の上に何本も)
+  const pinePos = [[-12, -6], [-6, -9], [2, -11], [11, -8], [16, -3], [-17, 2], [14, 6], [-9, 7]];
+  for (const [px, pz] of pinePos) {
+    const t = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.4, 6, 6), trunk); t.position.set(px, 3, pz); t.rotation.z = (px % 3) * 0.08; g.add(t);
+    for (const [dy, rr] of [[6.2, 3.2], [7.4, 2.4], [8.4, 1.5]]) { const c = new THREE.Mesh(new THREE.SphereGeometry(rr, 8, 6), pine); c.scale.y = 0.45; c.position.set(px + (dy % 2) * 0.6, dy, pz); g.add(c); }
+  }
+  for (const sx of [-1, 1]) { const gd = makeSamurai('guard'); gd.position.set(sx * 3.4, 0, 1.6); gd.scale.setScalar(0.9); g.add(gd); }
   scene.add(g);
   return [gx, gz, base];
 }
