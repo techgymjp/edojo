@@ -824,6 +824,22 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
             // 桁: 橋の幅いっぱいの厚い桁 (下から見て空が透けないように)
             boxU(cx, cz, ux, uz, L + 0.2, wdt - 0.2, deck - 1.8, deck - 0.45, GIRDER);
           }
+          // 昌平橋: 赤れんがの一つアーチの橋 (両側の壁にアーチの口、アーチの裏)
+          {
+            const [sx0, sz0] = pts[k - 1], [ex0, ez0] = pts[e];
+            const mx0 = (sx0 + ex0) / 2 - OX, mz0 = (sz0 + ez0) / 2 - OZ;
+            const SHX = (139.76935 - 139.745) * KXT, SHZ = -(35.69900 - 35.674) * KZT;
+            if (Math.hypot(mx0 - SHX, mz0 - SHZ) < 45) {
+              const BRICK = [0.62, 0.3, 0.24], SL = Math.hypot(ex0 - sx0, ez0 - sz0) || 1, ux = (ex0 - sx0) / SL, uz = (ez0 - sz0) / SL, vx = -uz, vz = ux;
+              const NA = 24, base = wmax - 0.5, rise = Math.max(2, deck - 1.2 - base);
+              for (let q = 0; q < NA; q++) {
+                const t0 = q / NA, t1 = (q + 1) / NA, tm = (t0 + t1) / 2;
+                const yb = base + rise * Math.sin(Math.PI * tm), cx = sx0 + ux * SL * tm, cz = sz0 + uz * SL * tm;
+                for (const sd of [-1, 1]) boxU(cx + vx * sd * (wdt / 2 + 0.2), cz + vz * sd * (wdt / 2 + 0.2), ux, uz, SL / NA + 0.05, 0.6, yb, deck + 0.2, BRICK);
+                boxU(cx, cz, ux, uz, SL / NA + 0.05, wdt + 0.6, yb - 0.4, yb, BRICK);
+              }
+            }
+          }
           // 深い谷 (お茶の水) の橋: 谷底からのアーチ (聖橋)
           if (deck - wmax > 10 && spanL > 30) {
             const [sx, sz] = pts[k - 1], [ex, ez] = pts[e], SL = Math.hypot(ex - sx, ez - sz) || 1, ux = (ex - sx) / SL, uz = (ez - sz) / SL;

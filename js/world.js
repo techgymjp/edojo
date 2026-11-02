@@ -122,7 +122,7 @@ function westOfSophia(x, z) {
 // お茶の水の谷 (神田川が本郷台地を切り通した所。水道橋と秋葉原は低く、お茶の水は台地の上): 両岸は石垣なしの急な緑の崖
 export function ochaNorth(x, z) {
   const lo = W.W + x / W.KX, la = W.N - z / W.KZ;
-  return lo > 139.7565 && lo < 139.7700 && la > 35.6975 && la < 35.7045;
+  return lo > 139.7565 && lo < 139.7725 && la > 35.6965 && la < 35.7045;
 }
 // 真田濠 (四谷〜喰違) のまわり
 export function inSanada(x, z) {
@@ -385,9 +385,11 @@ export function buildWalls(scene) {
     // 今の街の岸 (川沿いの建物の壁を立てるのに使う)
     if (hc === 5) bankSegs.push({ ax, az, bx, bz, nx, nz });
     // お茶の水の谷 (国土地理院の 5m 標高で台地を切り通した崖): 両岸とも石垣なし、急な緑の崖 (草の面で立てる)
-    if (ochaNorth(mx, mz) && y1 - waterY(mx, mz) > 4) {
+    if (ochaNorth(mx, mz) && (y1 - waterY(mx, mz) > 4 || W.W + mx / W.KX > 139.7680)) {
       const lo_ = W.W + mx / W.KX;
       // 聖橋より東 (昌平橋まで) の北岸 (湯島側) は、水面から立ち上がるコンクリートの護岸 (上は地面の高さまで)
+      // 聖橋より東 (昌平橋〜万世橋) は両岸とも、水面から立ち上がるコンクリートの護岸
+      if (lo_ > 139.7680) { const top = Math.max(y1, groundMeshH(mx - nx * 14, mz - nz * 14) + 0.3); quad(conc, ax, az, bx, bz, y0, top, nx, nz, u0, u1, 3); return; }
       if (lo_ > 139.7672 && nz > 0) { const top = Math.max(y1, groundMeshH(mx - nx * 14, mz - nz * 14) + 0.3); quad(conc, ax, az, bx, bz, y0, top, nx, nz, u0, u1, 3); return; }
       quad(grass, ax, az, bx, bz, y0, y1, nx, nz, u0, u1, 4); return;
     }
