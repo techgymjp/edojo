@@ -273,9 +273,21 @@ export function makeBamboo() {
   tip.position.y = 1.1; g.add(tip);
   const ring = new THREE.Mesh(new THREE.RingGeometry(0.25, 0.4, 20), new THREE.MeshBasicMaterial({ color: 0xcfe8f0, transparent: true, opacity: 0.5, side: THREE.DoubleSide }));
   ring.rotation.x = -Math.PI / 2; ring.position.y = 0.05; g.add(ring);
-  g.userData = { ring };
+  // 背後の光 (水面の上で輝いて見えるように。スマホの小さな画面でも見つけやすく)
+  if (!BAMBOO_GLOW) {
+    const c = document.createElement('canvas'); c.width = c.height = 128; const q = c.getContext('2d');
+    const rg = q.createRadialGradient(64, 64, 2, 64, 64, 64);
+    rg.addColorStop(0, 'rgba(255,255,230,1)'); rg.addColorStop(0.3, 'rgba(180,255,170,0.7)'); rg.addColorStop(1, 'rgba(80,220,140,0)');
+    q.fillStyle = rg; q.fillRect(0, 0, 128, 128);
+    BAMBOO_GLOW = new THREE.CanvasTexture(c);
+  }
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: BAMBOO_GLOW, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+  glow.scale.set(2.6, 2.6, 1); glow.position.y = 0.7; glow.renderOrder = -1; g.add(glow);
+  tip.material = new THREE.MeshBasicMaterial({ color: 0xfff6c0 });
+  g.userData = { ring, glow };
   return g;
 }
+let BAMBOO_GLOW = null;
 
 // 寛永通宝 (投げ銭)
 export function makeCoin() {

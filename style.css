@@ -175,8 +175,8 @@ body.app #help, body.app .howto-panel table th:nth-child(2), body.app .howto-pan
 @media (orientation: landscape) and (max-height: 500px) {
   #dpad { grid-template-columns: repeat(3, 52px); grid-template-rows: repeat(3, 52px); }
 }
-@media (pointer: coarse) and (orientation: landscape) and (max-height: 500px) {
-  /* 横画面のスマホ: 左下は十字ボタンなので、ミニマップは右上 (視・止の下) へ */
+@media (pointer: coarse) and (orientation: landscape) {
+  /* 横画面のスマホ・タブレット: 左下は十字ボタンなので、ミニマップは右上 (視・止の下) へ */
   #minimap { left: auto; right: 8px; top: calc(56px + env(safe-area-inset-top)); bottom: auto; width: min(26vw, 200px); height: min(23.4vw, 180px); }
 }
 

@@ -478,6 +478,7 @@ function updateNinja(nj, dt) {
       nj.bam.rotation.z = Math.sin(G.t * 2 + nj.id) * 0.1 + (nj.stun > 0 ? 0.5 : 0);
       nj.bam.userData.ring.scale.setScalar(1 + (G.t * 2 % 1) * 1.5);
       nj.bam.userData.ring.material.opacity = 0.6 * (1 - (G.t * 2 % 1));
+      { const gl = nj.bam.userData.glow, k = 1 + Math.sin(G.t * 5 + nj.id) * 0.18, sc = (MOBILE ? 3.6 : 2.6) * k; gl.scale.set(sc, sc, 1); gl.material.opacity = 0.75 + 0.25 * Math.sin(G.t * 5 + nj.id); } // 光をゆらして目立たせる
       break;
     }
     case 'swim1': {
@@ -493,6 +494,7 @@ function updateNinja(nj, dt) {
       nj.bam.rotation.z = Math.sin(G.t * 2 + nj.id) * 0.1 + (nj.stun > 0 ? 0.5 : 0);
       nj.bam.userData.ring.scale.setScalar(1 + (G.t * 2 % 1) * 1.5);
       nj.bam.userData.ring.material.opacity = 0.6 * (1 - (G.t * 2 % 1));
+      { const gl = nj.bam.userData.glow, k = 1 + Math.sin(G.t * 5 + nj.id) * 0.18, sc = (MOBILE ? 3.6 : 2.6) * k; gl.scale.set(sc, sc, 1); gl.material.opacity = 0.75 + 0.25 * Math.sin(G.t * 5 + nj.id); } // 光をゆらして目立たせる
       break;
     }
     case 'emerge1': {
@@ -2026,4 +2028,4 @@ requestAnimationFrame(loop);
 boot();
 window.__wy = waterY; window.__G = G; window.__P = P; window.__CFG = CFG; window.__ll = ll; window.__gh = groundH;
 window.__tokyo = () => tokyo; window.__cam = camera; window.__THREE = THREE; window.__W = W; window.__renderer = renderer; window.__scene = scene;
-window.__dbg = { innerDive: (nj) => innerDive(nj), intrude: (nj) => intrude(nj), warps: () => warps, hitNinja, spawnNinja, throwCoins, throwLasso, startGame, navi: () => navi, isWater, cellOf, step, updateNav };
+window.__dbg = { route: () => routePoints(), innerDive: (nj) => innerDive(nj), intrude: (nj) => intrude(nj), warps: () => warps, hitNinja, spawnNinja, throwCoins, throwLasso, startGame, navi: () => navi, isWater, cellOf, step, updateNav };
