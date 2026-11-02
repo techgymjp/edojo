@@ -443,7 +443,8 @@ function buildMarunouchi(scene) {
   }
   // 四ツ谷: 外濠 (真田濠) の谷の上の駅。西の四谷側の横穴から出て、駅を通って東の麹町側の横穴へ
   {
-    const A = ll2(35.68545, 139.72905), B = ll2(35.68525, 139.73215);
+    // 四ツ谷: 新宿通り (四谷見附橋) の下から南へ、中央線と並んで谷の中を走る (甲州街道とは並ばない)
+    const A = ll2(35.68590, 139.72990), B = ll2(35.68360, 139.73045);
     const bank = Math.min(terrainH(...A), terrainH(...B));
     site(A, B, 160, Math.max(waterY(...ll2(35.6853, 139.7306)) + 5, bank - 4), { station: true });
   }

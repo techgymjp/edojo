@@ -213,7 +213,7 @@ def slope_bank(box, run=25):
     ring_ = (~sub_w) & (dist < run)
     T[y0b:y1b, x0b:x1b] = np.where(ring_, np.minimum(Ts, wl0 + 0.8 + (Ts - wl0 - 0.8) * k), np.where(sub_w, wl0 - 1.5, Ts))
     print('土手の斜面', box, int(ring_.sum()))
-slope_bank((35.6715, 35.6775, 139.7370, 139.7455), 40)
+slope_bank((35.6680, 35.6782, 139.7345, 139.7500), 35)
 slope_bank((35.6770, 35.6812, 139.7325, 139.7390), 25)
 def save(a, name):
     v = np.clip(np.round((a + 20) * 200), 0, 65535).astype(np.uint32)

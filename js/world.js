@@ -135,7 +135,22 @@ const AKASAKA_LL = [[35.6838, 139.7272], [35.6834, 139.7306], [35.6812, 139.7314
 let AKASAKA = null;
 export function inAkasaka(x, z) { if (!AKASAKA) AKASAKA = AKASAKA_LL.map(([la, lo]) => ll(la, lo)); return pip(AKASAKA, x, z); }
 // 日枝神社の山王の丘 (溜池の西岸): 石垣なし、緑の山
-export function inHie(x, z) { const lo = W.W + x / W.KX, la = W.N - z / W.KZ; return lo > 139.7370 && lo < 139.7455 && la > 35.6715 && la < 35.6775; }
+// 溜池の東 (日枝神社の山・永田町) と北の岸: 石垣なし、緑の土手 (西・南の赤坂の町の側はそのまま)。池の中心線 (古地図) の左側
+const TAME_C = [[35.679164, 139.737091], [35.678546, 139.7374], [35.675322, 139.738844], [35.672818, 139.74101], [35.67111, 139.742835], [35.670596, 139.746233], [35.6707, 139.750408], [35.671024, 139.751214]];
+let TAMEC = null;
+export function inHie(x, z) {
+  const lo = W.W + x / W.KX, la = W.N - z / W.KZ;
+  if (!(lo > 139.7345 && lo < 139.7505 && la > 35.6680 && la < 35.6795)) return false;
+  if (!TAMEC) TAMEC = TAME_C.map(([a, b]) => ll(a, b));
+  let best = 1e18, side = 0;
+  for (let i = 0; i + 1 < TAMEC.length; i++) {
+    const [x1, z1] = TAMEC[i], [x2, z2] = TAMEC[i + 1], dx = x2 - x1, dz = z2 - z1, L2 = dx * dx + dz * dz, t = Math.max(0, Math.min(1, ((x - x1) * dx + (z - z1) * dz) / L2));
+    const d = Math.hypot(x - x1 - dx * t, z - z1 - dz * t);
+    if (d < best) { best = d; side = dx * (z - z1) - dz * (x - x1); }
+  }
+  // 東・北 (日枝神社の山・永田町) は 150m まで、南西は池と外堀通りのあいだの土手 (中心から 55m まで)
+  return side < 0 ? best < 150 : best < 55;
+}
 // 弁慶濠の南の岸 (紀尾井町側でない方、ホテルニューオータニの向かい): 土手
 export function inBenkeiBank(x, z) { const lo = W.W + x / W.KX, la = W.N - z / W.KZ; return lo > 139.7325 && lo < 139.7390 && la > 35.6770 && la < 35.6812; }
 export function sanadaGreen(x, z) {
