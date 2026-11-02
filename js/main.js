@@ -994,7 +994,7 @@ function throwCoins() {
       const trail = new THREE.Group(); for (let i = 0; i < 9; i++) { const d = new THREE.Mesh(coinHeadGeo, coinTrailMat); d.scale.setScalar(0.45 * (1 - i / 10)); d.visible = false; trail.add(d); } scene.add(trail);
       const dist = Math.hypot(to.x - p.x, to.z - p.z);
       // 横の曲がり (1 発ごとに左右に振り分け) と、投げ上げる高さ
-      const side = (k - 2) * 1.6 + (k % 2 ? 2.2 : -2.2), apex = 3.5 + dist * 0.1 + k * 0.4;
+      const side = (k % 2 ? 1 : -1) * (3.5 + k * 0.6), apex = 1.6 + k * 0.15; // 頭上ぐらいの高さで、まず横へ大きく出る
       G.coins.push({ m: head, trail, pts: [], from: p.clone(), to, tg: live ? tg : null, side, apex, t: 0, T: Math.max(0.35, dist / 55), life: 2 });
       A.gun(k === 0 ? 0.55 : 0.4);
     }, k * 90);
@@ -1003,10 +1003,10 @@ function throwCoins() {
 // 投げ銭の軌跡: 手元 → (上へ apex、横へ side ふくらむ) → 目標 の曲線
 function coinCurve(c, s) {
   const dx = c.to.x - c.from.x, dz = c.to.z - c.from.z, L = Math.hypot(dx, dz) || 1, nx = -dz / L, nz = dx / L;
-  const bend = Math.sin(Math.PI * s);
+  const bend = Math.sin(Math.PI * Math.pow(s, 0.7)); // 早めに横へふくらんでから戻る
   return new THREE.Vector3(
     c.from.x + dx * s + nx * c.side * bend,
-    c.from.y + (c.to.y - c.from.y) * s + c.apex * 4 * s * (1 - s) * (1 - 0.35 * s),
+    c.from.y + (c.to.y - c.from.y) * s + c.apex * 4 * s * (1 - s),
     c.from.z + dz * s + nz * c.side * bend);
 }
 const coinTrailMat = new THREE.MeshBasicMaterial({ color: 0xffd060, transparent: true, opacity: 0.55, depthWrite: false, fog: false });
