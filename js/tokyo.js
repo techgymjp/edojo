@@ -508,6 +508,7 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
     roof: new THREE.MeshLambertMaterial({ vertexColors: true }),
   };
   // 首都高は国土地理院の道路データ (地上・高架・トンネル) で取り直したもの (js/shutoko-data.js) に置き換える
+  const KIX = (139.73179 - 139.745) * KXT, KIZ = -(35.68080 - 35.674) * KZT; // 首都高4号 紀伊国坂のトンネルの出口 (データ上)
   CITY.roads.length = 0;
   for (const r of SHUTOKO) CITY.roads.push({ x: r.x.slice(), z: r.z.slice(), h: r.h.slice(), t: r.t.slice() });
   HIGHWAYS.length = 0;
@@ -609,6 +610,12 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
     for (let i = 0; i < r.h.length; i++) r.h[i] = r.g[i] ? terrainH(r.x[i] + OX, r.z[i] + OZ) + 0.25 : r.h[i] + Ts(r.x[i], r.z[i]);
     // 戻した江戸の堀 (溜池など) の上に来た地面の道は、水の底に沈まないよう、水面の上の高架にする (霞が関トンネルの手前の段差)
     for (let i = 0; i < r.h.length; i++) if (r.g[i] && isWater(r.x[i] + OX, r.z[i] + OZ)) { r.g[i] = false; r.h[i] = Math.max(r.h[i], waterY(r.x[i] + OX, r.z[i] + OZ) + 4); }
+    // 首都高4号 紀伊国坂: 迎賓館の下のトンネルから、外堀通りの下をくぐって弁慶濠の岸の斜面に口を開け、そのまま弁慶濠の上の高架へ
+    // (データではトンネルの出口が外堀通りと同じ高さの地面の道になっていて、外堀通りと平面で交わって見えた)
+    if (r.x.length >= 5 && !r.t[0] && Math.hypot(r.x[0] - KIX, r.z[0] - KIZ) < 8) {
+      r.t[0] = r.t[1] = 1; r.g[0] = r.g[1] = r.g[2] = r.g[3] = false;
+      r.h[2] = 19.5; r.h[3] = Math.max(r.h[3], 20.4); r.h[4] = Math.max(r.h[4], 20.6);
+    }
   }  // 高架の端が宙に浮いたまま切れている所: 両端とも浮いたつなぎは消し、片端だけの所は端の 60m を地面まで下ろす
   {
     const gh = (x, z) => (isWater(x + OX, z + OZ) ? waterY(x + OX, z + OZ) : terrainH(x + OX, z + OZ));

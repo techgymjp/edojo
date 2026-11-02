@@ -1316,7 +1316,10 @@ function updateCamera(dt) {
   if (G.camMode === 1) {
     // 見下ろし: 後ろ 50m・高さ 50m
     const wy0 = waterY(P.x, P.z), ch2 = camHeading();
-    camera.position.set(P.x - Math.cos(ch2) * 50, wy0 + 50, P.z - Math.sin(ch2) * 50);
+    // カメラの位置や小舟までの間にビル・崖があれば、その上まで上げる (壁の中に入って外側が透けて見えないように)
+    let cy = wy0 + 50;
+    for (let i = 2; i <= 10; i++) { const f = i / 10, sx = P.x - Math.cos(ch2) * 50 * f, sz = P.z - Math.sin(ch2) * 50 * f; cy = Math.max(cy, (obst(sx, sz) + 4 - wy0) / Math.max(f, 0.2) + wy0); }
+    camera.position.set(P.x - Math.cos(ch2) * 50, Math.min(cy, wy0 + 160), P.z - Math.sin(ch2) * 50);
     camera.lookAt(P.x + Math.cos(ch2) * 40, wy0, P.z + Math.sin(ch2) * 40);
   }
 }
