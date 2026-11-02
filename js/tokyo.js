@@ -607,6 +607,8 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
       r.h[i] = Math.max(r.h[a], r.h[b], 3);
     }
     for (let i = 0; i < r.h.length; i++) r.h[i] = r.g[i] ? terrainH(r.x[i] + OX, r.z[i] + OZ) + 0.25 : r.h[i] + Ts(r.x[i], r.z[i]);
+    // 戻した江戸の堀 (溜池など) の上に来た地面の道は、水の底に沈まないよう、水面の上の高架にする (霞が関トンネルの手前の段差)
+    for (let i = 0; i < r.h.length; i++) if (r.g[i] && isWater(r.x[i] + OX, r.z[i] + OZ)) { r.g[i] = false; r.h[i] = Math.max(r.h[i], waterY(r.x[i] + OX, r.z[i] + OZ) + 4); }
   }  // 高架の端が宙に浮いたまま切れている所: 両端とも浮いたつなぎは消し、片端だけの所は端の 60m を地面まで下ろす
   {
     const gh = (x, z) => (isWater(x + OX, z + OZ) ? waterY(x + OX, z + OZ) : terrainH(x + OX, z + OZ));

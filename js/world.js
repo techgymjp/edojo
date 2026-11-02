@@ -176,6 +176,11 @@ function makeGroundTextures() {
     let cur = new Uint8Array(n); for (let j = j0; j < j1; j++) for (let i = i0; i < i1; i++) { const k = j * W.w + i; cur[k] = W.code[k] === 0 ? 1 : 0; }
     for (let it = 0; it < 30; it++) { const nx = cur.slice(); for (let j = j0 + 1; j < j1 - 1; j++) for (let i = i0 + 1; i < i1 - 1; i++) { const k = j * W.w + i; if (!cur[k] && (cur[k - 1] || cur[k + 1] || cur[k - W.w] || cur[k + W.w])) nx[k] = 1; } cur = nx; }
     for (let j = j0; j < j1; j++) for (let i = i0; i < i1; i++) { const k = j * W.w + i; if (cur[k] && W.code[k] === 5) { const x = (i + 0.5) * W.res, z = (j + 0.5) * W.res; if (pip(DOTE_XZ()[1], x, z) && castleSide(x, z)) nearW90[k] = 1; } } }
+  // 喰違見附〜弁慶濠のまわり (紀伊国坂・紀尾井町・ニューオータニの庭) も、水から 120m までは緑地
+  { const j0 = Math.floor((W.N - 35.6835) * W.KZ / W.res), j1 = Math.floor((W.N - 35.6765) * W.KZ / W.res), i0 = Math.floor((139.7300 - W.W) * W.KX / W.res), i1 = Math.floor((139.7385 - W.W) * W.KX / W.res);
+    let cur = new Uint8Array(n); for (let j = j0; j < j1; j++) for (let i = i0; i < i1; i++) { const k = j * W.w + i; cur[k] = W.code[k] === 0 ? 1 : 0; }
+    for (let it = 0; it < 40; it++) { const nx = cur.slice(); for (let j = j0 + 1; j < j1 - 1; j++) for (let i = i0 + 1; i < i1 - 1; i++) { const k = j * W.w + i; if (!cur[k] && (cur[k - 1] || cur[k + 1] || cur[k - W.w] || cur[k + W.w])) nx[k] = 1; } cur = nx; }
+    for (let j = j0; j < j1; j++) for (let i = i0; i < i1; i++) { const k = j * W.w + i; if (cur[k] && W.code[k] === 5) nearW90[k] = 1; } }
   for (let k = 0; k < n; k++) {
     const c = W.code[k];
     let b = GROUND_RGB[c];
