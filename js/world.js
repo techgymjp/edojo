@@ -581,7 +581,7 @@ export function buildWater(scene) {
     uniforms: {
       tReflect: { value: rt.texture }, texMat: { value: new THREE.Matrix4() }, time: { value: 0 },
       color: { value: new THREE.Color(0x24525e) }, fogColor: { value: new THREE.Color() }, fogNear: { value: 300 }, fogFar: { value: 2000 },
-      camPos: { value: new THREE.Vector3() }, strength: { value: 0.75 }, useRefl: { value: 1 }, skyCol: { value: new THREE.Color(0x8090a8) },
+      camPos: { value: new THREE.Vector3() }, strength: { value: 0.75 }, useRefl: { value: (matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window) ? 0 : 1 }, skyCol: { value: new THREE.Color(0x8090a8) }, // useRefl: スマホは映り込みを描かない (景色をもう一度描くのが重く、ときどきカクッと止まる)
       gz: { value: new THREE.Vector4() }, gx: { value: new THREE.Vector4() }, isGorge: { value: 0 },
     },
     vertexShader: `uniform mat4 texMat; varying vec4 vR; varying vec3 vW; varying float vDepth;

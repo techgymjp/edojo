@@ -50,7 +50,18 @@ const canvas = $('game');
 // スマホ (指で触る画面) は軽くする: アンチエイリアスなし、解像度を下げる、映り込みを減らす、遠くを描かない
 const MOBILE = matchMedia('(pointer: coarse)').matches;
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: !MOBILE, powerPreference: 'high-performance' });
-renderer.setPixelRatio(MOBILE ? Math.min(devicePixelRatio, 0.9) : Math.min(devicePixelRatio, 1.25));
+// スマホは描く解像度 1.0 から始め、重ければ自動で 0.6 まで下げる (軽くなれば戻す)
+let PR = MOBILE ? Math.min(devicePixelRatio, 1.0) : Math.min(devicePixelRatio, 1.25);
+renderer.setPixelRatio(PR);
+const perf = { acc: 0, n: 0 };
+function autoResolution(dt) {
+  if (!MOBILE) return;
+  perf.acc += dt; perf.n++;
+  if (perf.n < 60) return;
+  const avg = perf.acc / perf.n; perf.acc = 0; perf.n = 0;
+  const next = avg > 1 / 30 ? Math.max(0.6, PR - 0.1) : avg < 1 / 50 ? Math.min(Math.min(devicePixelRatio, 1.0), PR + 0.1) : PR;
+  if (Math.abs(next - PR) > 0.01) { PR = next; renderer.setPixelRatio(PR); renderer.setSize(innerWidth, innerHeight, false); }
+}
 renderer.setSize(innerWidth, innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 const scene = new THREE.Scene();
@@ -1853,7 +1864,13 @@ $('btnRevive').onclick = async () => {
   G.reviveOpen = false;
 };
 // 広告のバナー: タイトル・遊び方・一服 (ポーズ)・結果の画面だけ (プレイ中は操作ボタンと重なるので出さない)
-function syncBanner() { Ads.setBanner(G.state === 'title' || G.state === 'pause' || G.state === 'result'); }
+function syncBanner() {
+  const want = G.state === 'title' || G.state === 'pause' || G.state === 'result';
+  Ads.setBanner(want);
+  // バナーが出ている間は、画面のパネルを広告の上に収める (body.banner)
+  const on = want && Ads.available && !Ads.showing;
+  if (document.body.classList.contains('banner') !== on) document.body.classList.toggle('banner', on);
+}
 // タイトル画面: ビルド番号・広告の設定 (EU など同意が必要な地域だけ)
 if (NATIVE) document.body.classList.add('app');
 $('appVer').textContent = window.APP_VERSION ? window.APP_VERSION : '';
@@ -1899,7 +1916,8 @@ function step(dt) {
   } else {
     updateBoatMesh(dt, false);
     // 本丸に忍び込まれたとき (アプリ版): 忍者が走っていくのを 3 秒見せてから、広告を見て押し返すかをたずねる
-    if (G.intruder && !G.reviveAsked && G.t - G.intrudeT > 3) askRevive();
+    // 本丸に忍び込まれたとき (アプリ版): 忍者が天守のてっぺんに立つまで見届けてから、下の細い帯で「広告を見て、やり直す」をたずねる
+    if (G.intruder && !G.reviveAsked && ((G.intruder.raid && G.intruder.raid.phase === 2 && G.intruder.raid.t > 1.2) || G.t - G.intrudeT > 12)) askRevive();
     if (!G.reviveOpen) G.endT -= dt;
     if (G.endT <= 0) showResult();
   }
@@ -1947,7 +1965,9 @@ function loop(now) {
     if (window.__camOverride) { const d = window.__camOverride; camera.position.set(...d.p); camera.lookAt(...d.l); }
     updateSky();
     updateFloats(dt);
-    updateHud(dt);
+    // スマホは HUD の文字とミニマップを 3 コマに 1 回だけ書き直す
+    G.hudAcc = (G.hudAcc || 0) + dt;
+    if (!MOBILE || (G.frame || 0) % 3 === 0) { updateHud(G.hudAcc); G.hudAcc = 0; }
   } else if (G.state === 'debug') {
     const d = window.__camSet;
     camera.position.set(...d.p); camera.lookAt(...d.l); G.t = d.t ?? 0; updateSky();
@@ -1963,10 +1983,10 @@ function loop(now) {
   // 名札: タイトル・結果の画面では出さない。遊んでいるときも、カメラから 80m 以内の名札は出さない (近くで画面をふさがないように)
   if (castle && castle.labels) { const show = G.state === 'play' || G.state === 'ending' || G.state === 'pause'; for (const l of castle.labels) l.visible = show && l.position.distanceTo(camera.position) > 80; }
   water.update(now / 1000, skyMat.uniforms.hor.value, scene.fog, camera);
-  cullChunks(camera.position, MOBILE ? 1000 : 1500);
+  cullChunks(camera.position, MOBILE ? 800 : 1500);
   tokyo.update(dt, now / 1000, modern.mat.userData.night.value, scene.fog.color, camera);
   // 見える範囲の街のタイルを組み立てる
-  { const t0 = performance.now(); while (tokyo.stream(camera.position, MOBILE ? 900 : 1200, 1) > 0 && performance.now() - t0 < 4); }
+  { const t0 = performance.now(); while (tokyo.stream(camera.position, MOBILE ? 750 : 1200, 1) > 0 && performance.now() - t0 < 4); }
   for (const w of warps) for (const e of [w.a, w.b]) { e.disc.rotation.z = now / 400; e.beam.visible = Math.hypot(camera.position.x - e.x, camera.position.z - e.z) > 25; }
   I.pressed.clear();
   // 建物の透かし: 遊んでいるときだけ (カメラ → 小舟の主人公)
@@ -1976,7 +1996,9 @@ function loop(now) {
   const cb = CUT.boat.value.y; CUT.boat.value.y = -1e5;
   // 映り込みは 2 フレームに 1 回 (軽くする)
   // 水面の映り込み (3 フレームに 1 回、低い解像度で)
-  if ((G.frame = (G.frame || 0) + 1) % (MOBILE ? 8 : 3) === 0) water.reflect(renderer, scene, camera, (G.state === 'play' || G.state === 'ending') ? waterY(P.x, P.z) : undefined);
+  G.frame = (G.frame || 0) + 1;
+  autoResolution(dt);
+  if (!MOBILE && G.frame % 3 === 0) water.reflect(renderer, scene, camera, (G.state === 'play' || G.state === 'ending') ? waterY(P.x, P.z) : undefined);
   CUT.boat.value.y = cb;
   renderer.render(scene, camera);
 }

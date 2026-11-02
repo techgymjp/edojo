@@ -148,8 +148,10 @@ h1 { font-family: "Yuji Syuku", serif; font-size: clamp(52px, 13vw, 96px); line-
 .app-meta { margin-top: 10px; font-size: 12px; opacity: 0.75; }
 .app-meta a, .link-btn { color: inherit; text-decoration: underline; background: none; border: 0; font: inherit; cursor: pointer; padding: 0 4px; }
 /* 広告を見て曲者を押し返す */
-#revive { z-index: 60; }
-.panel.revive p { margin: 10px 0 16px; line-height: 1.6; }
+#revive.revive-bar { position: fixed; left: 50%; bottom: calc(10px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 60; display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 12px; background: rgba(14, 18, 30, 0.88); border: 1px solid rgba(216,168,48,0.7); color: #f3ead6; font-size: 16px; white-space: nowrap; }
+#revive.hidden { display: none; }
+.rv-btn { font: inherit; font-weight: 800; color: #fff; background: linear-gradient(180deg, #e04030, #a01818); border: 0; border-radius: 10px; padding: 8px 14px; }
+.rv-no { font: inherit; color: #f3ead6; background: rgba(255,255,255,0.12); border: 0; border-radius: 10px; padding: 8px 12px; }
 /* アプリ版では、パソコンのキーの説明を出さない (ボタンの名前で案内する) */
 body.app #help, body.app .howto-panel table th:nth-child(2), body.app .howto-panel table td:nth-child(2) { display: none; }
 /* 横画面のスマホは高さが小さい: 結果画面などを詰める */
@@ -176,4 +178,18 @@ body.app #help, body.app .howto-panel table th:nth-child(2), body.app .howto-pan
 @media (pointer: coarse) and (orientation: landscape) and (max-height: 500px) {
   /* 横画面のスマホ: 左下は十字ボタンなので、ミニマップは右上 (視・止の下) へ */
   #minimap { left: auto; right: 8px; top: calc(56px + env(safe-area-inset-top)); bottom: auto; width: min(26vw, 200px); height: min(23.4vw, 180px); }
+}
+
+/* バナー広告 (画面の下 50px) が出ている間は、パネルを広告の上に収める */
+body.banner .screen { padding-bottom: 62px; }
+body.banner .panel { max-height: calc(100vh - 76px); overflow-y: auto; }
+@media (orientation: landscape) and (max-height: 500px) {
+  body.banner .screen { align-items: center; padding-top: 6px; }
+  .panel.result h2 { font-size: 22px; margin: 2px 0; }
+  .panel.result .r-pre, .panel.result .r-note { font-size: 12px; margin: 2px 0; }
+  .panel.result .r-title { font-size: 15px; margin: 2px 0; }
+  .panel.result .r-stats { margin: 4px auto; font-size: 14px; }
+  .panel.result .r-stats th, .panel.result .r-stats td { padding: 1px 8px; }
+  .panel.result .btn.primary { font-size: 17px; padding: 6px 26px; margin: 4px auto; }
+  .panel.result .btn.ghost { font-size: 14px; padding: 4px 16px; margin: 4px 4px; display: inline-block; min-width: 120px; }
 }

@@ -126,14 +126,11 @@
   </div>
 </div>
 
-<!-- 広告を見て本丸の曲者を押し返す (アプリ版だけ) -->
-<div id="revive" class="screen hidden">
-  <div class="panel revive">
-    <h2>本丸に曲者！</h2>
-    <p>広告を見て、この曲者を押し返しますか？<br><small id="reviveLeft"></small></p>
-    <button id="btnRevive" class="btn primary">広告を見て押し返す</button>
-    <button id="btnReviveNo" class="btn ghost small">そのまま終わる (<span id="reviveSec">6</span>)</button>
-  </div>
+<!-- 広告を見て、本丸の曲者を押し返してやり直す (アプリ版だけ)。乗っ取りの場面を隠さないよう、画面の下の細い帯 -->
+<div id="revive" class="revive-bar hidden">
+  <span class="rv-text">広告を見て、やり直す <small id="reviveLeft"></small></span>
+  <button id="btnRevive" class="rv-btn">▶ 広告を見る</button>
+  <button id="btnReviveNo" class="rv-no">結果へ (<span id="reviveSec">6</span>)</button>
 </div>
 
 <!-- アプリ版: 広告の設定 (ビルド時に作る。Web 版ではファイルがなく、何もしない) -->
