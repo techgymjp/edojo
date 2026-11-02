@@ -95,6 +95,7 @@ function buildRail(root, city, OX, OZ) {
       base[i] = Math.max(base[i], waterY(r.x[i] + OX, r.z[i] + OZ) + 3);
     }
     r.y = base.map((b, i) => b + r.h[i] + 0.2);
+    if (typeof window !== 'undefined') (window.__rails ||= []).push(r);
     // 勾配は 3.5% まで (地面の凸凹で線路が段々にならないように。低い所は高架で渡る)
     // 前後 30m の平均でならす (端の点はそのまま。ほかの線とつながる所がずれないように)
     for (let pass = 0; pass < 3; pass++) {
