@@ -1,7 +1,7 @@
 # Google Play ストア掲載情報（下書き）
 
 Play Console の「ストアの掲載情報」に貼り付けて使います。既定の言語を日本語にし、「翻訳を管理」から英語（en-US）を追加してください。
-ゲームの画面は日本語だけなので、英語の掲載にも同じスクリーンショットを使います（詳しい説明に「画面は日本語」と書いてあります）。
+ゲームは日本語と英語に対応しています（端末の言語が日本語でなければ英語）。スクリーンショットは日本語用 `ja-*` と英語用 `en-*` を使い分けます。
 
 ## 画像（このフォルダ）
 
@@ -9,7 +9,8 @@ Play Console の「ストアの掲載情報」に貼り付けて使います。�
 | --- | --- | --- |
 | アプリのアイコン | `icon-512.png` | 512 × 512 |
 | フィーチャー グラフィック | `feature-graphic.png` | 1024 × 500 |
-| スマートフォンのスクリーンショット（日本語・英語 共通） | `ja-1-title.png`（タイトル）、`ja-2-suiton.png`（水遁の術の竹筒）、`ja-3-catch.png`（召し捕りの瞬間）、`ja-4-tameike.png`（溜池と今の東京） | 1920 × 1080 |
+| スマートフォンのスクリーンショット（日本語） | `ja-1-title.png`（タイトル）、`ja-2-suiton.png`（水遁の術の竹筒）、`ja-3-catch.png`（召し捕りの瞬間）、`ja-4-tameike.png`（溜池と今の東京） | 1920 × 1080 |
+| スマートフォンのスクリーンショット（英語） | `en-1-title.png`、`en-2-suiton.png`、`en-3-catch.png`、`en-4-tameike.png` | 1920 × 1080 |
 
 ---
 
@@ -57,9 +58,10 @@ Play Console の「ストアの掲載情報」に貼り付けて使います。�
 
 ■ かんたん操作
 ・左下の「前・後・左・右」ボタンで舟を操り、右下の「なわ」「ぜに」「ジャンプ」で戦う
-・本丸に忍び込まれても、広告を見れば曲者を成敗して続けられる（1 ゲーム 3 回まで）
+・本丸に忍び込まれても、広告を見れば曲者を成敗して続けられる（1 ゲーム 5 回まで）
 ・召し捕った人数と称号を友だちにシェア
 ・オフラインでも遊べる（広告・シェアは通信が必要）
+・日本語・英語対応
 
 あなたは江戸城を守り抜けるか。いざ、出陣。
 ```
@@ -109,11 +111,11 @@ If even one of them gets into the keep, the castle falls.
 • Period-drama style music with shamisen and taiko drums
 
 ■ EASY CONTROLS
-• Steer with the forward / back / left / right buttons, and fight with the Lasso, Coin and Jump buttons
-• If a ninja gets into the keep, you can watch an ad to defeat him and keep playing (up to 3 times per game)
+• Steer with the Fwd / Back / L / R buttons, and fight with the Lasso, Coin and Jump buttons
+• If a ninja gets into the keep, you can watch an ad to defeat the intruder and keep playing (up to 5 times per game)
 • Share your catch count and rank with friends
 • Playable offline (ads and sharing need a connection)
-• The game screens are in Japanese
+• Available in English and Japanese
 
 Can you protect Edo Castle? To your boat!
 ```
