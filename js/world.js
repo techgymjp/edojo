@@ -161,6 +161,8 @@ function makeGroundTextures() {
   const lvData = new Uint8Array(n);
   // 土手の所は印を足す (斜面を石垣ではなく草にする)
   for (let j = 0; j < W.h; j++) for (let i = 0; i < W.w; i++) { const k = j * W.w + i; lvData[k] = W.lv[k] * 63 + (W.lv[k] > 0 && isDote((i + 0.5) * W.res, (j + 0.5) * W.res) ? 30 : 0); }
+  // 真田濠の中は地面を切り抜かない (地形を水面の下へ下げてあるので、土手の斜面が水の中までつながり、すき間から空が透けない)
+  for (let j = 0; j < W.h; j++) for (let i = 0; i < W.w; i++) { const k = j * W.w + i; if (W.lv[k] === 0 && inSanada((i + 0.5) * W.res, (j + 0.5) * W.res)) lvData[k] = 40; }
   const lvTex = new THREE.DataTexture(lvData, W.w, W.h, THREE.RedFormat);
   lvTex.unpackAlignment = 1;
   lvTex.magFilter = THREE.LinearFilter; lvTex.minFilter = THREE.LinearFilter; lvTex.generateMipmaps = false;
