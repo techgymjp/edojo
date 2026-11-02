@@ -391,7 +391,8 @@ export function buildWalls(scene) {
       // 聖橋より東 (昌平橋〜万世橋) は両岸とも、水面から立ち上がるコンクリートの護岸
       if (lo_ > 139.7680) { const top = Math.max(y1, groundMeshH(mx - nx * 14, mz - nz * 14) + 0.3); quad(conc, ax, az, bx, bz, y0, top, nx, nz, u0, u1, 3); return; }
       if (lo_ > 139.7672 && nz > 0) { const top = Math.max(y1, groundMeshH(mx - nx * 14, mz - nz * 14) + 0.3); quad(conc, ax, az, bx, bz, y0, top, nx, nz, u0, u1, 3); return; }
-      quad(grass, ax, az, bx, bz, y0, y1, nx, nz, u0, u1, 4); return;
+      // 急な斜面は崖の形と合わず崩れるので、垂直の所は石垣にする
+      quad(stone, ax, az, bx, bz, y0, y1, nx, nz, u0, u1, 3.2); return;
     }
     const dote = isDote(mx, mz);
     if (dote) {
