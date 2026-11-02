@@ -113,6 +113,11 @@ function buildRail(root, city, OX, OZ) {
     for (let i = 0; i < n; i++) if (!isWater(r.x[i] + OX, r.z[i] + OZ)) r.y[i] = Math.max(r.y[i], gy(r.x[i], r.z[i]) + r.h[i] + 0.2);
   }
   const brk = { p: [], n: [], uv: [] };
+  // 道路の上を渡る所 (中央・総武線が万世橋・昌平橋のまわりで道をまたぐ所など) は、緑の鋼の桁の高架橋にする
+  const RG = 30, roadGrid = new Map();
+  for (const r of ROADS) { const w = r[0]; for (let i = 1; i + 3 < r.length; i += 2) { const s0 = [r[i] / 2, r[i + 1] / 2, r[i + 2] / 2, r[i + 3] / 2, w]; for (let gx = Math.floor(Math.min(s0[0], s0[2]) / RG); gx <= Math.floor(Math.max(s0[0], s0[2]) / RG); gx++) for (let gz = Math.floor(Math.min(s0[1], s0[3]) / RG); gz <= Math.floor(Math.max(s0[1], s0[3]) / RG); gz++) { const k = gx * 100000 + gz; if (!roadGrid.has(k)) roadGrid.set(k, []); roadGrid.get(k).push(s0); } } }
+  const overRoad = (x, z) => { for (const s0 of roadGrid.get(Math.floor(x / RG) * 100000 + Math.floor(z / RG)) || []) { const [x1, z1, x2, z2, w] = s0, dx = x2 - x1, dz = z2 - z1, L2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((x - x1) * dx + (z - z1) * dz) / L2)); if (Math.hypot(x - x1 - dx * t, z - z1 - dz * t) < w / 2 + 1) return true; } return false; };
+  const STEEL = [0.36, 0.55, 0.38], YEL = [0.86, 0.68, 0.12];
   // レンガ高架の区間 (緯度経度の範囲と路線)
   const llx = (la, lo) => [(lo - 139.745) * 111320 * Math.cos(35.674 * Math.PI / 180), -(la - 35.674) * 110574];
   const [, zChuoS] = llx(35.6815, 0), [, zChuoN] = llx(35.6990, 0), [, zYamaS] = llx(35.6660, 0), [, zYamaN] = llx(35.6805, 0);
@@ -122,7 +127,7 @@ function buildRail(root, city, OX, OZ) {
   for (const r of RAIL) {
     if (r.t) continue;
     const Wd = r.n >= 4 ? 10 : 5.5;
-    let acc = 0;
+    let acc = 0, c0road = null;
     for (let i = 0; i + 1 < r.x.length; i++) {
       const X1 = r.x[i], Z1 = r.z[i], X2 = r.x[i + 1], Z2 = r.z[i + 1], LL = Math.hypot(X2 - X1, Z2 - Z1);
       if (LL < 0.1) continue;
@@ -162,11 +167,15 @@ function buildRail(root, city, OX, OZ) {
           continue;
         }
         if (elev) {
-          // 高架: 壁高欄 (1.2m) と桁 (1.8m)、桁の裏、25m ごとの橋脚
+          // 高架: 壁高欄 (1.2m) と桁 (1.8m)、桁の裏、25m ごとの橋脚。道路の上は緑の鋼の桁
+          const road = overRoad((x1 + x2) / 2, (z1 + z2) / 2);
           for (const [P0, P1, sd] of [[A, D, 1], [B, C, -1]]) {
             const up = (q) => [q[0], q[1] + 1.2, q[2]], dn = (q) => [q[0], q[1] - 1.8, q[2]];
-            quad(dn(P0), dn(P1), up(P1), up(P0), [nx * sd, 0, nz * sd], SIDE);
+            quad(dn(P0), dn(P1), up(P1), up(P0), [nx * sd, 0, nz * sd], road ? STEEL : SIDE);
           }
+          // 道路の端 (桁の始まり) に黄色い鉄の橋脚
+          if (road !== (c0road ?? road)) for (const sd of [-1, 1]) { const bx = x1 + nx * sd * (Wd / 2 - 0.5), bz = z1 + nz * sd * (Wd / 2 - 0.5), gg = below(x1, z1); piers.push([bx, bz, gg - 0.5, y1 - 1.8, 1]); }
+          c0road = road;
           quad([B[0], y1 - 1.8, B[2]], [C[0], y2 - 1.8, C[2]], [D[0], y2 - 1.8, D[2]], [A[0], y1 - 1.8, A[2]], [0, -1, 0], [0.8, 0.8, 0.78]);
           acc += L;
           if (acc > 25) { acc = 0; piers.push([x1, z1, g1 - 1, y1 - 1.8]); }
@@ -262,9 +271,10 @@ function buildRail(root, city, OX, OZ) {
     bm.frustumCulled = false; root.add(bm);
   }
   const pg = new THREE.BoxGeometry(2.4, 1, 2.4).translate(0, 0.5, 0);
-  const pm = new THREE.InstancedMesh(pg, new THREE.MeshLambertMaterial({ color: 0x9a9a96 }), Math.max(1, piers.length));
+  const pm = new THREE.InstancedMesh(pg, new THREE.MeshLambertMaterial({ color: 0xffffff }), Math.max(1, piers.length));
   const m4 = new THREE.Matrix4();
-  piers.forEach(([x, z, y0, y1], i) => { m4.makeScale(1, Math.max(0.1, y1 - y0), 1).setPosition(x, y0, z); pm.setMatrixAt(i, m4); });
+  piers.forEach(([x, z, y0, y1, yel], i) => { m4.makeScale(yel ? 0.5 : 1, Math.max(0.1, y1 - y0), yel ? 0.5 : 1).setPosition(x, y0, z); pm.setMatrixAt(i, m4); if (yel) pm.setColorAt(i, new THREE.Color(0xd8a820)); else pm.setColorAt(i, new THREE.Color(0x9a9a96)); });
+  if (pm.instanceColor) pm.instanceColor.needsUpdate = true;
   pm.count = piers.length; root.add(pm);
   // 松住町架道橋 (昌平橋の北詰で総武線が道路をまたぐ、緑の鋼のアーチ橋)
   {
