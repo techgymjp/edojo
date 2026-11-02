@@ -598,6 +598,7 @@ export class City {
     for (const r of CITY.roads) for (let i = 0; i < r.x.length; i++) (r.t[i] ? tunPts : openPts).push([r.x[i], r.z[i], r]);
     const portalAt = (r, j, j2) => {
       const x = r.x[j], z = r.z[j];
+      if (Math.hypot(x - (139.7305 - 139.745) * 111320 * Math.cos(35.674 * Math.PI / 180), z + (35.6862 - 35.674) * 110574) < 130) return; // 四谷見附橋の下はトンネルでない
       if (!tunPts.some(([a, b, q]) => q !== r && Math.hypot(a - x, b - z) < 14)) return;
       if (openPts.some(([a, b, q]) => q !== r && Math.hypot(a - x, b - z) < 14)) return;
       const dx = x - r.x[j2], dz = z - r.z[j2], dl = Math.hypot(dx, dz) || 1, ux = dx / dl, uz = dz / dl, vx = -uz, vz = ux, h = r.h[j];

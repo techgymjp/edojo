@@ -69,8 +69,11 @@ export function addCutaway(mat) {
 }
 
 // ---- 国土地理院の鉄道データの線路と電車 ----
+const YTX = (139.7305 - 139.745) * 111320 * Math.cos(35.674 * Math.PI / 180), YTZ = -(35.6862 - 35.674) * 110574;
 const SUIX = (139.7530 - 139.745) * 111320 * Math.cos(35.674 * Math.PI / 180), SUIZ = -(35.7020 - 35.674) * 110574;
 function buildRail(root, city, OX, OZ) {
+  // 四谷見附橋の下をくぐる所は、トンネルでなく地上の線路として描く
+  for (const r of RAIL) if (r.t && r.jr && r.x.every((x, j) => Math.hypot(x - YTX, r.z[j] - YTZ) < 160)) r.t = 0;
   // 四ツ谷の丸ノ内線は手で作る (buildMarunouchi) ので、国土地理院データの丸ノ内線 (JR 以外) の四ツ谷の区間は描かない (3 本に見えないように)
   { const K = 111320 * Math.cos(35.674 * Math.PI / 180);
     for (let i = RAIL.length - 1; i >= 0; i--) { const r = RAIL[i]; if (r.jr) continue;
@@ -211,6 +214,8 @@ function buildRail(root, city, OX, OZ) {
       if (r.t) continue;
       for (const [j, j2] of [[0, 1], [r.x.length - 1, r.x.length - 2]]) {
         if (j2 < 0 || j2 >= r.x.length || !tun.has(tk(r.x[j], r.z[j]))) continue;
+        // 四谷門 (四谷見附橋) の所は、橋の下を通るだけでトンネルではない
+        if (Math.hypot(r.x[j] - YTX, r.z[j] - YTZ) < 130) continue;
         const ox = r.x[j], oz = r.z[j], dx = ox - r.x[j2], dz = oz - r.z[j2], dl = Math.hypot(dx, dz) || 1, ux = dx / dl, uz = dz / dl, vx = -uz, vz = ux;
         const y = r.y[j] - 0.2, hw = (r.n >= 4 ? 10 : 5.5) / 2 + 1;
         const P = (a, b, yy) => [ox + ux * a + vx * b, yy, oz + uz * a + vz * b];
@@ -419,6 +424,7 @@ function buildMarunouchi(scene) {
     // 横穴 (岸の壁の黒い口と枠)
     // 崖 (緑の斜面) から突き出したトンネルの入口: 崖の面より 1.5m 川側に、コンクリートの大きな額と黒い口
     for (const [px, pz, s] of [[ax, az, -1], [bx, bz, 1]]) {
+      if (s < 0 && opt.noNorthPortal) continue; // 四ツ谷: 北は新宿通りの橋の下をくぐるだけ (トンネルの口は描かない)
       const fx = px - ux * s * 1.5, fz = pz - uz * s * 1.5;
       mk(new THREE.BoxGeometry(10, 10, 3), CON, fx + ux * s * 1.5, deckY + 3.5, fz + uz * s * 1.5);
       mk(new THREE.BoxGeometry(5.6, 5, 0.3), DARK, fx - ux * s * 0.05, deckY + 2.1, fz - uz * s * 0.05);
@@ -454,7 +460,7 @@ function buildMarunouchi(scene) {
     // 四谷見附の交差点 (新宿通りの南) で地上に出て、南端 (迎賓館・水面の側) でトンネルに入る。ホームは真ん中より南寄り
     const A = ll2(35.68570, 139.73024), B = ll2(35.68200, 139.73021);
     const bank = Math.min(terrainH(...A), terrainH(...B));
-    site(A, B, 160, Math.max(waterY(...ll2(35.6853, 139.7306)) + 5, bank - 4), { station: true, platStart: 140 });
+    site(A, B, 160, Math.max(waterY(...ll2(35.6853, 139.7306)) + 5, bank - 4), { station: true, platStart: 140, noNorthPortal: true });
   }
   return {
     sites,
