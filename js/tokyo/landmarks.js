@@ -832,13 +832,23 @@ export function addGeihinkan(scene, city) {
   // 北の石畳の前庭 (広場) と、その先の木の並ぶ庭
   const yard = new THREE.Mesh(new THREE.PlaneGeometry(130, 90), new THREE.MeshLambertMaterial({ color: 0xb8b4aa }));
   yard.rotation.x = -Math.PI / 2; yard.position.set(0, 0.2, -60); g.add(yard);
+  // 木: 北の前庭の両側の並木、南の主庭 (噴水の庭) のまわり、敷地の西と東のふちの木の帯。
+  // 1 本ずつその場所の地面に乗せる (userData.perPart)。正門 (北へ約 155m) より外には植えない
   const treeG = new THREE.SphereGeometry(2.6, 8, 6), trunkG = new THREE.CylinderGeometry(0.25, 0.35, 3, 6);
-  const leaf = new THREE.MeshLambertMaterial({ color: 0x4f7a3a }), trunkM = new THREE.MeshLambertMaterial({ color: 0x5a4030 });
-  for (let zz = -125; zz >= -230; zz -= 13) for (let xx = -55; xx <= 55; xx += 13) {
-    if (Math.abs(xx) < 8) continue; // 真ん中の道
-    const t = new THREE.Mesh(trunkG, trunkM); t.position.set(xx, 1.5, zz); g.add(t);
-    const l = new THREE.Mesh(treeG, leaf); l.scale.y = 1.2; l.position.set(xx, 4.6, zz); g.add(l);
-  }
+  const leaf = new THREE.MeshLambertMaterial({ color: 0x4f7a3a }), leaf2 = new THREE.MeshLambertMaterial({ color: 0x3f6a32 }), trunkM = new THREE.MeshLambertMaterial({ color: 0x5a4030 });
+  const trees = new THREE.Group(); trees.userData.perPart = true;
+  let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const tree = (lx, lz, sc = 1) => {
+    const t = new THREE.Group(); t.position.set(X + lx, 0, Z + lz); t.scale.setScalar(sc);
+    const tr = new THREE.Mesh(trunkG, trunkM); tr.position.y = 1.2; t.add(tr);
+    const l = new THREE.Mesh(treeG, rnd() < 0.5 ? leaf : leaf2); l.scale.y = 1.2; l.position.y = 4.3; t.add(l);
+    trees.add(t);
+  };
+  for (let z = -25; z >= -145; z -= 12) for (const sx of [-1, 1]) tree(sx * 70, z, 1.1); // 前庭の並木
+  for (let z = 35; z <= 165; z += 11) for (const sx of [-1, 1]) tree(sx * (72 + rnd() * 6), z, 1 + rnd() * 0.4); // 主庭の東西
+  for (let x = -66; x <= 66; x += 11) tree(x, 168 + rnd() * 6, 1 + rnd() * 0.4); // 主庭の南
+  for (let z = -150; z <= 175; z += 9) for (const bx of [-112, -100, 100, 112]) tree(bx + rnd() * 6 - 3, z + rnd() * 4, 1.1 + rnd() * 0.5); // 西と東のふちの木の帯
+  scene.add(trees);
   scene.add(g);
   return { pos: [X, Z] };
 }
