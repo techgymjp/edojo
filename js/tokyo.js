@@ -69,6 +69,7 @@ export function addCutaway(mat) {
 }
 
 // ---- 国土地理院の鉄道データの線路と電車 ----
+const SUIX = (139.7530 - 139.745) * 111320 * Math.cos(35.674 * Math.PI / 180), SUIZ = -(35.7020 - 35.674) * 110574;
 function buildRail(root, city, OX, OZ) {
   const deck = { p: [], n: [], c: [] };
   // 面の表 (反時計回り) が法線の向きになるように並べる (両面表示で裏の法線が反転して黒くならないように)
@@ -95,6 +96,8 @@ function buildRail(root, city, OX, OZ) {
       base[i] = Math.max(base[i], waterY(r.x[i] + OX, r.z[i] + OZ) + 3);
     }
     r.y = base.map((b, i) => b + r.h[i] + 0.2);
+    // 水道橋駅のまわりの中央・総武線の高架は 2m 高く (実物の高さに)
+    for (let i = 0; i < n; i++) { const dx = r.x[i] - SUIX, dz = r.z[i] - SUIZ, d = Math.hypot(dx, dz); if ((r.ln === 'c' || r.ln === 's') && d < 320) r.y[i] += 2 * Math.min(1, (320 - d) / 120); }
     if (typeof window !== 'undefined') (window.__rails ||= []).push(r);
     // 勾配は 3.5% まで (地面の凸凹で線路が段々にならないように。低い所は高架で渡る)
     // 前後 30m の平均でならす (端の点はそのまま。ほかの線とつながる所がずれないように)
@@ -361,9 +364,11 @@ function buildMarunouchi(scene) {
       for (let d = -L / 2; d <= L / 2; d += 4) { const o = mk(new THREE.BoxGeometry(0.25, 2.6, 0.25), STEEL, cx + ux * d - uz * sd * 3.1, deckY + 0.5, cz + uz * d + ux * sd * 3.1); o.rotation.x = 0.6 * (Math.round(d / 4) % 2 ? 1 : -1); }
     }
     // 横穴 (岸の壁の黒い口と枠)
+    // 崖 (緑の斜面) から突き出したトンネルの入口: 崖の面より 1.5m 川側に、コンクリートの大きな額と黒い口
     for (const [px, pz, s] of [[ax, az, -1], [bx, bz, 1]]) {
-      mk(new THREE.BoxGeometry(7.5, 6.5, 1.5), CON, px + ux * s * 0.8, deckY + 2.4, pz + uz * s * 0.8);
-      mk(new THREE.BoxGeometry(5.6, 4.8, 1.6), DARK, px + ux * s * 0.6, deckY + 2.0, pz + uz * s * 0.6);
+      const fx = px - ux * s * 1.5, fz = pz - uz * s * 1.5;
+      mk(new THREE.BoxGeometry(10, 10, 3), CON, fx + ux * s * 1.5, deckY + 3.5, fz + uz * s * 1.5);
+      mk(new THREE.BoxGeometry(5.6, 5, 0.3), DARK, fx - ux * s * 0.05, deckY + 2.1, fz - uz * s * 0.05);
     }
     // 駅のホーム
     if (opt.station) for (const sd of [-1, 1]) {
