@@ -188,6 +188,8 @@ if ring.any():
     k = np.clip(dist_w / 25, 0, 1); k = k * k * (3 - 2 * k)
     T = np.where(ring, np.minimum(T, (wl_s + 0.8) + (T - wl_s - 0.8) * k), T).astype(np.float32)
     print('真田濠のまわりの土手の斜面', int(ring.sum()))
+    # 濠の中の地形 (地面のメッシュの頂点) は水面の下へ: 岸の斜面が水の中へ下りていくように (高いままだと土手が宙に浮いて透ける)
+    T = np.where(water & SANADA, WL - 1.5, T).astype(np.float32)
 # 万世橋〜昌平橋の南岸: 標高データが中央線のレンガ高架 (高さ 約 11m) を地面として拾っているので、まわりの道の高さ (約 4.5m) に下げる
 vm = land & (lat > 35.6960) & (lat < 35.6990) & (lon > 139.7680) & (lon < 139.7725) & (T > 5.2)
 T = np.where(vm, 4.5, T).astype(np.float32)
