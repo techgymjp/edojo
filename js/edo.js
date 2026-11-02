@@ -1,3 +1,4 @@
+import { place } from './i18n.js';
 // 町並み・城・門・橋・ワープ・今のビル・テックジムのアドバルーン
 import * as THREE from '../vendor/three.module.min.js';
 import { W, ll, codeAt, isWater, groundH, cellOf, LEVEL_H, waterY, terrainH } from './world.js';
@@ -108,6 +109,7 @@ export const TENSHU = [35.68800, 139.75570];
 
 // ---------- ラベル ----------
 export function labelSprite(text, color = '#fff', size = 1) {
+  text = place(text);
   const c = document.createElement('canvas');
   const g = c.getContext('2d');
   const fs = 56;

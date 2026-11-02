@@ -2,6 +2,7 @@
 import * as THREE from '../vendor/three.module.min.js';
 import { W, loadWorld, buildGround, buildWalls, buildWater, cullChunks, nearCastle, isWater, codeAt, groundH, cellOf, ll, isDote, LEVEL_H, waterY, terrainH, nearWaterGrid } from './world.js';
 import { buildTown, buildModern, buildCastle, buildWarps, buildBalloon, moatName, labelSprite, MOAT_NAMES, GATES } from './edo.js';
+import { T, EN, place, applyEnglishPage } from './i18n.js';
 import { makeBoat, animateBoat, makeNinja, poseNinja, makeBamboo, makeCoin } from './models.js';
 import * as A from './audio.js';
 import { Fireworks } from './fireworks.js';
@@ -166,17 +167,17 @@ holdBtn('btnCoin', () => I.pressed.add('Coin'));
 // ---------- 読み込み ----------
 async function boot() {
   try {
-    $('loadtext').textContent = '江戸の地図を読み込み中……';
+    $('loadtext').textContent = T('江戸の地図を読み込み中……', 'Loading the map of Edo…');
     await loadWorld();
     buildGround(scene);
-    $('loadtext').textContent = '石垣を積んでいます……';
+    $('loadtext').textContent = T('石垣を積んでいます……', 'Building the stone walls…');
     await frame();
     const segs = buildWalls(scene);
     water = buildWater(scene);
-    $('loadtext').textContent = '町を建てています……';
+    $('loadtext').textContent = T('町を建てています……', 'Building the town…');
     await frame();
     const town = buildTown(scene);
-    $('loadtext').textContent = '今の東京を建てています……';
+    $('loadtext').textContent = T('今の東京を建てています……', 'Building modern Tokyo…');
     await frame();
     tokyo = buildTokyo(scene, renderer, segs.bankSegs);
     // ターザン大東京の街がない所だけ、PLATEAU の箱のビルで埋める
@@ -186,7 +187,7 @@ async function boot() {
     for (const bd of tokyo.city.bld) if (bd.plateau || bd.far) covered.add(Math.floor((bd.cx + tokyo.OX) / 120) * 1000 + Math.floor((bd.cz + tokyo.OZ) / 120));
     modern = buildModern(scene, bld.filter(([h, cx, cz]) => !covered.has(Math.floor(cx / 120) * 1000 + Math.floor(cz / 120)) && (h >= 45 || nearWaterGrid(cx, cz, 200))));
     addCutaway(modern.mat);
-    $('loadtext').textContent = '江戸城を建てています……';
+    $('loadtext').textContent = T('江戸城を建てています……', 'Building Edo Castle…');
     await frame();
     const before = new Set(scene.children);
     castle = buildCastle(scene, segs.castleSegs);
@@ -206,7 +207,7 @@ async function boot() {
     G.state = 'title';
   } catch (e) {
     console.error(e);
-    $('loadtext').textContent = '読み込みに失敗しました: ' + e.message;
+    $('loadtext').textContent = T('読み込みに失敗しました: ', 'Failed to load: ') + e.message;
   }
 }
 const frame = () => new Promise((r) => requestAnimationFrame(() => r()));
@@ -536,7 +537,7 @@ function updateNinja(nj, dt) {
         nj.x = R.tx - dx / l * inset; nj.z = R.tz - dz / l * inset;
         nj.m.position.set(nj.x, nj.y, nj.z); nj.m.rotation.set(0, Math.atan2(dx, dz), 0);
         poseNinja(nj.m, 'climb', G.t * 3);
-        if (nj.y >= top) { R.phase = 2; R.t = 0; nj.x = R.tx; nj.z = R.tz; nj.y = top + 4; floatText(nj.x, nj.y + 4, nj.z, '天守を取られた！', 'red', true); A.sfx('boom', 0.8); }
+        if (nj.y >= top) { R.phase = 2; R.t = 0; nj.x = R.tx; nj.z = R.tz; nj.y = top + 4; floatText(nj.x, nj.y + 4, nj.z, T('天守を取られた！', 'The keep has fallen!'), 'red', true); A.sfx('boom', 0.8); }
       } else {
         nj.m.position.set(nj.x, nj.y, nj.z); nj.m.rotation.y += dt * 0.8;
         poseNinja(nj.m, 'roof', G.t);
@@ -610,7 +611,7 @@ function updateNinja(nj, dt) {
         nj.m.visible = false;
         splash(nj.x, nj.z, 1.6);
         A.dodon(); A.sfx('splash1', 0.8);
-        alertMsg(`忍者が${moatName(nj.x, nj.z) || '内堀'}に飛び込んだ！`);
+        alertMsg(T(`忍者が${moatName(nj.x, nj.z) || '内堀'}に飛び込んだ！`, `A ninja dove into ${place(moatName(nj.x, nj.z) || '内堀')}!`));
       }
       break;
     }
@@ -693,7 +694,7 @@ function startClimb(nj, c) {
   splash(nj.x, nj.z, 0.8);
   A.sfx('splash2', 0.6);
   const where = moatName(wx, wz);
-  alertMsg(`${where ? where + 'で' : ''}忍者が${nj.dote ? '土手を這い上がって' : '石垣を登って'}いる！`);
+  alertMsg(T(`${where ? where + 'で' : ''}忍者が${nj.dote ? '土手を這い上がって' : '石垣を登って'}いる！`, `A ninja is climbing the ${nj.dote ? 'bank' : 'stone wall'}${where ? ' at ' + place(where) : ''}!`));
   A.sfx('bell', 0.6);
 }
 
@@ -751,7 +752,7 @@ function startRun(nj) {
   for (const c of navi.innerEntry) { const d = (cellX(c) - nj.x) ** 2 + (cellZ(c) - nj.z) ** 2; if (d < bd) { bd = d; best = c; } }
   nj.lx = cellX(best); nj.lz = cellZ(best);
   nj.state = 'run'; nj.hp = 1;
-  alertMsg(`${moatName(nj.bx, nj.bz)}を越えられた！ 忍者が内堀へ走っている`);
+  alertMsg(T(`${moatName(nj.bx, nj.bz)}を越えられた！ 忍者が内堀へ走っている`, `A ninja crossed ${place(moatName(nj.bx, nj.bz))} and is running to the inner moat!`));
   A.sfx('bell', 0.5, 1.1);
 }
 
@@ -908,7 +909,7 @@ function innerDive(nj) {
   nj.outer = false; nj.state = 'dive'; nj.t = 0.9; nj.y = waterY(nj.x, nj.z);
   // 警報: 「○○濠で忍者発生！」と出して、BGM を止めて「ブー、ブー」を鳴らす (4 秒)
   if (G.state === 'play') {
-    $('alert').textContent = `⚠ ${moatName(nj.x, nj.z) || '内堀'}で忍者発生！`;
+    $('alert').textContent = EN ? `⚠ Ninja in ${place(moatName(nj.x, nj.z) || '内堀')}!` : `⚠ ${moatName(nj.x, nj.z) || '内堀'}で忍者発生！`;
     $('alert').classList.add('show'); alertTimer = 4;
     G.alarmT = 4; G.alarmBeep = 0; A.stopBgm();
   }
@@ -931,7 +932,7 @@ function intrude(nj) {
   nj.raid = { tx, tz, bx: tx - dx / l * 26, bz: tz - dz / l * 26, base: groundH(tx, tz), phase: -1, t: 0, y0: Math.max(nj.y || 0, groundH(nj.x, nj.z)) };
   nj.state = 'raid'; nj.m.visible = true; nj.bam.visible = false;
   G.intruder = nj; G.intrudeT = G.t; G.reviveAsked = false;
-  floatText(nj.x, nj.y + 3, nj.z, '侵入された！', 'red', true);
+  floatText(nj.x, nj.y + 3, nj.z, T('侵入された！', 'Intruder!'), 'red', true);
   A.sfx('bell', 1); A.sfx('boom', 0.6);
   finish(false);
   G.endT = 60; // 天守のてっぺんに着いてから数秒で結果へ (raid で決める)
@@ -1254,7 +1255,7 @@ function updateBoat(dt) {
         G.warpCd = 2; camInit = false; trail.length = 0;
         A.sfx('launch', 0.6, 1.3);
         $('flash').classList.remove('on'); void $('flash').offsetWidth; $('flash').classList.add('on');
-        floatText(P.x, 5, P.z, 'ワープ！', 'cyan');
+        floatText(P.x, 5, P.z, T('ワープ！', 'Warp!'), 'cyan');
         return updateBoatMesh(dt, dash);
       }
     }
@@ -1557,7 +1558,7 @@ function updateMarkers() {
     const a = Math.atan2(worst.z - P.z, worst.x - P.x) - camHeading();
     ar.style.display = '';
     ar.style.transform = `translate(-50%,-50%) rotate(${a}rad)`;
-    $('dangerInfo').textContent = `${moatName(worst.x, worst.z)} ${Math.round(Math.hypot(worst.x - P.x, worst.z - P.z))}m　あと${Math.max(0, Math.round((1 - worst.prog) * (worst.H - (worst.wy || 0)) / (worst.dote ? CFG.climbDote : CFG.climbStone)))}秒`;
+    $('dangerInfo').textContent = `${place(moatName(worst.x, worst.z))} ${Math.round(Math.hypot(worst.x - P.x, worst.z - P.z))}m　` + T('あと', '') + `${Math.max(0, Math.round((1 - worst.prog) * (worst.H - (worst.wy || 0)) / (worst.dote ? CFG.climbDote : CFG.climbStone)))}` + T('秒', 's left');
   } else { ar.style.display = 'none'; $('dangerInfo').textContent = ''; }
 }
 // 道案内: 忍者が出ていれば一番近い忍者へ。いなければ外堀をぐるっと回る道
@@ -1709,7 +1710,7 @@ function updateNav() {
     const a = Math.atan2(tz - P.z, tx - P.x) - camHeading();
     el.style.display = ''; el.classList.remove('ninja');
     $('navArrow').style.transform = `rotate(${a}rad)`;
-    $('navInfo').textContent = `${best.n}（約${fmtD(rd)}）`;
+    $('navInfo').textContent = T(`${best.n}（約${fmtD(rd)}）`, `${place(best.n)} (${fmtD(rd)})`);
     G.navT = [best.x, best.z];
   } else { el.style.display = 'none'; G.navT = null; }
   // 近くの忍者
@@ -1724,7 +1725,7 @@ function updateNav() {
   if (ninja) {
     ne.style.display = '';
     $('ninjaArrow').style.transform = `rotate(${Math.atan2(ninja.z - P.z, ninja.x - P.x) - camHeading()}rad)`;
-    $('ninjaInfo').textContent = `忍者 ${fmtD(nd)}`;
+    $('ninjaInfo').textContent = T(`忍者 ${fmtD(nd)}`, `Ninja ${fmtD(nd)}`);
   } else ne.style.display = 'none';
 }
 function updateHud(dt) {
@@ -1735,9 +1736,9 @@ function updateHud(dt) {
   // 江戸の時刻 (2 時間ずつ)
   const KOKU = ['暁九つ', '暁八つ', '暁七つ', '明け六つ', '朝五つ', '昼四つ', '昼九つ', '昼八つ', '夕七つ', '暮れ六つ', '宵五つ', '夜四つ'];
   $('hTime').textContent = KOKU[Math.floor(((hourNow() + 1) % 24) / 2)];
-  $('hPlace').textContent = moatName(P.x, P.z);
-  $('gear').textContent = `時速${Math.round(Math.abs(P.v) * 3.6)}km`;
-  { const e = Math.floor(G.t); $('hElapsed').textContent = `経過 ${Math.floor(e / 60)}:${String(e % 60).padStart(2, '0')}`; }
+  $('hPlace').textContent = place(moatName(P.x, P.z));
+  $('gear').textContent = T(`時速${Math.round(Math.abs(P.v) * 3.6)}km`, `${Math.round(Math.abs(P.v) * 3.6)} km/h`);
+  { const e = Math.floor(G.t); $('hElapsed').textContent = T('経過 ', 'Time ') + `${Math.floor(e / 60)}:${String(e % 60).padStart(2, '0')}`; }
   if (alertTimer > 0) { alertTimer -= dt; if (alertTimer <= 0) $('alert').classList.remove('show'); }
   drawMinimap();
   updateMarkers();
@@ -1762,7 +1763,7 @@ function startGame() {
   for (const l of G.lassos) { scene.remove(l.line); scene.remove(l.loop); }
   Object.assign(G, { escaped: 0, lastSpawn: 0, forceSpawn: 120, t: 0, captured: 0, spawned: 0, nextSpawn: CFG.firstAt, st: 100, ninjas: [], coins: [], lassos: [], coinCd: 0, lassoCd: 0, warpCd: 0, camYaw: 0, intruder: null, result: null, alarmT: 0, alarmBeep: 0, kills: [], lanterns: G.lanterns || [], retries: 0, reviveAsked: false, reviveOpen: false });
   for (const L of G.lanterns) scene.remove(L.g); G.lanterns = [];
-  G.name = ($('nameInput').value || '平次').slice(0, 10);
+  G.name = ($('nameInput').value || T('平次', 'Heiji')).slice(0, 10);
   $('hudName').textContent = G.name;
   // 浅草橋の手前 (神田川) から、外堀・内堀の方 (西) へ向いて
   let [sx, sz] = ll(35.69595, 139.7850);
@@ -1777,7 +1778,7 @@ function startGame() {
   $('title').classList.add('hidden'); $('result').classList.add('hidden'); $('pause').classList.add('hidden');
   $('hud').classList.remove('hidden');
   G.state = 'play';
-  alertMsg('外堀を回って、江戸城に忍び寄る忍者を投げ銭と投げ輪で召し捕れ！');
+  alertMsg(T('外堀を回って、江戸城に忍び寄る忍者を投げ銭と投げ輪で召し捕れ！', 'Sail around the outer moat and catch the ninja with coins and your lasso!'));
 }
 function pause(on) {
   if (on && G.state === 'play') { G.state = 'pause'; $('pause').classList.remove('hidden'); }
@@ -1801,14 +1802,15 @@ function showResult() {
   G.state = 'result';
   $('hud').classList.add('hidden');
   $('result').classList.remove('hidden');
-  $('rHead').textContent = win ? '天晴れ！ 全員御用' : '本丸に曲者！';
+  $('rHead').textContent = win ? T('天晴れ！ 全員御用', 'Splendid! All caught') : T('本丸に曲者！', 'Intruder in the keep!');
   const n = G.captured;
-  const title = win ? (G.t < 330 ? '江戸一番の名同心' : '名同心') : n >= 60 ? '腕利きの同心' : n >= 35 ? '同心' : n >= 15 ? '下っ引き' : '見習い';
-  $('rTitle').textContent = `${G.name}　「${title}」`;
-  $('rCap').textContent = `${n} / ${CFG.total} 人`;
-  $('rTime').textContent = `${Math.floor(G.t / 60)}分${Math.floor(G.t % 60)}秒`;
-  $('rNote').textContent = (win ? '江戸城は今日も安泰。' : '本丸に忍び込まれた……') + (G.retries ? `（やり直し ${G.retries} 回）` : '');
-  G.shareText = `風雲江戸城で、忍者を ${n} / ${CFG.total} 人召し捕った！ ${G.name}「${title}」` + (win ? ' 全員御用！' : '') + (G.retries ? ` やり直し ${G.retries} 回` : '') + ' #風雲江戸城';
+  const title = win ? (G.t < 330 ? T('江戸一番の名同心', 'Best Constable in Edo') : T('名同心', 'Master Constable')) : n >= 60 ? T('腕利きの同心', 'Skilled Constable') : n >= 35 ? T('同心', 'Constable') : n >= 15 ? T('下っ引き', 'Deputy') : T('見習い', 'Apprentice');
+  $('rTitle').textContent = T(`${G.name}　「${title}」`, `${G.name} — “${title}”`);
+  $('rCap').textContent = T(`${n} / ${CFG.total} 人`, `${n} / ${CFG.total}`);
+  $('rTime').textContent = T(`${Math.floor(G.t / 60)}分${Math.floor(G.t % 60)}秒`, `${Math.floor(G.t / 60)}m ${Math.floor(G.t % 60)}s`);
+  $('rNote').textContent = (win ? T('江戸城は今日も安泰。', 'Edo Castle is safe today.') : T('本丸に忍び込まれた……', 'A ninja got into the keep…')) + (G.retries ? T(`（やり直し ${G.retries} 回）`, ` (continues: ${G.retries})`) : '');
+  G.shareText = T(`風雲江戸城で、忍者を ${n} / ${CFG.total} 人召し捕った！ ${G.name}「${title}」` + (win ? ' 全員御用！' : '') + (G.retries ? ` やり直し ${G.retries} 回` : '') + ' #風雲江戸城',
+    `I caught ${n} / ${CFG.total} ninja in Edo Castle: Moat Ninja Patrol! ${G.name} — “${title}”` + (win ? ' All caught!' : '') + (G.retries ? ` (continues: ${G.retries})` : '') + ' #EdoCastle');
 }
 
 // ---------- アプリ版 (Android): 広告・戻るボタン・シェア ----------
@@ -1817,7 +1819,7 @@ const Ads = window.Ads || { available: false, canReward: false, showInterstitial
 const Cap = window.Capacitor, NATIVE = !!(Cap && Cap.isNativePlatform && Cap.isNativePlatform());
 window.Sound = { suspend: () => A.suspendAll(), resume: () => { if (!document.hidden) A.resumeAll(); } };
 const SHARE_URL = 'https://techgym.jp/column/claude-code-game-edojo/';
-const MAX_RETRY = 3;
+const MAX_RETRY = 5;
 // 全画面広告を出し、閉じられたら次へ (読み込めていなければ最大 3 秒だけ待ち、だめなら出さずに進む)
 let interBusy = false;
 const withInter = (fn) => async () => { if (interBusy) return; interBusy = true; try { await Ads.showInterstitial(3000); } catch (e) {} interBusy = false; fn(); };
@@ -1836,13 +1838,13 @@ $('btnShare').onclick = async () => {
   } catch (e) { return; }
   open(`https://x.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(SHARE_URL)}`, '_blank', 'noopener');
 };
-// 本丸に忍び込まれたとき: 広告を最後まで見たら、その曲者を押し返して続ける (1 ゲーム 3 回まで。召し捕りには数えない)
+// 本丸に忍び込まれたとき: 広告を最後まで見たら、曲者を成敗して続ける (1 ゲーム 5 回まで。召し捕りには数えない)
 let reviveTimer = null;
 function askRevive() {
   G.reviveAsked = true;
   if (!Ads.canReward || G.retries >= MAX_RETRY) return;
   G.reviveOpen = true;
-  $('reviveLeft').textContent = `あと ${MAX_RETRY - G.retries} 回`;
+  $('reviveLeft').textContent = T(`あと ${MAX_RETRY - G.retries} 回`, `${MAX_RETRY - G.retries} left`);
   let sec = 6; $('reviveSec').textContent = sec;
   $('revive').classList.remove('hidden');
   reviveTimer = setInterval(() => { sec--; $('reviveSec').textContent = sec; if (sec <= 0) closeRevive(); }, 1000);
@@ -1865,7 +1867,7 @@ $('btnRevive').onclick = async () => {
     const cap = G.captured;
     for (const o of targets) { hitNinja(o, true); G.escaped = (G.escaped || 0) + 1; }
     G.captured = cap; $('hCap').textContent = cap;
-    floatText(P.x, waterY(P.x, P.z) + 4, P.z, targets.length > 1 ? `曲者 ${targets.length} 人を成敗！` : '曲者を成敗！', 'red', true);
+    floatText(P.x, waterY(P.x, P.z) + 4, P.z, targets.length > 1 ? T(`曲者 ${targets.length} 人を成敗！`, `Defeated ${targets.length} intruders!`) : T('曲者を成敗！', 'Intruder defeated!'), 'red', true);
     if (G.captured + G.escaped >= CFG.total) finish(true);
   }
   G.reviveOpen = false;
@@ -1898,10 +1900,12 @@ document.addEventListener('visibilitychange', () => {
   else if (!Ads.showing) A.resumeAll();
 });
 $('btnPause').onclick = () => pause(true);
-$('btnMute').onclick = () => { A.setMuted(!A.isMuted()); $('btnMute').textContent = A.isMuted() ? '音：切' : '音：入'; };
+$('btnMute').onclick = () => { A.setMuted(!A.isMuted()); $('btnMute').textContent = A.isMuted() ? T('音：切', 'Sound: OFF') : T('音：入', 'Sound: ON'); };
 $('btnHowto').onclick = () => $('howto').classList.remove('hidden');
 $('howtoClose').onclick = withInter(() => $('howto').classList.add('hidden'));
 $('title').addEventListener('pointerdown', () => { A.initAudio(); A.playBgm('bgmTitle'); }, { once: true });
+applyEnglishPage();
+if (EN) $('nameInput').value = 'Heiji';
 try { const n = localStorage.getItem('edojo-name'); if (n) $('nameInput').value = n; } catch (e) {}
 $('nameInput').addEventListener('change', () => { try { localStorage.setItem('edojo-name', $('nameInput').value); } catch (e) {} });
 
