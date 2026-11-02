@@ -127,6 +127,8 @@ function buildRail(root, city, OX, OZ) {
     }
     // ならしたあとも、陸の所では地面より下に潜らない (お茶の水の崖ぞいの中央・総武線が途切れて見えないように)
     for (let i = 0; i < n; i++) if (!isWater(r.x[i] + OX, r.z[i] + OZ)) r.y[i] = Math.max(r.y[i], gy(r.x[i], r.z[i]) + r.h[i] + 0.2);
+    // 四ツ谷: 中央線・総武線は谷底 (水面のすぐ上) を走り、丸ノ内線の鉄橋の下をくぐる
+    if (r.jr) for (let i = 0; i < n; i++) if (isWater(r.x[i] + OX, r.z[i] + OZ) && Math.hypot(r.x[i] - YTX, r.z[i] - YTZ) < 220) r.y[i] = Math.min(r.y[i], waterY(r.x[i] + OX, r.z[i] + OZ) + 1);
   }
   const brk = { p: [], n: [], uv: [] };
   // 道路の上を渡る所 (中央・総武線が万世橋・昌平橋のまわりで道をまたぐ所など) は、緑の鋼の桁の高架橋にする
@@ -516,8 +518,7 @@ function buildMarunouchi(scene) {
     // 四谷見附橋から南を見て: 右 (外堀通りの側) から入線し、やや左 (東) へ弧を描いて南のトンネルへ。ホームは堀に出てすぐから 125m、その先トンネルまでは線路だけ
     const N = [35.68580, 139.72985], C = [35.68475, 139.72992], S = [35.68370, 139.73050], pts = [];
     for (let i = 0; i <= 12; i++) { const t = i / 12, a = (1 - t) * (1 - t), b2 = 2 * t * (1 - t), c = t * t; pts.push(ll2(N[0] * a + C[0] * b2 + S[0] * c, N[1] * a + C[1] * b2 + S[1] * c)); }
-    const bank = Math.min(terrainH(...pts[0]), terrainH(...pts[12]));
-    curveSite(pts, 160, Math.max(waterY(...ll2(35.6853, 139.7306)) + 5, bank - 4), { platStart: 4, PL: 125, cover: 40 });
+    curveSite(pts, 160, waterY(...ll2(35.6853, 139.7306)) + 6.6, { platStart: 4, PL: 125, cover: 40 }); // 中央線 (水面 +1m) の電車の上を越える高さ
   }
   return {
     sites,
@@ -916,7 +917,9 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
           const ya = terrainH(...pts[a]), yb = terrainH(...pts[b]);
           let wmax = -1e9; for (let q = k; q < e; q++) wmax = Math.max(wmax, waterY(...pts[q]));
           // 橋の高さは岸の道の高さ (水面から 4m は空ける)。今の神田川・日本橋川の橋と同じく、たもとの道とほぼ同じ高さ
-          const deck = Math.max(Math.max(ya, yb) + 0.3, wmax + 4);
+          let deck = Math.max(Math.max(ya, yb) + 0.3, wmax + 4);
+          // 四谷見附橋 (新宿通り): 谷の上の高い橋。下を丸ノ内線の鉄橋と電車、その下を中央線・総武線がくぐる
+          if (Math.hypot(qx - OX - YTX, qz - OZ - YTZ) < 60) deck = Math.max(deck, 28.5);
           const spanL = (e - k) * 4;
           // たもとの坂 (取り付け道路): 橋の床から道の高さまで 6% で下ろし、下は擁壁で埋める (橋が途切れて見えないように)
           for (const [q0, dir] of [[a, -1], [b, 1]]) {
