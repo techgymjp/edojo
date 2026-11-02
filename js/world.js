@@ -170,9 +170,16 @@ function makeGroundTextures() {
   { const R = 8; let cur = new Uint8Array(n); for (let k = 0; k < n; k++) cur[k] = W.code[k] === 0 ? 1 : 0;
     for (let it = 0; it < R; it++) { const nx = cur.slice(); for (let j = 1; j < W.h - 1; j++) for (let i = 1; i < W.w - 1; i++) { const k = j * W.w + i; if (!cur[k] && (cur[k - 1] || cur[k + 1] || cur[k - W.w] || cur[k + W.w])) nx[k] = 1; } cur = nx; }
     for (let k = 0; k < n; k++) nearW[k] = cur[k] && W.code[k] === 5 ? 1 : 0; }
+  // 飯田橋〜四谷の外濠の内側 (お城の側) は、土手の上の道までずっと外濠公園の緑道: 水から 90m まで緑
+  const nearW90 = new Uint8Array(n);
+  { const j0 = Math.floor((W.N - 35.7020) * W.KZ / W.res), j1 = Math.floor((W.N - 35.6760) * W.KZ / W.res), i0 = Math.floor((139.7250 - W.W) * W.KX / W.res), i1 = Math.floor((139.7490 - W.W) * W.KX / W.res);
+    let cur = new Uint8Array(n); for (let j = j0; j < j1; j++) for (let i = i0; i < i1; i++) { const k = j * W.w + i; cur[k] = W.code[k] === 0 ? 1 : 0; }
+    for (let it = 0; it < 30; it++) { const nx = cur.slice(); for (let j = j0 + 1; j < j1 - 1; j++) for (let i = i0 + 1; i < i1 - 1; i++) { const k = j * W.w + i; if (!cur[k] && (cur[k - 1] || cur[k + 1] || cur[k - W.w] || cur[k + W.w])) nx[k] = 1; } cur = nx; }
+    for (let j = j0; j < j1; j++) for (let i = i0; i < i1; i++) { const k = j * W.w + i; if (cur[k] && W.code[k] === 5) { const x = (i + 0.5) * W.res, z = (j + 0.5) * W.res; if (pip(DOTE_XZ()[1], x, z) && castleSide(x, z)) nearW90[k] = 1; } } }
   for (let k = 0; k < n; k++) {
     const c = W.code[k];
     let b = GROUND_RGB[c];
+    if (nearW90[k]) b = [92, 150, 62];
     if (nearW[k]) { const x = ((k % W.w) + 0.5) * W.res, z = (Math.floor(k / W.w) + 0.5) * W.res; if (isDote(x, z) || inSanada(x, z) || inHie(x, z) || inBenkeiBank(x, z)) b = [92, 150, 62]; }
     if (c === 5 && sanadaGreen(((k % W.w) + 0.5) * W.res, (Math.floor(k / W.w) + 0.5) * W.res)) b = [92, 150, 62];
     const r = (hash(k) - 0.5) * 14;
@@ -328,6 +335,7 @@ function castleSide(x, z) {
   return cr < 0;
 }
 let DOTE = null;
+const DOTE_XZ = () => { if (!DOTE) DOTE = DOTE_LL.map((p) => p.map(([la, lo]) => ll(la, lo))); return DOTE; };
 function pip(poly, x, z) {
   let c = false;
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
