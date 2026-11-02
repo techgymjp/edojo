@@ -40,12 +40,16 @@ Third-party software
 This repository includes third-party software under its own license, which is not affected
 by the terms above:
 
-- three.js (js/vendor/three.module.min.js) — MIT License, Copyright 2010-2024 three.js authors.
-  See js/vendor/three.LICENSE.
+- three.js (vendor/three.module.min.js) — MIT License, Copyright 2010-2024 three.js authors.
+  See vendor/three.LICENSE.
 
 The Android app also uses Capacitor and @capacitor-community/admob (MIT License), installed
 from npm at build time.
 
-Map data (terrain, aerial photos, buildings, island names and sea routes) is processed from
-GSI Tiles of the Geospatial Information Authority of Japan (国土地理院「地理院タイル」を加工して作成),
-used under the GSI content terms of use with attribution.
+Map and building data are processed from the following open data, used under their terms with attribution
+(the attribution is also shown on the title screen):
+
+- Moats, rivers and terrain: Geospatial Information Authority of Japan, GSI Tiles / vector tiles
+  (国土地理院 ベクトルタイル・標高タイルを加工して作成)
+- Buildings: Project PLATEAU, Ministry of Land, Infrastructure, Transport and Tourism
+  (東京都23区 2020年度, plateau-tokyo23ku-building-mvt-2020 by indigo-lab), CC BY 4.0

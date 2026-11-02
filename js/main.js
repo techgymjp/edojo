@@ -523,7 +523,7 @@ function updateNinja(nj, dt) {
         nj.m.position.set(nj.x, nj.y, nj.z); nj.m.rotation.y += dt * 0.8;
         poseNinja(nj.m, 'roof', G.t);
         // てっぺんに立ったあと、テックジムのアドバルーンも見せてから結果へ
-        if (R.t > 7 && G.endT > 1) G.endT = 1;
+        if (R.t > 7 && G.endT > 1 && !G.reviveOpen) G.endT = 1;
       }
       break;
     }
@@ -912,7 +912,7 @@ function intrude(nj) {
   const dx = tx - nj.x, dz = tz - nj.z, l = Math.hypot(dx, dz) || 1;
   nj.raid = { tx, tz, bx: tx - dx / l * 26, bz: tz - dz / l * 26, base: groundH(tx, tz), phase: -1, t: 0, y0: Math.max(nj.y || 0, groundH(nj.x, nj.z)) };
   nj.state = 'raid'; nj.m.visible = true; nj.bam.visible = false;
-  G.intruder = nj;
+  G.intruder = nj; G.intrudeT = G.t; G.reviveAsked = false;
   floatText(nj.x, nj.y + 3, nj.z, '侵入された！', 'red', true);
   A.sfx('bell', 1); A.sfx('boom', 0.6);
   finish(false);
@@ -1742,7 +1742,7 @@ function startGame() {
   for (const nj of G.ninjas) { scene.remove(nj.m); scene.remove(nj.bam); nj.marker.remove(); }
   for (const c of G.coins) scene.remove(c.m);
   for (const l of G.lassos) { scene.remove(l.line); scene.remove(l.loop); }
-  Object.assign(G, { escaped: 0, lastSpawn: 0, forceSpawn: 120, t: 0, captured: 0, spawned: 0, nextSpawn: CFG.firstAt, st: 100, ninjas: [], coins: [], lassos: [], coinCd: 0, lassoCd: 0, warpCd: 0, camYaw: 0, intruder: null, result: null, alarmT: 0, alarmBeep: 0, kills: [], lanterns: G.lanterns || [] });
+  Object.assign(G, { escaped: 0, lastSpawn: 0, forceSpawn: 120, t: 0, captured: 0, spawned: 0, nextSpawn: CFG.firstAt, st: 100, ninjas: [], coins: [], lassos: [], coinCd: 0, lassoCd: 0, warpCd: 0, camYaw: 0, intruder: null, result: null, alarmT: 0, alarmBeep: 0, kills: [], lanterns: G.lanterns || [], retries: 0, reviveAsked: false, reviveOpen: false });
   for (const L of G.lanterns) scene.remove(L.g); G.lanterns = [];
   G.name = ($('nameInput').value || '平次').slice(0, 10);
   $('hudName').textContent = G.name;
@@ -1789,18 +1789,89 @@ function showResult() {
   $('rTitle').textContent = `${G.name}　「${title}」`;
   $('rCap').textContent = `${n} / ${CFG.total} 人`;
   $('rTime').textContent = `${Math.floor(G.t / 60)}分${Math.floor(G.t % 60)}秒`;
-  $('rNote').textContent = win ? '江戸城は今日も安泰。' : '本丸に忍び込まれた……';
+  $('rNote').textContent = (win ? '江戸城は今日も安泰。' : '本丸に忍び込まれた……') + (G.retries ? `（やり直し ${G.retries} 回）` : '');
+  G.shareText = `風雲江戸城で、忍者を ${n} / ${CFG.total} 人召し捕った！ ${G.name}「${title}」` + (win ? ' 全員御用！' : '') + (G.retries ? ` やり直し ${G.retries} 回` : '') + ' #風雲江戸城';
 }
 
-$('btnStart').onclick = startGame;
-$('btnAgain').onclick = startGame;
-$('btnToTitle').onclick = () => { $('result').classList.add('hidden'); showTitle(); G.state = 'title'; A.playBgm('bgmTitle'); };
-$('btnResume').onclick = () => pause(false);
-$('btnQuit').onclick = () => { $('pause').classList.add('hidden'); for (const nj of G.ninjas) nj.marker.remove(); showTitle(); G.state = 'title'; };
+// ---------- アプリ版 (Android): 広告・戻るボタン・シェア ----------
+// 広告 (js/ads.js) は Android アプリのときだけ動く。Web 版では Ads.available が false で何もしない
+const Ads = window.Ads || { available: false, canReward: false, showInterstitial: async () => {}, showRewarded: async () => 'unavailable', setBanner() {}, showPrivacyOptions: async () => {}, initDone: Promise.resolve(), privacyOptionsRequired: false };
+const Cap = window.Capacitor, NATIVE = !!(Cap && Cap.isNativePlatform && Cap.isNativePlatform());
+window.Sound = { suspend: () => A.suspendAll(), resume: () => { if (!document.hidden) A.resumeAll(); } };
+const SHARE_URL = 'https://techgym.jp/column/claude-code-game-edojo/';
+const MAX_RETRY = 3;
+// 全画面広告を出し、閉じられたら次へ (読み込めていなければ最大 3 秒だけ待ち、だめなら出さずに進む)
+let interBusy = false;
+const withInter = (fn) => async () => { if (interBusy) return; interBusy = true; try { await Ads.showInterstitial(3000); } catch (e) {} interBusy = false; fn(); };
+function toTitle() { for (const s of ['result', 'pause', 'howto', 'revive']) $(s).classList.add('hidden'); for (const nj of G.ninjas) nj.marker.remove(); showTitle(); G.state = 'title'; A.playBgm('bgmTitle'); }
+$('btnStart').onclick = withInter(startGame);
+$('btnAgain').onclick = withInter(startGame);
+$('btnToTitle').onclick = withInter(toTitle);
+$('btnResume').onclick = withInter(() => pause(false));
+$('btnQuit').onclick = withInter(toTitle);
+// シェア: アプリでは Android の共有メニュー、Web では共有メニュー (なければ X の投稿画面)
+$('btnShare').onclick = async () => {
+  const text = G.shareText || '風雲江戸城 #風雲江戸城';
+  try {
+    if (NATIVE && Cap.Plugins && Cap.Plugins.Share) { await Cap.Plugins.Share.share({ title: '風雲江戸城', text, url: SHARE_URL, dialogTitle: 'シェア' }); return; }
+    if (navigator.share) { await navigator.share({ title: '風雲江戸城', text, url: SHARE_URL }); return; }
+  } catch (e) { return; }
+  open(`https://x.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(SHARE_URL)}`, '_blank', 'noopener');
+};
+// 本丸に忍び込まれたとき: 広告を最後まで見たら、その曲者を押し返して続ける (1 ゲーム 3 回まで。召し捕りには数えない)
+let reviveTimer = null;
+function askRevive() {
+  G.reviveAsked = true;
+  if (!Ads.canReward || G.retries >= MAX_RETRY) return;
+  G.reviveOpen = true;
+  $('reviveLeft').textContent = `あと ${MAX_RETRY - G.retries} 回`;
+  let sec = 6; $('reviveSec').textContent = sec;
+  $('revive').classList.remove('hidden');
+  reviveTimer = setInterval(() => { sec--; $('reviveSec').textContent = sec; if (sec <= 0) closeRevive(); }, 1000);
+}
+function closeRevive() { clearInterval(reviveTimer); reviveTimer = null; $('revive').classList.add('hidden'); G.reviveOpen = false; }
+$('btnReviveNo').onclick = closeRevive;
+$('btnRevive').onclick = async () => {
+  clearInterval(reviveTimer); reviveTimer = null; $('revive').classList.add('hidden');
+  const r = await Ads.showRewarded();
+  const nj = G.intruder;
+  if (r === 'rewarded' && nj && G.state === 'ending') {
+    // 曲者を本丸から押し返す (消える。召し捕りには数えない)
+    G.retries++;
+    scene.remove(nj.m); scene.remove(nj.bam); nj.marker.remove(); nj.state = 'gone'; nj.raid = null;
+    G.escaped = (G.escaped || 0) + 1;
+    G.intruder = null; G.result = null; G.state = 'play'; G.endT = 0; G.alarmT = 0; camInit = false;
+    A.stopBgm(); A.playBgm('bgmSea');
+    floatText(P.x, waterY(P.x, P.z) + 4, P.z, '曲者を押し返した！', 'red', true);
+    if (G.captured + G.escaped >= CFG.total) finish(true);
+  }
+  G.reviveOpen = false;
+};
+// 広告のバナー: タイトル・遊び方・一服 (ポーズ)・結果の画面だけ (プレイ中は操作ボタンと重なるので出さない)
+function syncBanner() { Ads.setBanner(G.state === 'title' || G.state === 'pause' || G.state === 'result'); }
+// タイトル画面: ビルド番号・広告の設定 (EU など同意が必要な地域だけ)
+if (NATIVE) document.body.classList.add('app');
+$('appVer').textContent = window.APP_VERSION ? window.APP_VERSION : '';
+Ads.initDone.then(() => { if (Ads.privacyOptionsRequired) $('btnAdPrivacy').hidden = false; });
+$('btnAdPrivacy').onclick = () => Ads.showPrivacyOptions();
+// 戻るボタン: プレイ中は一服 (ポーズ)、遊び方は閉じる、タイトル・結果の画面ではアプリを終わる
+if (NATIVE && Cap.Plugins && Cap.Plugins.App) Cap.Plugins.App.addListener('backButton', () => {
+  if (Ads.showing || interBusy) return;
+  if (!$('revive').classList.contains('hidden')) { closeRevive(); return; }
+  if (!$('howto').classList.contains('hidden')) { $('howtoClose').onclick(); return; }
+  if (G.state === 'play') { pause(true); return; }
+  if (G.state === 'pause' || G.state === 'ending') return;
+  Cap.Plugins.App.exitApp();
+});
+// 別のアプリに切り替えたら、自動で一服 (ポーズ) して音も止める
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { if (G.state === 'play') pause(true); A.suspendAll(); }
+  else if (!Ads.showing) A.resumeAll();
+});
 $('btnPause').onclick = () => pause(true);
 $('btnMute').onclick = () => { A.setMuted(!A.isMuted()); $('btnMute').textContent = A.isMuted() ? '音：切' : '音：入'; };
 $('btnHowto').onclick = () => $('howto').classList.remove('hidden');
-$('howtoClose').onclick = () => $('howto').classList.add('hidden');
+$('howtoClose').onclick = withInter(() => $('howto').classList.add('hidden'));
 $('title').addEventListener('pointerdown', () => { A.initAudio(); A.playBgm('bgmTitle'); }, { once: true });
 try { const n = localStorage.getItem('edojo-name'); if (n) $('nameInput').value = n; } catch (e) {}
 $('nameInput').addEventListener('change', () => { try { localStorage.setItem('edojo-name', $('nameInput').value); } catch (e) {} });
@@ -1822,7 +1893,9 @@ function step(dt) {
     } else A.playBgm(climbing ? 'bgmBattle' : 'bgmSea');
   } else {
     updateBoatMesh(dt, false);
-    G.endT -= dt;
+    // 本丸に忍び込まれたとき (アプリ版): 忍者が走っていくのを 3 秒見せてから、広告を見て押し返すかをたずねる
+    if (G.intruder && !G.reviveAsked && G.t - G.intrudeT > 3) askRevive();
+    if (!G.reviveOpen) G.endT -= dt;
     if (G.endT <= 0) showResult();
   }
   for (const nj of G.ninjas) updateNinja(nj, dt);
@@ -1836,6 +1909,7 @@ function loop(now) {
   requestAnimationFrame(loop);
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   if (G.state === 'loading') return;
+  syncBanner();
   if (G.state === 'play' || G.state === 'ending') {
     if (pressed('KeyP') || pressed('Escape')) { if (G.state === 'play') pause(true); }
     // 確かめ用: window.__ts で時間を速める

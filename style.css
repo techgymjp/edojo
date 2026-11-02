@@ -143,3 +143,18 @@ h1 { font-family: "Yuji Syuku", serif; font-size: clamp(52px, 13vw, 96px); line-
   .tbtn { width: 62px; height: 62px; font-size: 18px; }
   .tbtn.dash { height: 48px; border-radius: 28px; }
 }
+
+/* アプリ版: ビルド番号・プライバシーポリシー・広告の設定 */
+.app-meta { margin-top: 10px; font-size: 12px; opacity: 0.75; }
+.app-meta a, .link-btn { color: inherit; text-decoration: underline; background: none; border: 0; font: inherit; cursor: pointer; padding: 0 4px; }
+/* 広告を見て曲者を押し返す */
+#revive { z-index: 60; }
+.panel.revive p { margin: 10px 0 16px; line-height: 1.6; }
+/* アプリ版では、パソコンのキーの説明を出さない (ボタンの名前で案内する) */
+body.app #help, body.app .howto-panel table th:nth-child(2), body.app .howto-panel table td:nth-child(2) { display: none; }
+/* 横画面のスマホは高さが小さい: 結果画面などを詰める */
+@media (orientation: landscape) and (max-height: 500px) {
+  .panel { padding-top: 10px; padding-bottom: 10px; }
+  .panel h2 { margin: 4px 0; }
+  .panel .btn { margin-top: 6px; }
+}

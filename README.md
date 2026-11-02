@@ -71,6 +71,22 @@ GitHub Pages は「Deploy from a branch」（`main` の `/ (root)`）で公開�
 - 櫓・門・天守台の位置とアドバルーン：皇居ランナー・ターザン大東京（テックジム）
 - 3D 描画：[three.js](https://threejs.org/)（MIT License）
 
+## Android アプリ
+
+Capacitor で Android アプリにしています（パッケージ名 `jp.techgym.edojo`。ゲームのファイルはアプリに同梱し、オフラインでも遊べます）。
+作り方は techgymjp/jet-fighter の `docs/ANDROID_PORTING.md` と同じ構成です。
+
+- 動作確認用の APK（デバッグ署名・テスト広告）: main への push のたびに GitHub Actions がビルドし、Release `android-latest` に載せます
+  - リリース画面: https://github.com/techgymjp/edojo/releases/tag/android-latest
+  - APK 直接: https://github.com/techgymjp/edojo/releases/latest/download/edojo.apk
+  - スマホで読み取る QR コード（リリース画面）: `docs/apk-qr.png`
+
+  ![APK の QR コード](docs/apk-qr.png)
+
+- Google Play 用の署名付き AAB: リポジトリの Secrets（`ANDROID_KEYSTORE_BASE64` など 4 つ）があるとき、Actions の Artifact `edojo-release-aab` に出ます（本番広告）
+- 広告（AdMob）: バナーはタイトル・一服・結果の画面だけ。全画面広告は出陣・もう一度・再開・タイトルへ戻るとき。リワード広告は、本丸に忍び込まれたときに見ると、その曲者を押し返して続けられます（1 ゲーム 3 回まで。召し捕りの数は増えず、結果とシェアに「やり直し N 回」と出ます）
+- 手元でビルドするとき: `npm ci` → `npm run android:sync` → `npm run android:open`（Android Studio）
+
 ## ライセンス
 
 著作権はテックジム株式会社に帰属します（All rights reserved）。詳しくは [LICENSE](LICENSE) を見てください。three.js（MIT）などの同梱ライブラリはそれぞれのライセンスに従います。

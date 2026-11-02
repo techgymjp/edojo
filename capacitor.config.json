@@ -1,0 +1,8 @@
+{
+  "appId": "jp.techgym.edojo",
+  "appName": "風雲江戸城",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#101828"
+  }
+}

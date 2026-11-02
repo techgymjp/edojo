@@ -65,6 +65,7 @@
       ビル: 国土交通省 Project PLATEAU（東京都23区 2020年度、plateau-tokyo23ku-building-mvt-2020 by indigo-lab）<br>
       音: 瀬戸内の海賊王・孤軍奮闘小早川（テックジム）より　3D: three.js
     </div>
+    <div class="app-meta"><span id="appVer"></span> <a href="https://techgym.jp/privacy-policy/" target="_blank" rel="noopener">プライバシーポリシー</a> <button id="btnAdPrivacy" class="link-btn" hidden>広告の設定</button></div>
   </div>
 </div>
 
@@ -113,10 +114,25 @@
     </table>
     <div id="rNote" class="r-note"></div>
     <button id="btnAgain" class="btn primary">もう一度</button>
+    <button id="btnShare" class="btn ghost">シェア</button>
     <button id="btnToTitle" class="btn ghost">タイトルへ</button>
   </div>
 </div>
 
+<!-- 広告を見て本丸の曲者を押し返す (アプリ版だけ) -->
+<div id="revive" class="screen hidden">
+  <div class="panel revive">
+    <h2>本丸に曲者！</h2>
+    <p>広告を見て、この曲者を押し返しますか？<br><small id="reviveLeft"></small></p>
+    <button id="btnRevive" class="btn primary">広告を見て押し返す</button>
+    <button id="btnReviveNo" class="btn ghost small">そのまま終わる (<span id="reviveSec">6</span>)</button>
+  </div>
+</div>
+
+<!-- アプリ版: 広告の設定 (ビルド時に作る。Web 版ではファイルがなく、何もしない) -->
+<script src="js/ads-config.js" onerror="void 0"></script>
+<script src="js/build-info.js" onerror="void 0"></script>
+<script src="js/ads.js"></script>
 <script type="module" src="js/main.js?v=3"></script>
 </body>
 </html>

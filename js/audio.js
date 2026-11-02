@@ -25,6 +25,9 @@ export function initAudio() {
     }
   } catch (e) { ctx = null; }
 }
+// 広告を出している間や、別のアプリに切り替えたときは音を止める
+export function suspendAll() { if (ctx && ctx.state === 'running') ctx.suspend(); }
+export function resumeAll() { if (ctx && ctx.state === 'suspended') ctx.resume(); }
 export function setMuted(m) { muted = m; if (master) master.gain.value = m ? 0 : 0.8; }
 export function isMuted() { return muted; }
 export function sfx(name, vol = 1, rate = 1) {
