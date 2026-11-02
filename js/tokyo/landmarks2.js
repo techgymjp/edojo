@@ -224,10 +224,11 @@ export function addAkasaka(scene, city) {
   let g = new THREE.Group();
   const verm = M(VERM);
   // 日枝神社: 社殿と、三角の破風がのった山王鳥居
-  const [HX, HZ] = ll(35.67480, 139.73970);
+  // 山王の丘のてっぺん (溜池から 40m 以上離れた一番高い所)
+  const [HX, HZ] = ll(35.67585, 139.73990);
   hallBuilding(g, city, HX, HZ, 0, 0, 0, 22, 16, 8, 7, verm, M(0x4f7f6f), '日枝神社');
-  torii(g, HX, HZ + 40, 0, 8, 9, verm);
-  const gable = mesh(new THREE.ConeGeometry(2.6, 2.4, 3), verm, HX, 11.3, HZ + 40, g);
+  torii(g, HX + 30, HZ, Math.PI / 2, 8, 9, verm);
+  const gable = mesh(new THREE.ConeGeometry(2.6, 2.4, 3), verm, HX + 30, 11.3, HZ, g);
   gable.rotation.z = Math.PI;
   gable.rotation.y = Math.PI / 2;
   gable.scale.set(1, 1, 0.3);

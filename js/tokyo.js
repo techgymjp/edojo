@@ -652,7 +652,7 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
   const maru = buildMarunouchi(scene);
   // 日枝神社の山王の丘の森 (丘の上の社殿が宙に浮いて見えないように、斜面に木を植える)
   {
-    const [hx, hz] = [(139.7397 - W.W) * W.KX, (W.N - 35.6748) * W.KZ];
+    const [hx, hz] = [(139.7399 - W.W) * W.KX, (W.N - 35.67585) * W.KZ];
     const geo = new THREE.ConeGeometry(3.2, 9, 7).translate(0, 4.5, 0);
     const N = 90, im = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ color: 0x2f5a2c }), N);
     const m4 = new THREE.Matrix4(); let k = 0, seed = 11;
