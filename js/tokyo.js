@@ -424,8 +424,8 @@ function buildMarunouchi(scene) {
       mk(new THREE.BoxGeometry(5.6, 5, 0.3), DARK, fx - ux * s * 0.05, deckY + 2.1, fz - uz * s * 0.05);
     }
     // 駅のホーム
-    // (四ツ谷: 北寄り 165m に、両側のホームと太陽光パネルの屋根)
-    if (opt.station) { const PL = Math.min(L, 165), off = -L / 2 + PL / 2 + 8, px = cx + ux * off, pz = cz + uz * off;
+    // (四ツ谷: 北の端から platStart m の所から 220m、両側のホームと太陽光パネルの屋根)
+    if (opt.station) { const PL = Math.min(L, 220), off = -L / 2 + PL / 2 + (opt.platStart ?? 8), px = cx + ux * off, pz = cz + uz * off;
       for (const sd of [-1, 1]) {
         mk(new THREE.BoxGeometry(3.5, 1.1, PL), PLAT, px - uz * sd * 4.8, deckY + 0.55, pz + ux * sd * 4.8);
         mk(new THREE.BoxGeometry(6, 0.35, PL), SOLAR, px - uz * sd * 4.8, deckY + 4.6, pz + ux * sd * 4.8);
@@ -451,9 +451,10 @@ function buildMarunouchi(scene) {
   {
     // 四ツ谷: 新宿通り (四谷見附橋) の下から南へ、中央線と並んで谷の中を走る (甲州街道とは並ばない)
     // 航空写真のとおり: 太陽光パネルの屋根のホームが、新宿通りの下から真南へまっすぐ。中央線・総武線はその下をくぐって南西へ
-    const A = ll2(35.68600, 139.73026), B = ll2(35.68290, 139.73026);
+    // 四谷見附の交差点 (新宿通りの南) で地上に出て、南端 (迎賓館・水面の側) でトンネルに入る。ホームは真ん中より南寄り
+    const A = ll2(35.68570, 139.73024), B = ll2(35.68200, 139.73021);
     const bank = Math.min(terrainH(...A), terrainH(...B));
-    site(A, B, 160, Math.max(waterY(...ll2(35.6853, 139.7306)) + 5, bank - 4), { station: true });
+    site(A, B, 160, Math.max(waterY(...ll2(35.6853, 139.7306)) + 5, bank - 4), { station: true, platStart: 140 });
   }
   return {
     sites,
