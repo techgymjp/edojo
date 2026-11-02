@@ -40,6 +40,13 @@
   <div id="help" class="help">W 長押しで加速　S ブレーキ　A/D 舵　Space ジャンプ（長押しで高く）　J・左クリック 投げ銭　K・右クリック 投げ輪　Q/E 視点</div>
   <div id="joyzone"></div>
   <div id="joybase"><div id="joyknob"></div></div>
+  <!-- スマホ: 移動は左下の十字ボタン (前 = 長押しで加速・後 = ブレーキ・左右 = 舵) -->
+  <div id="dpad">
+    <button id="padUp" class="dbtn up">前</button>
+    <button id="padLeft" class="dbtn left">左</button>
+    <button id="padRight" class="dbtn right">右</button>
+    <button id="padDown" class="dbtn down">後</button>
+  </div>
   <div id="tbtns">
     <button id="btnLasso" class="tbtn lasso">なわ</button>
     <button id="btnCoin" class="tbtn coin">ぜに</button>
@@ -77,18 +84,18 @@
       <li><b>忍者の動き</b>：外堀の外のビルの屋上に現れ、<b>ムササビの術</b>で外堀へ飛び込む → <b>水遁の術</b>で竹筒だけを出して外堀を渡る（水の中にいるときは ▼ が出る）→ 内堀の方へ外堀を横切って向こう岸をよじ登り、内堀まで歩く → 内堀に飛び込み、竹筒で江戸城の石垣へ → 石垣をよじ登って本丸へ。本丸に忍び込まれたら負け。石垣はよじ登るのに時間がかかるので、しとめやすい。</li>
       <li><b>ぜに（投げ銭）</b>：水遁の術で水の中を渡っている忍者（竹筒）専用。40m 以内の一番近い竹筒へ、光の弾で 5 連射。当たれば忍者は宙に浮いてドボン。</li>
       <li><b>なわ（投げ輪）</b>：30〜150m の一番近い忍者へ、カーブをかけて投げる。当たれば忍者を空へ引き上げて、お濠へドボン。投げ直しに少し時間がかかる。</li>
-      <li><b>加速</b>：上（W・↑・スティックを前）を長押しするほど、どんどん速くなる。下でブレーキ。</li>
+      <li><b>加速</b>：上（W・↑・「前」ボタン）を長押しするほど、どんどん速くなる。下でブレーキ。</li>
       <li><b>ジャンプ</b>：長押しするほど高く跳ぶ。土橋や低い岸を跳び越えられる（陸に落ちたら水に戻る）。</li>
       <li><b>ワープ</b>：本当はつながっていないお濠（半蔵門の土橋など）には、水色の渦のワープがある。入ると向こう側のお濠へ出る。</li>
       <li>狙う相手は自動で、前（舳先から左右 70 度）にいる一番近い忍者。後ろの忍者には投げられない。距離が合っていれば当たる。</li>
     </ul>
     <table>
       <tr><th></th><th>パソコン</th><th>スマホ</th></tr>
-      <tr><td>進む・舵</td><td>W 長押しで加速・S ブレーキ・A/D 舵</td><td>画面の左をなぞる (前に倒すと加速)</td></tr>
+      <tr><td>進む・舵</td><td>W 長押しで加速・S ブレーキ・A/D 舵</td><td>左下の「前」長押しで加速・「後」でブレーキ・「左」「右」で舵</td></tr>
       <tr><td>ジャンプ</td><td>Space (長押しで高く)</td><td>「ジャンプ」長押し</td></tr>
       <tr><td>ぜに</td><td>J・左クリック</td><td>「ぜに」</td></tr>
       <tr><td>なわ</td><td>K・右クリック</td><td>「なわ」</td></tr>
-      <tr><td>視点</td><td>Q/E・ホイール</td><td>画面の右をなぞる</td></tr>
+      <tr><td>視点</td><td>Q/E・ホイール</td><td>画面をなぞる</td></tr>
       <tr><td>一時停止</td><td>P・Esc</td><td>「止」</td></tr>
     </table>
     <button id="howtoClose" class="btn primary">閉じる</button>

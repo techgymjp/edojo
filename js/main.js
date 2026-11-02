@@ -108,7 +108,7 @@ const joyzone = $('joyzone'), joybase = $('joybase'), joyknob = $('joyknob');
 let joyId = null, joyX = 0, joyY = 0, lookId = null, lookX = 0;
 joyzone.addEventListener('touchstart', (e) => {
   for (const t of e.changedTouches) {
-    if (joyId === null && t.clientX < innerWidth * 0.5) {
+    if (false && joyId === null && t.clientX < innerWidth * 0.5) { // スティックはやめて、十字ボタンにした (なぞると視点)
       joyId = t.identifier; joyX = t.clientX; joyY = t.clientY;
       joybase.style.display = 'block'; joybase.style.left = joyX + 'px'; joybase.style.top = joyY + 'px'; joyknob.style.transform = 'translate(-50%,-50%)';
       I.joy = { x: 0, y: 0 };
@@ -145,6 +145,11 @@ const holdBtn = (id, on, off) => {
 holdBtn('btnCam', () => toggleCam());
 holdBtn('btnJump', () => { I.tJump = true; }, () => { I.tJump = false; });
 holdBtn('btnLasso', () => I.pressed.add('Lasso'));
+// 十字ボタン: キーボードの W・S・A・D と同じ (押している間だけ)
+for (const [id, code] of [['padUp', 'KeyW'], ['padDown', 'KeyS'], ['padLeft', 'KeyA'], ['padRight', 'KeyD']]) {
+  holdBtn(id, () => { I.keys.add(code); $(id).classList.add('on'); }, () => { I.keys.delete(code); $(id).classList.remove('on'); });
+  $(id).addEventListener('touchcancel', () => { I.keys.delete(code); $(id).classList.remove('on'); });
+}
 holdBtn('btnCoin', () => I.pressed.add('Coin'));
 
 // ---------- 読み込み ----------

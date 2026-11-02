@@ -4,6 +4,6 @@
     <string name="title_activity_main">風雲江戸城</string>
     <string name="package_name">jp.techgym.edojo</string>
     <string name="custom_url_scheme">jp.techgym.edojo</string>
-    <!-- AdMob のアプリ ID。本番の ID が届くまでは Google 公式のテスト用アプリ ID -->
-    <string name="admob_app_id">ca-app-pub-3940256099942544~3347511713</string>
+    <!-- AdMob のアプリ ID (Android アプリ「風雲江戸城」) -->
+    <string name="admob_app_id">ca-app-pub-6411535997477460~6371854619</string>
 </resources>

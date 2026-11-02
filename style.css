@@ -158,3 +158,22 @@ body.app #help, body.app .howto-panel table th:nth-child(2), body.app .howto-pan
   .panel h2 { margin: 4px 0; }
   .panel .btn { margin-top: 6px; }
 }
+
+/* スマホ: 移動の十字ボタン (左下) */
+#dpad { position: absolute; left: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); display: none; grid-template-columns: repeat(3, 60px); grid-template-rows: repeat(3, 60px); gap: 4px; pointer-events: auto; z-index: 2; }
+.dbtn { font: inherit; font-weight: 800; font-size: 18px; color: #fff; text-shadow: 0 1px 2px #000; border: 2px solid rgba(255,255,255,0.55); background: rgba(30, 40, 60, 0.55); border-radius: 14px; touch-action: none; user-select: none; -webkit-user-select: none; }
+.dbtn.on { background: rgba(255, 210, 120, 0.6); }
+.dbtn.up { grid-column: 2; grid-row: 1; }
+.dbtn.left { grid-column: 1; grid-row: 2; }
+.dbtn.right { grid-column: 3; grid-row: 2; }
+.dbtn.down { grid-column: 2; grid-row: 3; }
+@media (hover: none), (pointer: coarse) {
+  #dpad { display: grid; }
+}
+@media (orientation: landscape) and (max-height: 500px) {
+  #dpad { grid-template-columns: repeat(3, 52px); grid-template-rows: repeat(3, 52px); }
+}
+@media (pointer: coarse) and (orientation: landscape) and (max-height: 500px) {
+  /* 横画面のスマホ: 左下は十字ボタンなので、ミニマップは右上 (視・止の下) へ */
+  #minimap { left: auto; right: 8px; top: calc(56px + env(safe-area-inset-top)); bottom: auto; width: min(26vw, 200px); height: min(23.4vw, 180px); }
+}
