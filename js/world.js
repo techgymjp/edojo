@@ -107,11 +107,22 @@ const GROUND_RGB = [
 
 function hash(i) { i = (i ^ 61) ^ (i >>> 16); i *= 9; i ^= i >>> 4; i *= 0x27d4eb2d; i ^= i >>> 15; return (i >>> 0) / 4294967296; }
 
+// 真田濠のまわりの緑: 東は土手の緑道、西は外堀通りの向こうの緑地
+export function sanadaGreen(x, z) {
+  const [ax, az] = ll(35.68575, 139.72990), [bx, bz] = ll(35.68170, 139.73225);
+  const vx = bx - ax, vz = bz - az, L2 = vx * vx + vz * vz, t = ((x - ax) * vx + (z - az) * vz) / L2;
+  if (t < -0.02 || t > 1.02) return false;
+  const px = x - ax - vx * t, pz = z - az - vz * t, d = Math.hypot(px, pz);
+  // 東側 (ソフィア通りまでの緑道) は 112m まで、西側 (外堀通り 405 の向こうの緑地: 若葉東公園・迎賓館の前庭のあたり) は 170m まで
+  return (vx * pz - vz * px) < 0 ? d > 36 && d < 112 : d > 36 && d < 170;
+}
 function makeGroundTextures() {
   const n = W.w * W.h;
   const col = new Uint8Array(n * 4);
   for (let k = 0; k < n; k++) {
-    const c = W.code[k], b = GROUND_RGB[c];
+    const c = W.code[k];
+    let b = GROUND_RGB[c];
+    if (c === 5 && sanadaGreen(((k % W.w) + 0.5) * W.res, (Math.floor(k / W.w) + 0.5) * W.res)) b = [92, 150, 62];
     const r = (hash(k) - 0.5) * 14;
     // 今の東京は道路の白線っぽい明暗、江戸は土のむら
     col[k * 4] = Math.max(0, Math.min(255, b[0] + r));
