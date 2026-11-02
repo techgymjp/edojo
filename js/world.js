@@ -397,7 +397,8 @@ export function buildWalls(scene) {
     const dote = isDote(mx, mz);
     if (dote) {
       // 真田濠は石垣なし: 岸は全部、勾配のついた緑の土手 (地形を水ぎわまで下げてある)。水ぎわは低い草の縁だけ
-      if (inSanada(mx, mz)) { quad(grass, ax, az, bx, bz, y0, Math.min(y1, waterY(mx, mz) + 0.6), nx, nz, u0, u1, 4); return; }
+      // 草の縁は、水面から地面のメッシュ (16m 格子の斜面) の高さまで立てる (あいだにすき間ができて透けないように)
+      if (inSanada(mx, mz)) { quad(grass, ax, az, bx, bz, y0, Math.max(waterY(mx, mz) + 0.6, groundMeshH(mx, mz) + 0.4, groundMeshH(mx - nx * 4, mz - nz * 4) + 0.4), nx, nz, u0, u1, 4); return; }
       // 水ぎわの垂直な壁は石垣。その上の斜面 (地形) は緑の土手
       quad(stone, ax, az, bx, bz, y0, y1, nx, nz, u0, u1, 3.2);
       if (hc === 3 || hc === 4) doteSegs.push({ ax, az, bx, bz, nx, nz, y: y1, len, off: 0 });
