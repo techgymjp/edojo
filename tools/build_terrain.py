@@ -194,6 +194,27 @@ if ring.any():
 vm = land & (lat > 35.6960) & (lat < 35.6990) & (lon > 139.7680) & (lon < 139.7725) & (T > 5.2)
 T = np.where(vm, 4.5, T).astype(np.float32)
 print('万世橋の南岸 (レンガ高架) を下げる', int(vm.sum()))
+# 日枝神社の丘・弁慶濠の南岸も、水ぎわから勾配のある緑の土手で上がる (石垣にしない)
+def slope_bank(box, run=25):
+    la0, la1, lo0, lo1 = box
+    y0b, y1b = int((N - la1) * KZ / RES), int((N - la0) * KZ / RES); x0b, x1b = int((lo0 - W) * KX / RES), int((lo1 - W) * KX / RES)
+    sub_w = water[y0b:y1b, x0b:x1b]; dist = np.full(sub_w.shape, np.inf, np.float32)
+    from collections import deque as _d
+    q = _d(); 
+    for (a, b) in zip(*np.nonzero(sub_w)): dist[a, b] = 0; q.append((a, b))
+    while q:
+        a, b = q.popleft(); dv = dist[a, b] + RES
+        if dv > run: continue
+        for yy, xx in ((a + 1, b), (a - 1, b), (a, b + 1), (a, b - 1)):
+            if 0 <= yy < dist.shape[0] and 0 <= xx < dist.shape[1] and not sub_w[yy, xx] and dv < dist[yy, xx]: dist[yy, xx] = dv; q.append((yy, xx))
+    Ts = T[y0b:y1b, x0b:x1b]; Ws = WL[y0b:y1b, x0b:x1b]
+    wl0 = float(np.nanmedian(Ws[sub_w])) if sub_w.any() else 0
+    k = np.clip(dist / run, 0, 1); k = k * k * (3 - 2 * k)
+    ring_ = (~sub_w) & (dist < run)
+    T[y0b:y1b, x0b:x1b] = np.where(ring_, np.minimum(Ts, wl0 + 0.8 + (Ts - wl0 - 0.8) * k), np.where(sub_w, wl0 - 1.5, Ts))
+    print('土手の斜面', box, int(ring_.sum()))
+slope_bank((35.6715, 35.6775, 139.7370, 139.7455), 40)
+slope_bank((35.6770, 35.6812, 139.7325, 139.7390), 25)
 def save(a, name):
     v = np.clip(np.round((a + 20) * 200), 0, 65535).astype(np.uint32)
     rgb = np.stack([(v >> 8).astype(np.uint8), (v & 255).astype(np.uint8), np.zeros_like(v, np.uint8)], -1)

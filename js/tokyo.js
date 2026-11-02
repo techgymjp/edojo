@@ -9,7 +9,7 @@ import { SHUTOKO } from './shutoko-data.js';
 import { RAIL } from './rail-data.js';
 import { addTokyoTower, addDiet, addTechGym, addTokyoDome, addBudokan, addGeihinkan, addSkytree, addFuji, addDistant } from './tokyo/landmarks.js';
 import { addOchanomizu, addTokyoStation, addAkasaka, addRailways, addAkibaSigns, addNewOtani, addYotsuyaKudan, addGinzaNihonbashi, addUeno, addSensoji, addAsahi, addUenoAsakusa } from './tokyo/landmarks2.js';
-import { W, codeAt, isWater, LEVEL_H, waterY, nearWaterGrid, groundMeshH, sanadaGreen } from './world.js';
+import { W, codeAt, isWater, LEVEL_H, waterY, nearWaterGrid, groundMeshH, sanadaGreen, inAkasaka } from './world.js';
 // 地面の上に置くもの (線路・道・橋のたもと・ビル) は、描いている地面のメッシュ (16m 格子) と同じ高さに合わせる (細かい標高だとメッシュに潜って途切れて見える)
 const terrainH = groundMeshH;
 import { mergeStatic } from './merge.js';
@@ -500,13 +500,13 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
     }
   } };
   let dropped = 0;
-  const GHX = (139.72810 - 139.745) * KXT, GHZ = -(35.68030 - 35.674) * KZT, DTX = (139.74480 - 139.745) * KXT, DTZ = -(35.67590 - 35.674) * KZT;
+  const GHX = (139.72830 - 139.745) * KXT, GHZ = -(35.68000 - 35.674) * KZT, DTX = (139.74480 - 139.745) * KXT, DTZ = -(35.67590 - 35.674) * KZT;
   for (const bd of city.bld) {
     if (!bd.plateau) continue;
     const pts = [[bd.cx, bd.cz], [(bd.minx + bd.cx) / 2, bd.cz], [(bd.maxx + bd.cx) / 2, bd.cz], [bd.cx, (bd.minz + bd.cz) / 2], [bd.cx, (bd.maxz + bd.cz) / 2]];
     if (bad(bd.cx, bd.cz) || pts.filter(([x, z]) => bad(x, z)).length >= 2) { bd.plateau = false; dropped++; continue; }
     // 手で作る名所 (迎賓館) の所の PLATEAU のビルは描かない
-    if (Math.hypot(bd.cx - GHX, bd.cz - GHZ) < 95 || Math.hypot(bd.cx - DTX, bd.cz - DTZ) < 175 || sanadaGreen(bd.cx + OX, bd.cz + OZ)) { bd.plateau = false; dropped++; continue; }
+    if ((Math.abs(bd.cx - GHX) < 80 && bd.cz - GHZ < 40 && bd.cz - GHZ > -250) || Math.hypot(bd.cx - DTX, bd.cz - DTZ) < 175 || sanadaGreen(bd.cx + OX, bd.cz + OZ) || inAkasaka(bd.cx + OX, bd.cz + OZ)) { bd.plateau = false; dropped++; continue; }
     // 小舟から見えるのは川・お濠に面した街と高いビルだけ。水から 200m より奥の低いビルは描かない (軽くする)
     if (bd.h < 45 && !nearWaterGrid(bd.cx + OX, bd.cz + OZ, 200)) { bd.plateau = false; bd.far = true; }
   }

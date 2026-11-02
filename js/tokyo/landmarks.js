@@ -788,46 +788,57 @@ export function addDistant(scene) {
   };
 }
 
-// 迎賓館 赤坂離宮 (港区元赤坂2-1-1)。ネオ・バロックの宮殿: 白い石の正面 (北) と、南へのびる東西の翼、緑青の屋根、
-// 正面の中央の高い屋根と金の飾り。幅 約125m・奥行 約90m・高さ 約23m
+// 迎賓館 赤坂離宮 (港区元赤坂2-1-1)。ネオ・バロックの宮殿: 灰白色の花崗岩、緑青の屋根。正面は北 (四谷の方) で、
+// 中央の本館から左右の翼が北へ弧を描いて張り出す (上から見て「コ」の字が北に開く)。北に石畳の前庭、その先に木の並ぶ庭
 export function addGeihinkan(scene, city) {
-  const [X, Z] = ll(35.68030, 139.72810);
+  const [X, Z] = ll(35.68000, 139.72830);
   const g = new THREE.Group();
   g.position.set(X, 0, Z);
   const wallTex = canvasTex(256, 64, (c, w, h) => {
-    c.fillStyle = '#ece6d6'; c.fillRect(0, 0, w, h);
-    c.fillStyle = '#d6cdb8'; c.fillRect(0, h * 0.46, w, 3); c.fillRect(0, h * 0.9, w, 6);
+    c.fillStyle = '#d9d7d0'; c.fillRect(0, 0, w, h);
+    c.fillStyle = '#c4c1b8'; c.fillRect(0, h * 0.47, w, 3); c.fillRect(0, h * 0.9, w, 6); c.fillRect(0, 0, w, 4);
     for (let x = 0; x < w; x += 16) {
-      c.fillStyle = '#3c4650'; c.fillRect(x + 4, 8, 8, h * 0.3); c.fillRect(x + 4, h * 0.54, 8, h * 0.3);
-      c.fillStyle = '#f6f2e8'; c.fillRect(x, 0, 2, h);
+      c.fillStyle = '#4a5560'; c.fillRect(x + 5, 10, 6, h * 0.28); c.fillRect(x + 5, h * 0.55, 6, h * 0.28);
+      c.fillStyle = '#ebe9e3'; c.fillRect(x, 0, 2, h);
     }
   });
   wallTex.wrapS = THREE.RepeatWrapping;
-  const roofM = new THREE.MeshLambertMaterial({ color: 0x6fa58c });
+  const roofM = new THREE.MeshLambertMaterial({ color: 0x7fb8a0 });
   const gold = new THREE.MeshLambertMaterial({ color: 0xd8b040, emissive: 0x2a1c00 });
-  const wing = (lx, lz, w, d, h, rot = 0) => {
-    const t = wallTex.clone(); t.needsUpdate = true; t.repeat.set(Math.max(w, d) / 16, 1);
+  const block = (lx, lz, w, d, h, rot = 0) => {
+    const t = wallTex.clone(); t.needsUpdate = true; t.repeat.set(Math.max(w, d) / 14, 1);
     const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshLambertMaterial({ map: t }));
-    b.position.set(lx, h / 2, lz); g.add(b);
-    // マンサード屋根 (緑青)
-    const r = new THREE.Mesh(new THREE.CylinderGeometry(Math.SQRT1_2 * 0.82, Math.SQRT1_2, 1, 4, 1), roofM);
-    r.rotation.y = Math.PI / 4; r.scale.set(w + 1, 5, d + 1); r.position.set(lx, h + 2.5, lz); g.add(r);
-    city.addBox(X + lx, Z + lz, w, d, 0, h + 4, '迎賓館');
+    b.position.set(lx, h / 2, lz); b.rotation.y = rot; g.add(b);
+    const r = new THREE.Mesh(new THREE.CylinderGeometry(Math.SQRT1_2 * 0.8, Math.SQRT1_2, 1, 4, 1), roofM);
+    r.rotation.y = Math.PI / 4 + rot; r.scale.set(w + 1, 4, d + 1); r.position.set(lx, h + 2, lz); g.add(r);
+    const cs = Math.cos(rot), sn = Math.sin(rot);
+    city.addBox(X + lx, Z + lz, Math.abs(w * cs) + Math.abs(d * sn), Math.abs(w * sn) + Math.abs(d * cs), 0, h + 3, '迎賓館');
   };
-  // 正面 (北側) の横長の本館と、南へのびる東西の翼 (上から見て「凹」の形)
-  wing(0, -30, 125, 24, 18);
-  wing(-50, 10, 24, 60, 18);
-  wing(50, 10, 24, 60, 18);
-  // 中央の玄関の張り出しと高い屋根、金の飾り (鎧武者・天球儀の代わり)
-  wing(0, -44, 34, 10, 21);
+  // 中央の本館 (東西 70m) と、両端から北へ弧を描く翼 (3 つに分けて少しずつ向きを変える)
+  block(0, 8, 70, 26, 19);
+  for (const sx of [-1, 1]) {
+    block(sx * 44, 2, 22, 22, 19, sx * 0.25);
+    block(sx * 55, -18, 18, 24, 19, sx * 0.45);
+    block(sx * 60, -40, 16, 22, 19, sx * 0.2);
+    // 翼の先の角の小さな屋根と、切妻の飾り
+    const p = new THREE.Mesh(new THREE.ConeGeometry(6, 5, 4), roofM); p.rotation.y = Math.PI / 4; p.position.set(sx * 60, 24, -46); g.add(p);
+  }
+  // 中央の玄関の張り出し、高い屋根、金の飾り (鎧武者)、左右の緑青のドーム
+  block(0, -8, 26, 10, 21);
   const top = new THREE.Mesh(new THREE.CylinderGeometry(Math.SQRT1_2 * 0.4, Math.SQRT1_2, 1, 4, 1), roofM);
-  top.rotation.y = Math.PI / 4; top.scale.set(30, 9, 22); top.position.set(0, 27, -32); g.add(top);
-  for (const sx of [-14, 0, 14]) { const o = new THREE.Mesh(new THREE.SphereGeometry(1.2, 10, 8), gold); o.position.set(sx, sx === 0 ? 32.5 : 24, -42); g.add(o); }
-  // 正面の前庭 (砂利の広場) と黒と金の門
-  const yard = new THREE.Mesh(new THREE.PlaneGeometry(120, 70), new THREE.MeshLambertMaterial({ color: 0xcfc6b0 }));
-  yard.rotation.x = -Math.PI / 2; yard.position.set(0, 0.15, -80); g.add(yard);
-  const gate = new THREE.Mesh(new THREE.BoxGeometry(60, 4, 0.6), new THREE.MeshLambertMaterial({ color: 0x1e2226 }));
-  gate.position.set(0, 2, -116); g.add(gate);
+  top.rotation.y = Math.PI / 4; top.scale.set(24, 7, 18); top.position.set(0, 25, 2); g.add(top);
+  for (const sx of [-1, 0, 1]) { const o = new THREE.Mesh(new THREE.SphereGeometry(1.2, 10, 8), gold); o.position.set(sx * 9, sx === 0 ? 29.5 : 26, -12); g.add(o); }
+  for (const sx of [-1, 1]) { const dm = new THREE.Mesh(new THREE.SphereGeometry(3, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), roofM); dm.position.set(sx * 24, 21, -4); g.add(dm); }
+  // 北の石畳の前庭 (広場) と、その先の木の並ぶ庭
+  const yard = new THREE.Mesh(new THREE.PlaneGeometry(130, 90), new THREE.MeshLambertMaterial({ color: 0xb8b4aa }));
+  yard.rotation.x = -Math.PI / 2; yard.position.set(0, 0.2, -60); g.add(yard);
+  const treeG = new THREE.SphereGeometry(2.6, 8, 6), trunkG = new THREE.CylinderGeometry(0.25, 0.35, 3, 6);
+  const leaf = new THREE.MeshLambertMaterial({ color: 0x4f7a3a }), trunkM = new THREE.MeshLambertMaterial({ color: 0x5a4030 });
+  for (let zz = -125; zz >= -230; zz -= 13) for (let xx = -55; xx <= 55; xx += 13) {
+    if (Math.abs(xx) < 8) continue; // 真ん中の道
+    const t = new THREE.Mesh(trunkG, trunkM); t.position.set(xx, 1.5, zz); g.add(t);
+    const l = new THREE.Mesh(treeG, leaf); l.scale.y = 1.2; l.position.set(xx, 4.6, zz); g.add(l);
+  }
   scene.add(g);
   return { pos: [X, Z] };
 }

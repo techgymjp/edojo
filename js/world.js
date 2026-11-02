@@ -130,7 +130,16 @@ export function inSanada(x, z) {
   const vx = bx - ax, vz = bz - az, t = ((x - ax) * vx + (z - az) * vz) / (vx * vx + vz * vz);
   return t > -0.08 && t < 1.1 && Math.hypot(x - ax - vx * t, z - az - vz * t) < 120;
 }
+// 赤坂御用地 (迎賓館・東宮御所と庭): 外堀通り (405) と外苑東通り (414)・青山通りのあいだは緑地
+const AKASAKA_LL = [[35.6838, 139.7272], [35.6834, 139.7306], [35.6812, 139.7314], [35.6795, 139.7328], [35.6778, 139.7350], [35.6748, 139.7345], [35.6745, 139.7245], [35.6790, 139.7235], [35.6815, 139.7255]];
+let AKASAKA = null;
+export function inAkasaka(x, z) { if (!AKASAKA) AKASAKA = AKASAKA_LL.map(([la, lo]) => ll(la, lo)); return pip(AKASAKA, x, z); }
+// 日枝神社の山王の丘 (溜池の西岸): 石垣なし、緑の山
+export function inHie(x, z) { const lo = W.W + x / W.KX, la = W.N - z / W.KZ; return lo > 139.7370 && lo < 139.7455 && la > 35.6715 && la < 35.6775; }
+// 弁慶濠の南の岸 (紀尾井町側でない方、ホテルニューオータニの向かい): 土手
+export function inBenkeiBank(x, z) { const lo = W.W + x / W.KX, la = W.N - z / W.KZ; return lo > 139.7325 && lo < 139.7390 && la > 35.6770 && la < 35.6812; }
 export function sanadaGreen(x, z) {
+  if (inAkasaka(x, z)) return true;
   const [ax, az] = ll(35.68575, 139.72990), [bx, bz] = ll(35.68170, 139.73225);
   const vx = bx - ax, vz = bz - az, L2 = vx * vx + vz * vz, t = ((x - ax) * vx + (z - az) * vz) / L2;
   if (t < -0.02 || t > 1.08) return false;
@@ -141,9 +150,15 @@ export function sanadaGreen(x, z) {
 function makeGroundTextures() {
   const n = W.w * W.h;
   const col = new Uint8Array(n * 4);
+  // 外堀の西 (牛込濠〜弁慶濠) の土手のあたりは、水ぎわから 25m ほどの今の東京の地面も緑地 (灰色の地面にしない)
+  const nearW = new Uint8Array(n);
+  { const R = 8; let cur = new Uint8Array(n); for (let k = 0; k < n; k++) cur[k] = W.code[k] === 0 ? 1 : 0;
+    for (let it = 0; it < R; it++) { const nx = cur.slice(); for (let j = 1; j < W.h - 1; j++) for (let i = 1; i < W.w - 1; i++) { const k = j * W.w + i; if (!cur[k] && (cur[k - 1] || cur[k + 1] || cur[k - W.w] || cur[k + W.w])) nx[k] = 1; } cur = nx; }
+    for (let k = 0; k < n; k++) nearW[k] = cur[k] && W.code[k] === 5 ? 1 : 0; }
   for (let k = 0; k < n; k++) {
     const c = W.code[k];
     let b = GROUND_RGB[c];
+    if (nearW[k]) { const x = ((k % W.w) + 0.5) * W.res, z = (Math.floor(k / W.w) + 0.5) * W.res; if (isDote(x, z) || inSanada(x, z) || inHie(x, z) || inBenkeiBank(x, z)) b = [92, 150, 62]; }
     if (c === 5 && sanadaGreen(((k % W.w) + 0.5) * W.res, (Math.floor(k / W.w) + 0.5) * W.res)) b = [92, 150, 62];
     const r = (hash(k) - 0.5) * 14;
     // 今の東京は道路の白線っぽい明暗、江戸は土のむら
@@ -162,7 +177,7 @@ function makeGroundTextures() {
   // 土手の所は印を足す (斜面を石垣ではなく草にする)
   for (let j = 0; j < W.h; j++) for (let i = 0; i < W.w; i++) { const k = j * W.w + i; lvData[k] = W.lv[k] * 63 + (W.lv[k] > 0 && isDote((i + 0.5) * W.res, (j + 0.5) * W.res) ? 30 : 0); }
   // 真田濠の中は地面を切り抜かない (地形を水面の下へ下げてあるので、土手の斜面が水の中までつながり、すき間から空が透けない)
-  for (let j = 0; j < W.h; j++) for (let i = 0; i < W.w; i++) { const k = j * W.w + i; if (W.lv[k] === 0 && inSanada((i + 0.5) * W.res, (j + 0.5) * W.res)) lvData[k] = 40; }
+  for (let j = 0; j < W.h; j++) for (let i = 0; i < W.w; i++) { const k = j * W.w + i; if (W.lv[k] === 0 && (inSanada((i + 0.5) * W.res, (j + 0.5) * W.res) || inHie((i + 0.5) * W.res, (j + 0.5) * W.res) || inBenkeiBank((i + 0.5) * W.res, (j + 0.5) * W.res))) lvData[k] = 40; }
   const lvTex = new THREE.DataTexture(lvData, W.w, W.h, THREE.RedFormat);
   lvTex.unpackAlignment = 1;
   lvTex.magFilter = THREE.LinearFilter; lvTex.minFilter = THREE.LinearFilter; lvTex.generateMipmaps = false;
@@ -396,11 +411,11 @@ export function buildWalls(scene) {
       // 急な斜面は崖の形と合わず崩れるので、垂直の所は石垣にする
       quad(stone, ax, az, bx, bz, y0, y1, nx, nz, u0, u1, 3.2); return;
     }
-    const dote = isDote(mx, mz);
+    const dote = isDote(mx, mz) || inHie(mx, mz) || inBenkeiBank(mx, mz);
     if (dote) {
       // 真田濠は石垣なし: 岸は全部、勾配のついた緑の土手 (地形を水ぎわまで下げてある)。水ぎわは低い草の縁だけ
       // 草の縁は、水面から地面のメッシュ (16m 格子の斜面) の高さまで立てる (あいだにすき間ができて透けないように)
-      if (inSanada(mx, mz)) { quad(grass, ax, az, bx, bz, y0, Math.max(waterY(mx, mz) + 0.6, groundMeshH(mx, mz) + 0.4, groundMeshH(mx - nx * 4, mz - nz * 4) + 0.4), nx, nz, u0, u1, 4); return; }
+      if (inSanada(mx, mz) || inHie(mx, mz) || inBenkeiBank(mx, mz)) { quad(grass, ax, az, bx, bz, y0, Math.max(waterY(mx, mz) + 0.6, groundMeshH(mx, mz) + 0.4, groundMeshH(mx - nx * 4, mz - nz * 4) + 0.4), nx, nz, u0, u1, 4); return; }
       // 水ぎわの垂直な壁は石垣。その上の斜面 (地形) は緑の土手
       quad(stone, ax, az, bx, bz, y0, y1, nx, nz, u0, u1, 3.2);
       if (hc === 3 || hc === 4) doteSegs.push({ ax, az, bx, bz, nx, nz, y: y1, len, off: 0 });
