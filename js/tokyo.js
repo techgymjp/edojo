@@ -71,6 +71,10 @@ export function addCutaway(mat) {
 // ---- 国土地理院の鉄道データの線路と電車 ----
 const SUIX = (139.7530 - 139.745) * 111320 * Math.cos(35.674 * Math.PI / 180), SUIZ = -(35.7020 - 35.674) * 110574;
 function buildRail(root, city, OX, OZ) {
+  // 四ツ谷の丸ノ内線は手で作る (buildMarunouchi) ので、国土地理院データの丸ノ内線 (JR 以外) の四ツ谷の区間は描かない (3 本に見えないように)
+  { const K = 111320 * Math.cos(35.674 * Math.PI / 180);
+    for (let i = RAIL.length - 1; i >= 0; i--) { const r = RAIL[i]; if (r.jr) continue;
+      if (r.x.some((x, j) => { const lo = 139.745 + x / K, la = 35.674 - r.z[j] / 110574; return la > 35.6815 && la < 35.6875 && lo > 139.7280 && lo < 139.7330; })) RAIL.splice(i, 1); } }
   const deck = { p: [], n: [], c: [] };
   // 面の表 (反時計回り) が法線の向きになるように並べる (両面表示で裏の法線が反転して黒くならないように)
   const _o = (a, b, c2, n) => { const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c2[0] - a[0], vy = c2[1] - a[1], vz = c2[2] - a[2]; return (uy * vz - uz * vy) * n[0] + (uz * vx - ux * vz) * n[1] + (ux * vy - uy * vx) * n[2] >= 0; };
@@ -399,7 +403,7 @@ function buildMarunouchi(scene) {
   const ll2 = (la, lo) => [(lo - W.W) * W.KX, (W.N - la) * W.KZ];
   const RED = new THREE.MeshLambertMaterial({ color: 0xe60012 }), WHITE = new THREE.MeshLambertMaterial({ color: 0xf2f2ee }), WIN = new THREE.MeshLambertMaterial({ color: 0x24303c });
   const STEEL = new THREE.MeshLambertMaterial({ color: 0x5e6670 }), DARK = new THREE.MeshBasicMaterial({ color: 0x0a0a0c }), CON = new THREE.MeshLambertMaterial({ color: 0x9a9a96 });
-  const PLAT = new THREE.MeshLambertMaterial({ color: 0xc8c4bb }), ROOF = new THREE.MeshLambertMaterial({ color: 0x6a737c });
+  const PLAT = new THREE.MeshLambertMaterial({ color: 0xc8c4bb }), ROOF = new THREE.MeshLambertMaterial({ color: 0x6a737c }), SOLAR = new THREE.MeshLambertMaterial({ color: 0x3a4f78 });
   const sites = [];
   const site = (A, B, extend, deckY, opt = {}) => {
     const [ax, az] = A, [bx, bz] = B, L = Math.hypot(bx - ax, bz - az), ux = (bx - ax) / L, uz = (bz - az) / L, rot = Math.atan2(ux, uz);
@@ -420,11 +424,13 @@ function buildMarunouchi(scene) {
       mk(new THREE.BoxGeometry(5.6, 5, 0.3), DARK, fx - ux * s * 0.05, deckY + 2.1, fz - uz * s * 0.05);
     }
     // 駅のホーム
-    if (opt.station) for (const sd of [-1, 1]) {
-      mk(new THREE.BoxGeometry(3.5, 1.1, L), PLAT, cx - uz * sd * 4.8, deckY + 0.55, cz + ux * sd * 4.8);
-      mk(new THREE.BoxGeometry(4.5, 0.25, L), ROOF, cx - uz * sd * 4.8, deckY + 4.6, cz + ux * sd * 4.8);
-      for (let d = -L / 2 + 3; d < L / 2; d += 8) mk(new THREE.BoxGeometry(0.3, 3.5, 0.3), ROOF, cx + ux * d - uz * sd * 4.8, deckY + 2.9, cz + uz * d + ux * sd * 4.8);
-    }
+    // (四ツ谷: 北寄り 165m に、両側のホームと太陽光パネルの屋根)
+    if (opt.station) { const PL = Math.min(L, 165), off = -L / 2 + PL / 2 + 8, px = cx + ux * off, pz = cz + uz * off;
+      for (const sd of [-1, 1]) {
+        mk(new THREE.BoxGeometry(3.5, 1.1, PL), PLAT, px - uz * sd * 4.8, deckY + 0.55, pz + ux * sd * 4.8);
+        mk(new THREE.BoxGeometry(6, 0.35, PL), SOLAR, px - uz * sd * 4.8, deckY + 4.6, pz + ux * sd * 4.8);
+        for (let d = -PL / 2 + 3; d < PL / 2; d += 8) mk(new THREE.BoxGeometry(0.3, 3.5, 0.3), ROOF, px + ux * d - uz * sd * 4.8, deckY + 2.9, pz + uz * d + ux * sd * 4.8);
+      } }
     // 電車 (6 両)。トンネルの中は見えない所まで走る
     const cars = [];
     for (let i = 0; i < 6; i++) {
