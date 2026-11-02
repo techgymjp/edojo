@@ -268,6 +268,10 @@ for _ in range(3):
 changed = (neww != wat).sum()
 A = np.where(neww, 0, np.where(wat, landcode, A)).astype(A.dtype)
 print('smoothed bank cells', int(changed))
+# 四谷見附橋の西のたもと: 橋の下の水が西へはみ出して、外堀通りを切っていた所を陸にする (橋の下で南北の水はつながったまま)
+for y in range(cell(35.68612, 0)[0], cell(35.68568, 0)[0] + 1):
+    for x in range(cell(0, 139.72900)[1], cell(0, 139.73000)[1] + 1):
+        if A[y, x] == 0: A[y, x] = 5
 Image.fromarray(A).save(os.path.join(D, 'map.png'), optimize=True)
 # 水でないマスに端があるワープ、両端が同じ水面のワープは消す
 lab = np.zeros(A.shape, np.int32); n = 0

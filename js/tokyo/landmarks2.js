@@ -562,22 +562,59 @@ export function addAkibaSigns(scene, city) {
 
 // ---------- ホテルニューオータニ 本館 (ザ・メイン): 3方向に伸びる高層棟と、屋上の青い円形ラウンジ ----------
 export function addNewOtani(scene, city) {
-  const [X, Z] = ll(35.68000, 139.73420);
+  // ホテルニューオータニ: 低い基壇 (ロビー・宴会場) の上に、北のザ・メイン (17階、ガラスの壁、屋上に丸い回転ラウンジと四角い冠) と
+  // 南東のガーデンタワー (40階、丸みのある白い横じまの塔、屋上に円筒の冠)。PLATEAU の 1 つの大きな箱の代わり
   const g = new THREE.Group();
-  const wall = M(0xe4e0d6), blue = M(0x2f6fd8, { emissive: 0x0a1c40 });
-  const H = 70;
-  for (let i = 0; i < 3; i++) {
-    const a = i / 3 * Math.PI * 2;
-    const wx = X + Math.sin(a) * 16, wz = Z + Math.cos(a) * 16;
-    const wing = mesh(new THREE.BoxGeometry(14, H, 34), wall, wx, H / 2, wz, g);
-    wing.rotation.y = a;
-    city.addPrism(rectPts(wx, wz, a, 0, 0, 14, 34), 0, H, 'ホテルニューオータニ ザ・メイン').roof = true;
+  const P = (la, lo) => ll(la, lo);
+  // 基壇 (PLATEAU の敷地の形)
+  const site = [[35.67967,139.73521],[35.67952,139.73497],[35.67952,139.73481],[35.67989,139.73478],[35.68000,139.73489],[35.68038,139.73465],[35.68064,139.73463],[35.68057,139.73440],[35.68042,139.73437],[35.68042,139.73379],[35.68054,139.73379],[35.68054,139.73354],[35.68058,139.73343],[35.68114,139.73348],[35.68115,139.73380],[35.68167,139.73417],[35.68153,139.73451],[35.68124,139.73436],[35.68109,139.73454],[35.68095,139.73453],[35.68069,139.73472],[35.68053,139.73497],[35.68066,139.73545],[35.67934,139.73603],[35.67919,139.73551],[35.67918,139.73537],[35.67928,139.73501],[35.67957,139.73520]];
+  const sh = new THREE.Shape();
+  site.forEach(([la, lo], i) => { const [x, z] = P(la, lo); if (i) sh.lineTo(x, -z); else sh.moveTo(x, -z); });
+  const pod = new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: 14, bevelEnabled: false }).rotateX(-Math.PI / 2), M(0xb9a68c));
+  g.add(pod);
+  const podPts = []; for (const [la, lo] of site) podPts.push(...P(la, lo));
+  city.addPrism(podPts, 0, 14, 'ホテルニューオータニ').roof = true;
+  // ザ・メイン: ガラスの壁 (青みがかった灰色の格子)
+  const glass = canvasTex(256, 256, (c, w, h) => {
+    c.fillStyle = '#8a98a6'; c.fillRect(0, 0, w, h);
+    for (let y = 0; y < h; y += 16) for (let x = 0; x < w; x += 16) { c.fillStyle = (x * 7 + y * 3) % 5 ? '#4f6274' : '#6d8296'; c.fillRect(x + 1, y + 2, 14, 12); }
+  });
+  glass.wrapS = glass.wrapT = THREE.RepeatWrapping;
+  const gm = (len, hh) => { const t = glass.clone(); t.needsUpdate = true; t.repeat.set(len / 7, hh / 7); return new THREE.MeshLambertMaterial({ map: t }); };
+  const [MX, MZ] = P(35.68100, 139.73395), H = 72;
+  // 翼 3 本 (Y の形)
+  for (const [ang, len] of [[0.35, 62], [0.35 + 2.1, 46], [0.35 - 2.1, 46]]) {
+    const wx = MX + Math.sin(ang) * len / 2, wz = MZ + Math.cos(ang) * len / 2;
+    const wing = mesh(new THREE.BoxGeometry(17, H, len), gm(len, H), wx, 14 + H / 2, wz, g);
+    wing.rotation.y = ang;
+    mesh(new THREE.BoxGeometry(17.4, 1.2, len + 0.4), M(0xd8d4cc), wx, 14 + H, wz, g).rotation.y = ang;
+    city.addPrism(rectPts(wx, wz, ang, 0, 0, 17, len), 0, 14 + H, 'ホテルニューオータニ ザ・メイン').roof = true;
   }
-  mesh(new THREE.CylinderGeometry(13, 13, 6, 32), blue, X, H + 3, Z, g);
-  mesh(new THREE.CylinderGeometry(14, 13, 1, 32), M(0xdadfe4), X, H + 6.5, Z, g);
-  city.addPrism(rectPts(X, Z, 0, 0, 0, 24, 24), 0, H + 7, 'ホテルニューオータニ ザ・メイン');
+  // 屋上: 白い丸い回転ラウンジ (帯の窓) と、その上の四角い黄土色の冠
+  mesh(new THREE.CylinderGeometry(15, 13, 7, 32), M(0xe8e6e0), MX, 14 + H + 3.5, MZ, g);
+  mesh(new THREE.CylinderGeometry(15.2, 15.2, 1.6, 32), M(0x3a4654), MX, 14 + H + 4.2, MZ, g);
+  const crown = mesh(new THREE.BoxGeometry(24, 13, 20), M(0xa08a64), MX, 14 + H + 13.5, MZ, g);
+  crown.rotation.y = 0.35;
+  city.addPrism(rectPts(MX, MZ, 0.35, 0, 0, 24, 24), 0, 14 + H + 20, 'ホテルニューオータニ ザ・メイン').roof = true;
+  // ガーデンタワー: 丸みのある長い形 (だ円) の白い塔に、階ごとの暗い窓の帯。屋上に円筒の冠
+  const band = canvasTex(64, 128, (c, w, h) => {
+    c.fillStyle = '#f2f2ee'; c.fillRect(0, 0, w, h);
+    for (let y = 0; y < h; y += 16) { c.fillStyle = '#3c4450'; c.fillRect(0, y + 9, w, 5); }
+  });
+  band.wrapS = band.wrapT = THREE.RepeatWrapping;
+  const [TX, TZ] = P(35.67960, 139.73545), TH = 134;
+  const tb = band.clone(); tb.needsUpdate = true; tb.repeat.set(12, TH / 3.4 / 8);
+  const tower = mesh(new THREE.CylinderGeometry(1, 1, TH - 14, 40), new THREE.MeshLambertMaterial({ map: tb }), TX, 14 + (TH - 14) / 2, TZ, g);
+  tower.scale.set(27, 1, 13); tower.rotation.y = 0.45;
+  const top = mesh(new THREE.CylinderGeometry(1, 1, 2, 40), M(0xe6e6e2), TX, TH + 1, TZ, g);
+  top.scale.set(27.5, 1, 13.5); top.rotation.y = 0.45;
+  const cb = band.clone(); cb.needsUpdate = true; cb.repeat.set(10, 1);
+  mesh(new THREE.CylinderGeometry(10, 10, 12, 32), new THREE.MeshLambertMaterial({ map: cb }), TX, TH + 8, TZ, g);
+  mesh(new THREE.CylinderGeometry(10.3, 10.3, 1, 32), M(0xdadad6), TX, TH + 14.5, TZ, g);
+  const tp = []; for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2, lx = Math.cos(a) * 27, lz = Math.sin(a) * 13, c = Math.cos(0.45), sn = Math.sin(0.45); tp.push(TX + lx * c + lz * sn, TZ - lx * sn + lz * c); }
+  city.addPrism(tp, 0, TH + 15, 'ホテルニューオータニ ガーデンタワー').roof = true;
   scene.add(g);
-  return { pos: [X, Z] };
+  return { pos: [MX, MZ] };
 }
 
 // ---------- 渋谷・六本木: SHIBUYA109・スクランブル交差点とハチ公像・国立代々木競技場・国立新美術館・麻布台ヒルズ 森JPタワー ----------

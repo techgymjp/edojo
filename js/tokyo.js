@@ -245,7 +245,9 @@ function buildRail(root, city, OX, OZ) {
       if (L < 2) continue;
       const ux = (x2 - x1) / L, uz = (z2 - z1) / L, cx = (x1 + x2) / 2, cz = (z1 + z2) / 2;
       // 崖・谷の上 (お茶の水) や水の上では、ホームが宙に浮くので描かない
-      if (isWater(cx + OX, cz + OZ) || isWater(x1 + OX, z1 + OZ) || isWater(x2 + OX, z2 + OZ)) continue;
+      // (四ツ谷は、谷に水を戻した真田濠の上でも描く: 新宿通りの下から南へ、中央線・総武線のホームの屋根が見える)
+      const yotsu = Math.hypot(cx - YTX, cz - YTZ) < 200;
+      if (!yotsu && (isWater(cx + OX, cz + OZ) || isWater(x1 + OX, z1 + OZ) || isWater(x2 + OX, z2 + OZ))) continue;
       const y = (r.y[i] + r.y[i + 1]) / 2;
       // 下の地面よりずっと高い所 (高架の駅) は、ホームの下を柱で支える
       if (y - Math.min(gy(x1, z1), gy(x2, z2)) > 3) piers.push([cx, cz, Math.min(gy(x1, z1), gy(x2, z2)) - 1, y - 0.2]);
@@ -428,10 +430,17 @@ function buildMarunouchi(scene) {
       const fx = px - ux * s * 1.5, fz = pz - uz * s * 1.5;
       mk(new THREE.BoxGeometry(10, 10, 3), CON, fx + ux * s * 1.5, deckY + 3.5, fz + uz * s * 1.5);
       mk(new THREE.BoxGeometry(5.6, 5, 0.3), DARK, fx - ux * s * 0.05, deckY + 2.1, fz - uz * s * 0.05);
+      // 口の先は土をかぶせたトンネル (草の土手が線路を覆う)
+      if (opt.cover && s > 0) {
+        const n = opt.cover, cx2 = px + ux * (n / 2 + 1.5), cz2 = pz + uz * (n / 2 + 1.5);
+        // 草の土手 (四角すい台): 口の額の後ろから、丘の斜面へつながる
+        const mound = mk(new THREE.CylinderGeometry(Math.SQRT1_2, Math.SQRT1_2 * 2.2, 1, 4, 1).rotateY(Math.PI / 4), new THREE.MeshLambertMaterial({ color: 0x5b8a3c }), cx2, deckY + 3, cz2);
+        mound.scale.set(22, 11, n + 10);
+      }
     }
     // 駅のホーム
     // (四ツ谷: 北の端から platStart m の所から 220m、両側のホームと太陽光パネルの屋根)
-    if (opt.station) { const PL = Math.min(L, 220), off = -L / 2 + PL / 2 + (opt.platStart ?? 8), px = cx + ux * off, pz = cz + uz * off;
+    if (opt.station) { const PL = opt.PL ?? Math.min(L, 220), off = -L / 2 + PL / 2 + (opt.platStart ?? 8), px = cx + ux * off, pz = cz + uz * off;
       for (const sd of [-1, 1]) {
         mk(new THREE.BoxGeometry(3.5, 1.1, PL), PLAT, px - uz * sd * 4.8, deckY + 0.55, pz + ux * sd * 4.8);
         mk(new THREE.BoxGeometry(6, 0.35, PL), SOLAR, px - uz * sd * 4.8, deckY + 4.6, pz + ux * sd * 4.8);
@@ -446,7 +455,7 @@ function buildMarunouchi(scene) {
       const m3 = new THREE.Mesh(new THREE.BoxGeometry(2.9, 0.9, 16).translate(0, 3.0, 0), WIN);
       c.add(m1, m2, m3); c.visible = false; scene.add(c); cars.push(c);
     }
-    sites.push({ ax, az, ux, uz, L, rot, deckY, extend, cars, d: Math.random() * (L + 2 * extend), dir: 1, wait: 0, station: !!opt.station });
+    sites.push({ ax, az, ux, uz, L, rot, deckY, extend, cars, d: Math.random() * (L + 2 * extend), dir: 1, wait: 0, station: !!opt.station, stop: opt.station ? (opt.platStart ?? 8) + (opt.PL ?? Math.min(L, 220)) / 2 : L / 2 });
   };
   // 御茶ノ水: 神田川の谷の北岸の横穴から出て、鉄橋で南岸の横穴へ (聖橋のすぐ東)
   {
@@ -457,17 +466,19 @@ function buildMarunouchi(scene) {
   {
     // 四ツ谷: 新宿通り (四谷見附橋) の下から南へ、中央線と並んで谷の中を走る (甲州街道とは並ばない)
     // 航空写真のとおり: 太陽光パネルの屋根のホームが、新宿通りの下から真南へまっすぐ。中央線・総武線はその下をくぐって南西へ
-    // 四谷見附の交差点 (新宿通りの南) で地上に出て、南端 (迎賓館・水面の側) でトンネルに入る。ホームは真ん中より南寄り
-    const A = ll2(35.68570, 139.73024), B = ll2(35.68200, 139.73021);
+    // 四谷三丁目から新宿通りの下を来て、交差点 (四ツ谷駅) の下で右へ曲がり (北西から南へ)、外堀と並んで南へ。
+    // 新宿通りの南に中央線・総武線のホーム、その南の赤坂口の駅舎の下から丸ノ内線のホームが南へ 125m (屋根が駅舎からはみ出して見える)。
+    // 中央線・総武線はそのホームの下をくぐって南西へ行き、丸ノ内線はホームの先 40m ほどで、中央線のトンネルとほぼ並んで丘のトンネルに入る
+    const A = ll2(35.68570, 139.73024), B = ll2(35.68370, 139.73022);
     const bank = Math.min(terrainH(...A), terrainH(...B));
-    site(A, B, 160, Math.max(waterY(...ll2(35.6853, 139.7306)) + 5, bank - 4), { station: true, platStart: 140, noNorthPortal: true });
+    site(A, B, 160, Math.max(waterY(...ll2(35.6853, 139.7306)) + 5, bank - 4), { station: true, platStart: 50, PL: 125, noNorthPortal: true, cover: 30 });
   }
   return {
     sites,
     update(dt) {
       for (const s of sites) {
         // 駅では 15 秒止まる。横穴の奥 (extend m) で折り返す
-        const total = s.L + 2 * s.extend, mid = s.extend + s.L / 2;
+        const total = s.L + 2 * s.extend, mid = s.extend + s.stop;
         if (s.wait > 0) s.wait -= dt;
         else {
           const prev = s.d; s.d += 12 * s.dir * dt;
@@ -519,10 +530,13 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
   // 日枝神社の境内 (山王の丘) と南の石段にかかるビルは描かない
   const HIEX = (139.7399 - W.W) * W.KX - OX, HIEZ = (W.N - 35.67585) * W.KZ - OZ, HIETZ = (W.N - 35.67484) * W.KZ - OZ;
   const onHie1 = (x, z) => (Math.abs(x - HIEX) < 55 && z - HIEZ > -50 && z - HIEZ < 40) || (Math.abs(x - HIEX) < 12 && z >= HIEZ && z <= HIETZ + 6);
+  const OTA = [(139.7333 - W.W) * W.KX - OX, (W.N - 35.6818) * W.KZ - OZ, (139.7362 - W.W) * W.KX - OX, (W.N - 35.6790) * W.KZ - OZ];
   const onHie = (bd) => { for (let x = bd.minx; x <= bd.maxx; x += 4) for (let z = bd.minz; z <= bd.maxz; z += 4) if (city.inside(bd, x, z) && onHie1(x, z)) return true; return false; };
   for (const bd of city.bld) {
     if (!bd.plateau) continue;
     if (onHie(bd)) { bd.plateau = false; dropped++; continue; }
+    // ホテルニューオータニ (敷地全体が 134m の 1 つの箱になっている) は手で作る (addNewOtani)
+    if (bd.cx > OTA[0] && bd.cx < OTA[2] && bd.cz > OTA[1] && bd.cz < OTA[3] && bd.h > 20) { bd.plateau = false; dropped++; continue; }
     const pts = [[bd.cx, bd.cz], [(bd.minx + bd.cx) / 2, bd.cz], [(bd.maxx + bd.cx) / 2, bd.cz], [bd.cx, (bd.minz + bd.cz) / 2], [bd.cx, (bd.maxz + bd.cz) / 2]];
     if (bad(bd.cx, bd.cz) || pts.filter(([x, z]) => bad(x, z)).length >= 2) { bd.plateau = false; dropped++; continue; }
     // 手で作る名所 (迎賓館) の所の PLATEAU のビルは描かない
@@ -677,7 +691,14 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
   {
     const segs = [];
     for (const r of RAIL) if (!r.t) for (let i = 0; i + 1 < r.x.length; i++) if (r.h[i] > 2 || r.h[i + 1] > 2) segs.push([r.x[i], r.z[i], r.x[i + 1], r.z[i + 1], 8]);
-    for (const r of CITY.roads) for (let i = 0; i + 1 < r.x.length; i++) if (!r.t[i] && (r.h[i] - terrainH(r.x[i] + OX, r.z[i] + OZ) > 3 || r.h[i + 1] - terrainH(r.x[i + 1] + OX, r.z[i + 1] + OZ) > 3)) segs.push([r.x[i], r.z[i], r.x[i + 1], r.z[i + 1], 9]);
+    // 首都高: 地上・高架の所すべてと、トンネルの口から 40m (口の上にビルがかぶって、高速がビルから出て見えないように)
+    for (const r of CITY.roads) {
+      const n = r.x.length, dist = new Float32Array(n).fill(1e9);
+      for (let i = 0; i < n; i++) if (!r.t[i]) dist[i] = 0;
+      for (let i = 1; i < n; i++) dist[i] = Math.min(dist[i], dist[i - 1] + Math.hypot(r.x[i] - r.x[i - 1], r.z[i] - r.z[i - 1]));
+      for (let i = n - 2; i >= 0; i--) dist[i] = Math.min(dist[i], dist[i + 1] + Math.hypot(r.x[i] - r.x[i + 1], r.z[i] - r.z[i + 1]));
+      for (let i = 0; i + 1 < n; i++) if (Math.min(dist[i], dist[i + 1]) < 40) segs.push([r.x[i], r.z[i], r.x[i + 1], r.z[i + 1], 10]);
+    }
     const G = 40, grid = new Map();
     segs.forEach((sg, k) => { for (let gx = Math.floor(Math.min(sg[0], sg[2]) / G) - 1; gx <= Math.floor(Math.max(sg[0], sg[2]) / G) + 1; gx++) for (let gz = Math.floor(Math.min(sg[1], sg[3]) / G) - 1; gz <= Math.floor(Math.max(sg[1], sg[3]) / G) + 1; gz++) { const key = gx * 100000 + gz; if (!grid.has(key)) grid.set(key, []); grid.get(key).push(k); } });
     const near = (x, z) => { const l = grid.get(Math.floor(x / G) * 100000 + Math.floor(z / G)); if (!l) return false; for (const k of l) { const [x1, z1, x2, z2, w] = segs[k]; const dx = x2 - x1, dz = z2 - z1, L2 = dx * dx + dz * dz || 1; const t = Math.max(0, Math.min(1, ((x - x1) * dx + (z - z1) * dz) / L2)); if (Math.hypot(x - x1 - dx * t, z - z1 - dz * t) < w) return true; } return false; };
@@ -780,6 +801,7 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
       [24, [35.68875, 139.78930], [35.68835, 139.79350]], // 新大橋 (隅田川)
     ];
     const tz2 = (la, lo) => [((lo - 139.745) * KXT) * 2, (-(la - 35.674) * KZT) * 2];
+    const BUILT = [];
     const ROADS2 = ROADS.concat(MANUAL.map(([wd, a, b]) => [wd, ...tz2(...a), ...tz2(...b)]));
     for (const r of ROADS2) {
       const wdt = Math.max(8, r[0]), walk = Math.min(4, wdt * 0.18);
@@ -810,7 +832,10 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
         const px_ = -(rz - qz) / rl, pz_ = (rx - qx) / rl;
         const across = isWater(qx + px_ * 12, qz + pz_ * 12) && isWater(qx - px_ * 12, qz - pz_ * 12);
         if (typeof window !== 'undefined') (window.__br ||= []).push({ x: Math.round(qx), z: Math.round(qz), n: (e - k) * 4, across, ends: k > 0 && e < pts.length, castle: k > 0 && e < pts.length && (isCastle(...pts[k - 1]) || isCastle(...pts[e])), ya: k > 1 ? +terrainH(...pts[Math.max(0, k - 2)]).toFixed(1) : null, yb: e + 1 < pts.length ? +terrainH(...pts[Math.min(pts.length - 1, e + 1)]).toFixed(1) : null, w: +waterY(qx, qz).toFixed(1), wdt });
-        if (across && k > 0 && e < pts.length && (e - k) * 4 >= 8 && (e - k) * 4 < 400 && !isCastle(...pts[k - 1]) && !isCastle(...pts[e])) {
+        // 上下線が 2 本の線になっている道 (四谷見附橋など) は、橋を 1 本だけ架ける (2 枚の床が重なって段違いに見えないように)
+        const dup = BUILT.some(([bx, bz, bux, buz]) => Math.hypot(bx - qx, bz - qz) < 20 && Math.abs(bux * (rx - qx) / rl + buz * (rz - qz) / rl) > 0.9);
+        if (across && !dup && k > 0 && e < pts.length && (e - k) * 4 >= 8 && (e - k) * 4 < 400 && !isCastle(...pts[k - 1]) && !isCastle(...pts[e])) {
+          BUILT.push([qx, qz, (rx - qx) / rl, (rz - qz) / rl]);
           const a = Math.max(0, k - 2), b = Math.min(pts.length - 1, e + 1);
           const ya = terrainH(...pts[a]), yb = terrainH(...pts[b]);
           let wmax = -1e9; for (let q = k; q < e; q++) wmax = Math.max(wmax, waterY(...pts[q]));

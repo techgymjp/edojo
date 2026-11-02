@@ -522,7 +522,8 @@ function updateNinja(nj, dt) {
       } else {
         nj.m.position.set(nj.x, nj.y, nj.z); nj.m.rotation.y += dt * 0.8;
         poseNinja(nj.m, 'roof', G.t);
-        if (R.t > 2.5 && G.endT > 1) G.endT = 1;
+        // てっぺんに立ったあと、テックジムのアドバルーンも見せてから結果へ
+        if (R.t > 7 && G.endT > 1) G.endT = 1;
       }
       break;
     }
@@ -1846,9 +1847,16 @@ function loop(now) {
       if (R && R.phase === -1) { cp = new THREE.Vector3(nj.x + (P.x - nj.x) * 0.15 / Math.max(1, Math.hypot(P.x - nj.x, P.z - nj.z) / 60), R.y0 + 4, nj.z + (P.z - nj.z) * 0.15 / Math.max(1, Math.hypot(P.x - nj.x, P.z - nj.z) / 60)); const d = Math.hypot(cp.x - nj.x, cp.z - nj.z); if (d < 8) { const a = Math.atan2(P.z - nj.z, P.x - nj.x); cp.x = nj.x + Math.cos(a) * 9; cp.z = nj.z + Math.sin(a) * 9; } }
       else if (!R || R.phase === 0) { const a = Math.atan2((R ? R.tz : nj.z) - nj.z, (R ? R.tx : nj.x) - nj.x); cp = new THREE.Vector3(nj.x - Math.cos(a) * 9, nj.y + 3.5, nj.z - Math.sin(a) * 9); }
       else if (R.phase === 1) { const a = Math.atan2(R.tz - R.bz, R.tx - R.bx) + 0.9; cp = new THREE.Vector3(R.tx - Math.cos(a) * 55, R.base + 10 + (nj.y - R.base) * 0.6, R.tz - Math.sin(a) * 55); }
-      else { const a = R.t * 0.5; cp = new THREE.Vector3(R.tx + Math.cos(a) * 26, nj.y + 6, R.tz + Math.sin(a) * 26); }
+      else if (R.t < 2.5) { const a = R.t * 0.5; cp = new THREE.Vector3(R.tx + Math.cos(a) * 26, nj.y + 6, R.tz + Math.sin(a) * 26); }
+      else {
+        // 天守の上の忍者ごしに、テックジムのアドバルーンを見上げる
+        const [bx, bz] = ll(35.68022, 139.74014), by = groundH(bx, bz) + 175, d = Math.hypot(bx - nj.x, bz - nj.z) || 1;
+        cp = new THREE.Vector3(nj.x - (bx - nj.x) / d * 22, nj.y + 4, nj.z - (bz - nj.z) / d * 22);
+        const k = Math.min(1, (R.t - 2.5) / 1.5), e = k * k * (3 - 2 * k);
+        G.lookB = [nj.x + (bx - nj.x) * e, nj.y + 1 + (by - nj.y - 1) * e, nj.z + (bz - nj.z) * e];
+      }
       camera.position.lerp(cp, 1 - Math.exp(-dt * (R && R.phase === 0 ? 8 : 3)));
-      camera.lookAt(nj.x, nj.y + 1, nj.z);
+      if (R && R.phase === 2 && R.t >= 2.5 && G.lookB) camera.lookAt(...G.lookB); else camera.lookAt(nj.x, nj.y + 1, nj.z);
     } else updateCamera(dt);
     if (window.__camOverride) { const d = window.__camOverride; camera.position.set(...d.p); camera.lookAt(...d.l); }
     updateSky();

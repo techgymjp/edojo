@@ -259,6 +259,8 @@ export function buildGround(scene) {
       .replace('#include <map_fragment>', `
         float lvv = texture2D(lvMap, vMapUv).r * 255.0 / 63.0;
         if (lvv < 0.3) discard;
+        // 真田濠・溜池・弁慶濠: 水の底の平らな所は切り抜く (底が透けて水だけ暗く見えないように。岸の斜面は残す)
+        if (lvv > 0.5 && lvv < 0.75 && vUp > 0.97) discard;
         #include <map_fragment>
         // お城の急な斜面 (石垣) は石の色、まちの急な斜面 (崖・土手) は草の色
         // 斜面: お城は石垣の色、まちの斜面 (土手・崖) は草の緑
