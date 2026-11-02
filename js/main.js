@@ -1852,13 +1852,18 @@ $('btnRevive').onclick = async () => {
   const r = await Ads.showRewarded();
   const nj = G.intruder;
   if (r === 'rewarded' && nj && G.state === 'ending') {
-    // 曲者を本丸から押し返す (消える。召し捕りには数えない)
+    // 天守を乗っ取った曲者を成敗する (縄で縛られて宙に浮き、お濠へドボン)。
+    // すぐにまた乗っ取られないよう、本丸の石垣を登っている忍者・本丸へ歩いている忍者もいっしょに成敗する。
+    // リワード広告で点数は増やさない決まりなので、成敗した忍者は召し捕りの数には入れない (取り逃がしと同じ扱いで場から消える)
     G.retries++;
-    scene.remove(nj.m); scene.remove(nj.bam); nj.marker.remove(); nj.state = 'gone'; nj.raid = null;
-    G.escaped = (G.escaped || 0) + 1;
     G.intruder = null; G.result = null; G.state = 'play'; G.endT = 0; G.alarmT = 0; camInit = false;
     A.stopBgm(); A.playBgm('bgmSea');
-    floatText(P.x, waterY(P.x, P.z) + 4, P.z, '曲者を押し返した！', 'red', true);
+    nj.raid = null; nj.state = 'run';
+    const targets = [nj, ...G.ninjas.filter((o) => o !== nj && ((!o.outer && ['climb', 'climbOut'].includes(o.state)) || o.state === 'walkin'))];
+    const cap = G.captured;
+    for (const o of targets) { hitNinja(o, true); G.escaped = (G.escaped || 0) + 1; }
+    G.captured = cap; $('hCap').textContent = cap;
+    floatText(P.x, waterY(P.x, P.z) + 4, P.z, targets.length > 1 ? `曲者 ${targets.length} 人を成敗！` : '曲者を成敗！', 'red', true);
     if (G.captured + G.escaped >= CFG.total) finish(true);
   }
   G.reviveOpen = false;
@@ -1998,7 +2003,8 @@ function loop(now) {
   // 水面の映り込み (3 フレームに 1 回、低い解像度で)
   G.frame = (G.frame || 0) + 1;
   autoResolution(dt);
-  if (!MOBILE && G.frame % 3 === 0) water.reflect(renderer, scene, camera, (G.state === 'play' || G.state === 'ending') ? waterY(P.x, P.z) : undefined);
+  // 水面の映り込み: スマホは 8 コマに 1 回 (最初の版と同じ。映り込みがある方がきれい)
+  if (G.frame % (MOBILE ? 8 : 3) === 0) water.reflect(renderer, scene, camera, (G.state === 'play' || G.state === 'ending') ? waterY(P.x, P.z) : undefined);
   CUT.boat.value.y = cb;
   renderer.render(scene, camera);
 }
