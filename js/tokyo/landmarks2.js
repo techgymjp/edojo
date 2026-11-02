@@ -223,16 +223,107 @@ export function addTokyoStation(scene, city) {
 export function addAkasaka(scene, city) {
   let g = new THREE.Group();
   const verm = M(VERM);
-  // 日枝神社: 社殿と、三角の破風がのった山王鳥居
-  // 山王の丘のてっぺん (溜池から 40m 以上離れた一番高い所)
+  // 日枝神社 (山王権現): 山王の丘のてっぺんに、緑青 (青緑) の大屋根の拝殿・本殿と、朱の回廊・神門。南の石段の下に白い山王鳥居
+  // 部品ごとに、その場所の地面の高さへ持ち上げる (userData.perPart)
   const [HX, HZ] = ll(35.67585, 139.73990);
-  hallBuilding(g, city, HX, HZ, 0, 0, 0, 22, 16, 8, 7, verm, M(0x4f7f6f), '日枝神社');
-  torii(g, HX + 30, HZ, Math.PI / 2, 8, 9, verm);
-  const gable = mesh(new THREE.ConeGeometry(2.6, 2.4, 3), verm, HX + 30, 11.3, HZ, g);
-  gable.rotation.z = Math.PI;
-  gable.rotation.y = Math.PI / 2;
-  gable.scale.set(1, 1, 0.3);
-  scene.add(g);
+  const hg = new THREE.Group();
+  hg.userData.perPart = true;
+  const green = M(0x5d9c86), white = M(0xf2f0ea), stone = M(0x9a968c), dark = M(0x3a2a22), gold = M(0xd4a62a, { emissive: 0x2a1c00 });
+  // 入母屋の屋根: 寄棟 + 上の破風 (三角柱)
+  const gable = (w, h, d) => {
+    const sh = new THREE.Shape();
+    sh.moveTo(-w / 2, 0); sh.lineTo(w / 2, 0); sh.lineTo(0, h); sh.closePath();
+    return new THREE.ExtrudeGeometry(sh, { depth: d, bevelEnabled: false }).translate(0, 0, -d / 2);
+  };
+  const roof = (b, y, w, d, h, gableFront) => {
+    const r = mesh(hipGeo, green, 0, y + h * 0.3, 0, b);
+    r.scale.set(w, h * 0.6, d);
+    // 棟の破風 (横向き = 入母屋)
+    const gb = mesh(gable(d * 0.55, h * 0.75, w * 0.62), green, 0, y + h * 0.35, 0, b);
+    gb.rotation.y = Math.PI / 2;
+    if (gableFront) {
+      // 正面の千鳥破風 (白い三角の妻に金の飾り)
+      const gf = mesh(gable(w * 0.3, h * 0.8, d * 0.5), green, 0, y + h * 0.2, d * 0.22, b);
+      const tri = mesh(gable(w * 0.24, h * 0.62, 0.3), white, 0, y + h * 0.24, d * 0.47 + 0.2, b);
+      mesh(new THREE.SphereGeometry(0.7, 8, 6), gold, 0, y + h * 0.55, d * 0.47 + 0.5, b);
+    }
+  };
+  // 社殿 1 棟: 石の基壇・朱の柱と白壁・緑青の屋根
+  const hall = (lx, lz, w, d, wallH, roofH, gableFront, name) => {
+    const b = new THREE.Group();
+    b.position.set(HX + lx, 0, HZ + lz);
+    mesh(new THREE.BoxGeometry(w + 3, 6, d + 3), stone, 0, -2.4, 0, b); // 基壇 (斜面でも浮かないよう下へ深く)
+    mesh(new THREE.BoxGeometry(w, wallH, d), white, 0, 0.6 + wallH / 2, 0, b);
+    // 朱の柱・貫・長押
+    const nx = Math.max(2, Math.round(w / 4.5));
+    for (let i = 0; i <= nx; i++) for (const sz of [-1, 1]) mesh(new THREE.BoxGeometry(0.8, wallH, 0.8), verm, -w / 2 + (w * i) / nx, 0.6 + wallH / 2, sz * (d / 2 + 0.2), b);
+    for (const sx of [-1, 1]) for (let i = 1; i < 3; i++) mesh(new THREE.BoxGeometry(0.8, wallH, 0.8), verm, sx * (w / 2 + 0.2), 0.6 + wallH / 2, -d / 2 + (d * i) / 3, b);
+    for (const yy of [0.6 + wallH * 0.62, 0.6 + wallH - 0.3]) for (const sz of [-1, 1]) mesh(new THREE.BoxGeometry(w + 0.6, 0.5, 0.5), verm, 0, yy, sz * (d / 2 + 0.3), b);
+    // 正面の入口 (暗い)
+    mesh(new THREE.BoxGeometry(w * 0.3, wallH * 0.6, 0.3), dark, 0, 0.6 + wallH * 0.3, d / 2 + 0.15, b);
+    roof(b, 0.6 + wallH, w + 6, d + 6, roofH, gableFront);
+    hg.add(b);
+    const pts = rectPts(HX + lx, HZ + lz, 0, 0, 0, w, d);
+    city.addPrism(pts, 0, wallH + roofH * 0.6, name).roof = true;
+  };
+  // 拝殿 (写真の、横に広い朱と白の社殿と大きな緑青屋根)、幣殿、本殿 (正面は南の石段の方)
+  hall(0, 8, 30, 12, 6, 9, true, '日枝神社 拝殿');
+  hall(-21, 9, 10, 9, 4.5, 5, false, '日枝神社');
+  hall(21, 9, 10, 9, 4.5, 5, false, '日枝神社');
+  hall(0, -3, 10, 9, 6, 6, false, '日枝神社 幣殿');
+  hall(0, -15, 22, 15, 7.5, 10, true, '日枝神社 本殿');
+  // 回廊 (朱の柱・白壁・緑青の屋根) と、南の神門 (2階建ての楼門)
+  const RX = 34, RZ0 = -32, RZ1 = 27;
+  const kairo = (x0, z0, x1, z1) => {
+    const L = Math.hypot(x1 - x0, z1 - z0), b = new THREE.Group();
+    b.position.set(HX + (x0 + x1) / 2, 0, HZ + (z0 + z1) / 2);
+    b.rotation.y = Math.atan2(x1 - x0, z1 - z0);
+    mesh(new THREE.BoxGeometry(3.6, 7, L), stone, 0, -3, 0, b);
+    mesh(new THREE.BoxGeometry(3, 3.6, L), verm, 0, 2.2, 0, b);
+    mesh(new THREE.BoxGeometry(3.1, 1.6, L - 0.2), white, 0, 1.8, 0, b);
+    const r = mesh(hipGeo, green, 0, 4.9, 0, b);
+    r.scale.set(5.5, 1.8, L + 2);
+    hg.add(b);
+  };
+  kairo(-RX, RZ0, RX, RZ0); kairo(-RX, RZ0, -RX, RZ1); kairo(RX, RZ0, RX, RZ1);
+  kairo(-RX, RZ1, -5, RZ1); kairo(5, RZ1, RX, RZ1);
+  {
+    const b = new THREE.Group();
+    b.position.set(HX, 0, HZ + RZ1);
+    mesh(new THREE.BoxGeometry(12, 6, 7), stone, 0, -2.4, 0, b);
+    for (const sx of [-4.5, -1.5, 1.5, 4.5]) for (const sz of [-2.5, 2.5]) mesh(new THREE.BoxGeometry(0.8, 5, 0.8), verm, sx, 3.1, sz, b);
+    mesh(new THREE.BoxGeometry(10, 0.8, 6), verm, 0, 5.8, 0, b);
+    const r1 = mesh(hipGeo, green, 0, 6.8, 0, b); r1.scale.set(13, 1.6, 9);
+    mesh(new THREE.BoxGeometry(8, 3.4, 4.6), verm, 0, 9.2, 0, b);
+    mesh(new THREE.BoxGeometry(7, 1.2, 4.7), white, 0, 9.6, 0, b);
+    roof(b, 10.9, 12, 8, 6, false);
+    hg.add(b);
+    city.addPrism(rectPts(HX, HZ + RZ1, 0, 0, 0, 10, 6), 0, 14, '日枝神社 神門').roof = true;
+  }
+  // 南の石段: 神門から丘を下って、溜池 (外堀通り) の脇の白い山王鳥居まで。段ごとにその場所の地面へ
+  const [TX0, TZ0] = ll(35.67484, 139.73990);
+  const z0 = HZ + RZ1 + 6, z1 = TZ0 - 4, nSt = Math.max(2, Math.round((z1 - z0) / 1.5));
+  const stepGeo = new THREE.BoxGeometry(9, 4, (z1 - z0) / nSt + 0.1);
+  const stairGeo = new THREE.BoxGeometry(0.6, 1.2, (z1 - z0) / nSt + 0.1);
+  for (let i = 0; i < nSt; i++) {
+    const st = new THREE.Group();
+    st.userData.step = i;
+    st.position.set(HX + (TX0 - HX) * (i + 0.5) / nSt, 0, z0 + (z1 - z0) * (i + 0.5) / nSt);
+    mesh(stepGeo, stone, 0, -1.7, 0, st);
+    for (const sx of [-4.8, 4.8]) mesh(stairGeo, stone, sx, 0.6, 0, st); // 両脇の石の手すり
+    hg.add(st);
+  }
+  // 山王鳥居 (白、笠木の上に三角の破風)
+  {
+    const b = new THREE.Group();
+    b.position.set(TX0, 0, TZ0);
+    torii(b, 0, 0, 0, 11, 11, white);
+    const gb = mesh(gable(7, 3, 0.8), white, 0, 11.9, 0, b);
+    mesh(new THREE.BoxGeometry(8, 0.35, 1.2), M(0x222222), 0, 14.9, 0, b);
+    gb.renderOrder = 0;
+    hg.add(b);
+  }
+  scene.add(hg);
   // 豊川稲荷 東京別院: 本殿と朱色の鳥居・のぼり (風雲江戸城: 地形に乗せるとき 1 か所ずつ持ち上げるよう、別のまとまりに)
   const g0 = g;
   g = new THREE.Group();

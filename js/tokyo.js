@@ -516,8 +516,13 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
   } };
   let dropped = 0;
   const GHX = (139.72830 - 139.745) * KXT, GHZ = -(35.68000 - 35.674) * KZT, DTX = (139.74480 - 139.745) * KXT, DTZ = -(35.67590 - 35.674) * KZT;
+  // 日枝神社の境内 (山王の丘) と南の石段にかかるビルは描かない
+  const HIEX = (139.7399 - W.W) * W.KX - OX, HIEZ = (W.N - 35.67585) * W.KZ - OZ, HIETZ = (W.N - 35.67484) * W.KZ - OZ;
+  const onHie1 = (x, z) => (Math.abs(x - HIEX) < 55 && z - HIEZ > -50 && z - HIEZ < 40) || (Math.abs(x - HIEX) < 12 && z >= HIEZ && z <= HIETZ + 6);
+  const onHie = (bd) => { for (let x = bd.minx; x <= bd.maxx; x += 4) for (let z = bd.minz; z <= bd.maxz; z += 4) if (city.inside(bd, x, z) && onHie1(x, z)) return true; return false; };
   for (const bd of city.bld) {
     if (!bd.plateau) continue;
+    if (onHie(bd)) { bd.plateau = false; dropped++; continue; }
     const pts = [[bd.cx, bd.cz], [(bd.minx + bd.cx) / 2, bd.cz], [(bd.maxx + bd.cx) / 2, bd.cz], [bd.cx, (bd.minz + bd.cz) / 2], [bd.cx, (bd.maxz + bd.cz) / 2]];
     if (bad(bd.cx, bd.cz) || pts.filter(([x, z]) => bad(x, z)).length >= 2) { bd.plateau = false; dropped++; continue; }
     // 手で作る名所 (迎賓館) の所の PLATEAU のビルは描かない
@@ -658,8 +663,9 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
     const m4 = new THREE.Matrix4(); let k = 0, seed = 11;
     const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
     for (let t = 0; t < 600 && k < N; t++) {
-      const a = rnd() * Math.PI * 2, r = 25 + rnd() * 95, x = hx + Math.cos(a) * r, z = hz + Math.sin(a) * r;
+      const a = rnd() * Math.PI * 2, r = 30 + rnd() * 95, x = hx + Math.cos(a) * r, z = hz + Math.sin(a) * r;
       if (isWater(x, z) || terrainH(x, z) < 8) continue;
+      if ((Math.abs(x - hx) < 40 && z - hz > -38 && z - hz < 34) || (Math.abs(x - hx) < 9 && z > hz)) continue; // 社殿の境内と南の石段
       const sc = 0.8 + rnd() * 0.7;
       m4.makeScale(sc, sc, sc).setPosition(x, terrainH(x, z) - 0.5, z); im.setMatrixAt(k++, m4);
     }
@@ -707,6 +713,20 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
   root.updateMatrixWorld(true);
   for (const ch of [...root.children]) {
     if (ch === city.tileGroup || roadObjs.has(ch) || railObjs.has(ch)) continue;
+    if (ch.userData.perPart) {
+      for (const c of ch.children) { c.getWorldPosition(pv); c.position.y += terrainH(pv.x, pv.z); }
+      // 石段は、上の端と下の端の地面をまっすぐ結ぶ (地面のでこぼこで段が波打たないように)
+      const st = ch.children.filter((c) => c.userData.step !== undefined);
+      if (st.length > 1) {
+        // 上下の端を結ぶ線より地面が高い所は地面に合わせ、ならして、上から下へ下がる一方にする
+        const a = st[0].position.y, b = st[st.length - 1].position.y, n = st.length;
+        const y0 = st.map((c, i) => Math.max(c.position.y, a + (b - a) * i / (n - 1)));
+        const y1 = y0.map((_, i) => { let s2 = 0, k = 0; for (let j = Math.max(0, i - 3); j <= Math.min(n - 1, i + 3); j++) { s2 += y0[j]; k++; } return s2 / k; });
+        for (let i = 1; i < n; i++) y1[i] = Math.min(y1[i], y1[i - 1]);
+        st.forEach((c, i) => { c.position.y = y1[i]; });
+      }
+      continue;
+    }
     box3.setFromObject(ch); if (box3.isEmpty()) continue;
     box3.getCenter(cv); box3.getSize(sz);
     if (Math.max(sz.x, sz.z) < 250) { ch.position.y += Ts(cv.x - OX, cv.z - OZ); continue; }
