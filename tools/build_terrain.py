@@ -188,6 +188,10 @@ if ring.any():
     k = np.clip(dist_w / 25, 0, 1); k = k * k * (3 - 2 * k)
     T = np.where(ring, np.minimum(T, (wl_s + 0.8) + (T - wl_s - 0.8) * k), T).astype(np.float32)
     print('真田濠のまわりの土手の斜面', int(ring.sum()))
+# 万世橋〜昌平橋の南岸: 標高データが中央線のレンガ高架 (高さ 約 11m) を地面として拾っているので、まわりの道の高さ (約 4.5m) に下げる
+vm = land & (lat > 35.6960) & (lat < 35.6990) & (lon > 139.7680) & (lon < 139.7725) & (T > 5.2)
+T = np.where(vm, 4.5, T).astype(np.float32)
+print('万世橋の南岸 (レンガ高架) を下げる', int(vm.sum()))
 def save(a, name):
     v = np.clip(np.round((a + 20) * 200), 0, 65535).astype(np.uint32)
     rgb = np.stack([(v >> 8).astype(np.uint8), (v & 255).astype(np.uint8), np.zeros_like(v, np.uint8)], -1)
