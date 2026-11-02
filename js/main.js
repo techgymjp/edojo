@@ -54,7 +54,8 @@ renderer.setPixelRatio(MOBILE ? Math.min(devicePixelRatio, 0.9) : Math.min(devic
 renderer.setSize(innerWidth, innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.5, 11000);
+// near を 1.5m に: カメラのすぐ前の壁 (門の白壁・橋・高架) を切って、画面がふさがらないように
+const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 1.5, 11000);
 scene.fog = new THREE.Fog(0x8090a8, 250, 1400);
 const hemi = new THREE.HemisphereLight(0xdfe8ff, 0x7a7468, 1.1); // 下からの光は水の照り返しで少し明るめ (橋や高架の裏が真っ黒にならないように)
 scene.add(hemi);
@@ -1257,17 +1258,17 @@ function updateBoatMesh(dt, dash) {
   boat.rotateZ(P.roll); boat.rotateX(Math.sin(G.t * 1.2) * 0.02 - (dash ? 0.04 : 0) - (bAir ? clamp(P.vy * 0.03, -0.35, 0.35) : 0));
   G.throwT = Math.max(0, G.throwT - dt * 3);
   animateBoat(boat, G.t, Math.abs(P.v), G.throwT);
-  if (Math.abs(P.v) > 3 && Math.random() < dt * (Math.abs(P.v) / 3)) addWake();
+  if (Math.abs(P.v) > 3 && Math.random() < dt * Math.min(4, Math.abs(P.v) / 3)) addWake(); // 速くても 1 秒に 4 つまで
 }
 const wakes = [];
-const wakeGeo = new THREE.RingGeometry(0.5, 0.8, 16);
+const wakeGeo = new THREE.RingGeometry(0.3, 0.45, 16); // 小舟 (長さ 約 4.5m) に合わせて小さく
 function addWake() {
   const m = new THREE.Mesh(wakeGeo, new THREE.MeshBasicMaterial({ color: 0xdfefff, transparent: true, opacity: 0.4, side: THREE.DoubleSide, depthWrite: false }));
-  m.rotation.x = -Math.PI / 2; m.position.set(P.x - Math.cos(P.h) * 6, waterY(P.x, P.z) + 0.06, P.z - Math.sin(P.h) * 6); scene.add(m);
+  m.rotation.x = -Math.PI / 2; m.position.set(P.x - Math.cos(P.h) * 2.5, waterY(P.x, P.z) + 0.06, P.z - Math.sin(P.h) * 2.5); scene.add(m);
   wakes.push({ m, t: 0 });
 }
 function updateWakes(dt) {
-  for (const w of wakes) { w.t += dt; w.m.scale.setScalar(1 + w.t * 4); w.m.material.opacity = 0.4 * (1 - w.t / 1.5); if (w.t > 1.5) { scene.remove(w.m); w.dead = true; } }
+  for (const w of wakes) { w.t += dt; w.m.scale.setScalar(1 + w.t * 3); w.m.material.opacity = 0.3 * (1 - w.t / 1.5); if (w.t > 1.5) { scene.remove(w.m); w.dead = true; } }
   for (let i = wakes.length - 1; i >= 0; i--) if (wakes[i].dead) wakes.splice(i, 1);
 }
 function nearestWater(x, z) {
@@ -1865,6 +1866,8 @@ function loop(now) {
     G.t = 0;
     updateSky();
   }
+  // 名札: タイトル・結果の画面では出さない。遊んでいるときも、カメラから 80m 以内の名札は出さない (近くで画面をふさがないように)
+  if (castle && castle.labels) { const show = G.state === 'play' || G.state === 'ending' || G.state === 'pause'; for (const l of castle.labels) l.visible = show && l.position.distanceTo(camera.position) > 80; }
   water.update(now / 1000, skyMat.uniforms.hor.value, scene.fog, camera);
   cullChunks(camera.position, MOBILE ? 1000 : 1500);
   tokyo.update(dt, now / 1000, modern.mat.userData.night.value, scene.fog.color, camera);

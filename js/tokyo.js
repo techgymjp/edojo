@@ -96,6 +96,15 @@ function buildRail(root, city, OX, OZ) {
       base[i] = Math.max(base[i], waterY(r.x[i] + OX, r.z[i] + OZ) + 3);
     }
     r.y = base.map((b, i) => b + r.h[i] + 0.2);
+    // お茶の水〜秋葉原の中央・総武線は、高さをなめらかな坂に決める (標高データと高架の段のつなぎ目で段差ができないように)
+    //   総武線: お茶の水の崖から出て (海抜 約 11m)、松住町架道橋を渡り、秋葉原の 3 階 (海抜 約 16.7m) へ上がる
+    //   中央線: お茶の水 (約 11m) から万世橋のレンガ高架 (約 11.5m) へ、ほぼ平ら
+    if (r.ln === 's' || r.ln === 'c') for (let i = 0; i < n; i++) {
+      const lo = 139.745 + r.x[i] / (111320 * Math.cos(35.674 * Math.PI / 180)), la = 35.674 - r.z[i] / 110574;
+      if (la < 35.6960 || la > 35.7010 || lo < 139.7660 || lo > 139.7740) continue;
+      const k = (a, b, t) => a + (b - a) * Math.max(0, Math.min(1, t));
+      r.y[i] = r.ln === 's' ? k(11, 16.7, (lo - 139.7665) / (139.7715 - 139.7665)) : k(10.9, 11.6, (lo - 139.7665) / (139.7700 - 139.7665));
+    }
     // 水道橋駅のまわりの中央・総武線の高架は 2m 高く (実物の高さに)
     for (let i = 0; i < n; i++) { const dx = r.x[i] - SUIX, dz = r.z[i] - SUIZ, d = Math.hypot(dx, dz); if ((r.ln === 'c' || r.ln === 's') && d < 320) r.y[i] += 2 * Math.min(1, (320 - d) / 120); }
     if (typeof window !== 'undefined') (window.__rails ||= []).push(r);
@@ -828,7 +837,7 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
           {
             const [sx0, sz0] = pts[k - 1], [ex0, ez0] = pts[e];
             const mx0 = (sx0 + ex0) / 2 - OX, mz0 = (sz0 + ez0) / 2 - OZ;
-            const SHX = (139.76935 - 139.745) * KXT, SHZ = -(35.69900 - 35.674) * KZT;
+            const SHX = (139.76886 - 139.745) * KXT, SHZ = -(35.69836 - 35.674) * KZT;
             if (Math.hypot(mx0 - SHX, mz0 - SHZ) < 45) {
               const BRICK = [0.62, 0.3, 0.24], SL = Math.hypot(ex0 - sx0, ez0 - sz0) || 1, ux = (ex0 - sx0) / SL, uz = (ez0 - sz0) / SL, vx = -uz, vz = ux;
               const NA = 24, base = wmax - 0.5, rise = Math.max(2, deck - 1.2 - base);
