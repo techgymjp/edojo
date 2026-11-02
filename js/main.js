@@ -979,35 +979,37 @@ function throwCoins() {
   if (G.coinCd > 0) return;
   G.coinCd = CFG.coinCd; G.throwT = 1;
   const tg = pickTarget(CFG.coinRange, 0, 'water');
-  // 5 連射: 瀬戸内の海賊王の鉄砲そのまま (光る弾と後ろに伸びる軌跡、秒速 150m、わずかに落ちる)。忍者の動きを読んで撃つ
+  // 5 連射: 光る銭を、投げ輪のように少し上へ投げ上げ、横へ曲がりながら竹筒へ落とす (小舟の前でも軌跡が見えるように)
   for (let k = 0; k < 5; k++) {
     setTimeout(() => {
       if (G.state !== 'play') return;
       const p = heroPos();
-      let dir;
-      if (tg && !['gone', 'bound', 'fall', 'sink'].includes(tg.state)) {
-        const c = ninjaCenter(tg), T = c.distanceTo(p) / CFG.coinSpeed;
-        c.x += (tg.vx || 0) * T; c.z += (tg.vz || 0) * T;
-        dir = c.sub(p).normalize();
-      } else dir = new THREE.Vector3(Math.cos(P.h), 0.005, Math.sin(P.h)).normalize();
-      dir.x += rand(-0.022, 0.022); dir.z += rand(-0.022, 0.022); dir.normalize();
-      if (!coinBeamGeo) {
-        coinBeamGeo = new THREE.CylinderGeometry(0.5, 0.05, 26, 6, 1, true).rotateX(Math.PI / 2).translate(0, 0, -13);
-        coinHeadGeo = new THREE.SphereGeometry(0.5, 6, 4);
-      }
-      const m = new THREE.Group();
-      const head = new THREE.Mesh(coinHeadGeo, coinBeamMat); head.scale.setScalar(1.1);
-      const tail = new THREE.Mesh(coinBeamGeo, coinBeamMat); tail.scale.z = 0.001;
-      m.add(head, tail);
-      // 海賊王の船よりカメラが近いので、形はそのままで 0.4 倍、手の少し先から。
-      // 軌跡は撃った所より後ろへは伸ばさない (後ろからビームが来るように見えないように)
-      m.scale.setScalar(0.4); p.addScaledVector(dir, 2.5);
-      m.position.copy(p); m.lookAt(p.clone().add(dir)); scene.add(m);
-      G.coins.push({ m, tail, p0: p.clone(), p: p.clone(), v: dir.multiplyScalar(CFG.coinSpeed), tg, g: 1.2, life: CFG.coinRange / CFG.coinSpeed + 0.12 });
+      const fwd = new THREE.Vector3(Math.cos(P.h), 0, Math.sin(P.h));
+      const live = tg && !['gone', 'bound', 'fall', 'sink'].includes(tg.state);
+      const to = live ? ninjaCenter(tg) : new THREE.Vector3(P.x + fwd.x * 35, waterY(P.x, P.z) + 0.3, P.z + fwd.z * 35);
+      if (!coinHeadGeo) coinHeadGeo = new THREE.SphereGeometry(0.5, 8, 6);
+      const head = new THREE.Mesh(coinHeadGeo, coinBeamMat); head.scale.setScalar(0.55);
+      head.position.copy(p); scene.add(head);
+      // 後ろに引く光の粒 (だんだん小さく)
+      const trail = new THREE.Group(); for (let i = 0; i < 9; i++) { const d = new THREE.Mesh(coinHeadGeo, coinTrailMat); d.scale.setScalar(0.45 * (1 - i / 10)); d.visible = false; trail.add(d); } scene.add(trail);
+      const dist = Math.hypot(to.x - p.x, to.z - p.z);
+      // 横の曲がり (1 発ごとに左右に振り分け) と、投げ上げる高さ
+      const side = (k - 2) * 1.6 + (k % 2 ? 2.2 : -2.2), apex = 3.5 + dist * 0.1 + k * 0.4;
+      G.coins.push({ m: head, trail, pts: [], from: p.clone(), to, tg: live ? tg : null, side, apex, t: 0, T: Math.max(0.35, dist / 55), life: 2 });
       A.gun(k === 0 ? 0.55 : 0.4);
-    }, k * 70);
+    }, k * 90);
   }
 }
+// 投げ銭の軌跡: 手元 → (上へ apex、横へ side ふくらむ) → 目標 の曲線
+function coinCurve(c, s) {
+  const dx = c.to.x - c.from.x, dz = c.to.z - c.from.z, L = Math.hypot(dx, dz) || 1, nx = -dz / L, nz = dx / L;
+  const bend = Math.sin(Math.PI * s);
+  return new THREE.Vector3(
+    c.from.x + dx * s + nx * c.side * bend,
+    c.from.y + (c.to.y - c.from.y) * s + c.apex * 4 * s * (1 - s) * (1 - 0.35 * s),
+    c.from.z + dz * s + nz * c.side * bend);
+}
+const coinTrailMat = new THREE.MeshBasicMaterial({ color: 0xffd060, transparent: true, opacity: 0.55, depthWrite: false, fog: false });
 let coinBeamGeo = null, coinHeadGeo = null;
 const coinBeamMat = new THREE.MeshBasicMaterial({ color: 0xffe070, transparent: true, opacity: 0.9, depthWrite: false, fog: false });
 const ropeMat = new THREE.LineBasicMaterial({ color: 0xd8b070 });
@@ -1043,20 +1045,19 @@ function bez(l, s) {
 }
 function updateWeapons(dt) {
   for (const c of G.coins) {
-    c.life -= dt;
-    const p0 = c.p.clone();
-    if (c.g) c.v.y -= c.g * dt;
-    c.p.addScaledVector(c.v, dt);
-    c.m.position.copy(c.p); c.m.lookAt(c.p.clone().add(c.v));
-    if (c.tail && c.p0) c.tail.scale.z = Math.max(0.001, Math.min(1, c.p.distanceTo(c.p0) / (26 * 0.4)));
-    // 速いので、このフレームで進んだ線分と忍者の近さで当たりを見る
-    for (const nj of (c.tg ? [c.tg] : G.ninjas)) {
-      if (!onWater(nj)) continue; // 投げ銭は水面にいる忍者だけ
-      const q = ninjaCenter(nj), d = c.p.clone().sub(p0), L2 = d.lengthSq() || 1, t = clamp(q.clone().sub(p0).dot(d) / L2, 0, 1);
-      if (p0.clone().addScaledVector(d, t).distanceTo(q) < 2.2) { hitNinja(nj, false); spark(q); c.life = 0; break; }
+    c.life -= dt; c.t += dt;
+    // 忍者が動いても、その竹筒を追いかける
+    if (c.tg && onWater(c.tg)) c.to.copy(ninjaCenter(c.tg));
+    const s = Math.min(1, c.t / c.T), p = coinCurve(c, s);
+    c.m.position.copy(p);
+    c.pts.unshift(p.clone()); if (c.pts.length > 28) c.pts.pop();
+    c.trail.children.forEach((d, i) => { const q = c.pts[i * 3 + 2]; d.visible = !!q; if (q) d.position.copy(q); });
+    if (s >= 1) {
+      if (c.tg && onWater(c.tg)) { const q = ninjaCenter(c.tg); hitNinja(c.tg, false); spark(q); }
+      else splash(p.x, p.z, 0.25);
+      c.life = 0;
     }
-    if (c.p.y < waterY(c.p.x, c.p.z)) { c.life = 0; splash(c.p.x, c.p.z, 0.25); }
-    if (c.life <= 0) scene.remove(c.m);
+    if (c.life <= 0) { scene.remove(c.m); scene.remove(c.trail); }
   }
   G.coins = G.coins.filter((c) => c.life > 0);
   for (const l of G.lassos) {
@@ -1759,7 +1760,7 @@ function startGame() {
   A.initAudio();
   A.playBgm('bgmSea');
   for (const nj of G.ninjas) { scene.remove(nj.m); scene.remove(nj.bam); nj.marker.remove(); }
-  for (const c of G.coins) scene.remove(c.m);
+  for (const c of G.coins) { scene.remove(c.m); if (c.trail) scene.remove(c.trail); }
   for (const l of G.lassos) { scene.remove(l.line); scene.remove(l.loop); }
   Object.assign(G, { escaped: 0, lastSpawn: 0, forceSpawn: 120, t: 0, captured: 0, spawned: 0, nextSpawn: CFG.firstAt, st: 100, ninjas: [], coins: [], lassos: [], coinCd: 0, lassoCd: 0, warpCd: 0, camYaw: 0, intruder: null, result: null, alarmT: 0, alarmBeep: 0, kills: [], lanterns: G.lanterns || [], retries: 0, reviveAsked: false, reviveOpen: false });
   for (const L of G.lanterns) scene.remove(L.g); G.lanterns = [];
