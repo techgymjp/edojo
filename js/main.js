@@ -1300,7 +1300,9 @@ function updateCamera(dt) {
     const wy0 = waterY(P.x, P.z);
     for (let i = 1; i <= 16; i++) {
       const f = i / 16, sx = P.x - Math.cos(ch) * G.camDist * f, sz = P.z - Math.sin(ch) * G.camDist * f;
-      if (obst(sx, sz) + 1.2 > wy0 + 3 + (ty - wy0 - 3) * f) { blockF = (i - 1) / 16; break; }
+      const ly = wy0 + 3 + (ty - wy0 - 3) * f;
+      // 地面・ビル・名所の建物、または橋の床・首都高・線路の高架の中を通るなら、その手前まで寄せる
+      if (obst(sx, sz) + 1.2 > ly || tokyo.solidAt(sx, ly, sz) > -1e9) { blockF = (i - 1) / 16; break; }
     }
     if (blockF >= 0) dist = Math.max(4, G.camDist * blockF - 1.5);
     tx = P.x - Math.cos(ch) * dist; tz = P.z - Math.sin(ch) * dist;
@@ -1319,6 +1321,8 @@ function updateCamera(dt) {
     // カメラの位置や小舟までの間にビル・崖があれば、その上まで上げる (壁の中に入って外側が透けて見えないように)
     let cy = wy0 + 50;
     for (let i = 2; i <= 10; i++) { const f = i / 10, sx = P.x - Math.cos(ch2) * 50 * f, sz = P.z - Math.sin(ch2) * 50 * f; cy = Math.max(cy, (obst(sx, sz) + 4 - wy0) / Math.max(f, 0.2) + wy0); }
+    // 橋の床・首都高・線路の高架が間にあれば、その上を通る高さまで上げる
+    for (let pass = 0; pass < 3; pass++) for (let i = 2; i <= 10; i++) { const f = i / 10, sx = P.x - Math.cos(ch2) * 50 * f, sz = P.z - Math.sin(ch2) * 50 * f, top = tokyo.solidAt(sx, wy0 + (cy - wy0) * f, sz); if (top > -1e9) cy = Math.max(cy, (top + 3 - wy0) / f + wy0); }
     camera.position.set(P.x - Math.cos(ch2) * 50, Math.min(cy, wy0 + 160), P.z - Math.sin(ch2) * 50);
     camera.lookAt(P.x + Math.cos(ch2) * 40, wy0, P.z + Math.sin(ch2) * 40);
   }

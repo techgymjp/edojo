@@ -499,6 +499,23 @@ function buildMarunouchi(scene) {
 const KXT = 111320 * Math.cos(35.674 * Math.PI / 180), KZT = 110574;
 export function buildTokyo(scene, renderer, bankSegs = []) {
   const OX = (139.745 - W.W) * W.KX, OZ = (W.N - 35.674) * W.KZ;
+  // カメラが入り込まないための「中身の詰まった所」: 橋の床・首都高の高架・線路の高架 (板) と、名所の建物 (roofAt)
+  const SOL = new Map(), SG = 16;
+  const addSeg = (x1, z1, x2, z2, hw, y1, y2, below, above) => {
+    const s = [x1, z1, x2, z2, hw, y1, y2, below, above];
+    for (let gx = Math.floor((Math.min(x1, x2) - hw) / SG); gx <= Math.floor((Math.max(x1, x2) + hw) / SG); gx++) for (let gz = Math.floor((Math.min(z1, z2) - hw) / SG); gz <= Math.floor((Math.max(z1, z2) + hw) / SG); gz++) { const k = gx * 100000 + gz; let l = SOL.get(k); if (!l) SOL.set(k, l = []); l.push(s); }
+  };
+  const solidAt = (x, y, z) => {
+    const l = SOL.get(Math.floor(x / SG) * 100000 + Math.floor(z / SG)); if (!l) return -Infinity;
+    let top = -Infinity;
+    for (const [x1, z1, x2, z2, hw, y1, y2, below, above] of l) {
+      const ex = x2 - x1, ez = z2 - z1, L2 = ex * ex + ez * ez || 1, t = Math.max(0, Math.min(1, ((x - x1) * ex + (z - z1) * ez) / L2));
+      if (Math.hypot(x - x1 - ex * t, z - z1 - ez * t) > hw) continue;
+      const h = y1 + (y2 - y1) * t;
+      if (y > h - below && y < h + above) top = Math.max(top, h + above);
+    }
+    return top;
+  };
   const root = new THREE.Group();
   root.position.set(OX, 0, OZ);
   scene.add(root);
@@ -677,6 +694,9 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
   // 線路: 国土地理院の鉄道データ (JR、地上・高架) から描き、電車を走らせる (ターザン大東京の手で引いた線路は使わない)
   const nRail0 = root.children.length;
   rails = buildRail(root, city, OX, OZ);
+  // 首都高の高架と線路の高架 (電車の高さまで) を「中身の詰まった所」に
+  for (const r of CITY.roads) for (let i = 0; i + 1 < r.x.length; i++) if (!r.t[i] && !r.t[i + 1] && !(r.g && r.g[i] && r.g[i + 1])) addSeg(r.x[i] + OX, r.z[i] + OZ, r.x[i + 1] + OX, r.z[i + 1] + OZ, 8.5, r.h[i], r.h[i + 1], 2.4, 1.5);
+  for (const r of RAIL) if (!r.t) for (let i = 0; i + 1 < r.x.length; i++) if (r.y[i] - terrainH(r.x[i] + OX, r.z[i] + OZ) > 3 || r.y[i + 1] - terrainH(r.x[i + 1] + OX, r.z[i + 1] + OZ) > 3) addSeg(r.x[i] + OX, r.z[i] + OZ, r.x[i + 1] + OX, r.z[i + 1] + OZ, 6, r.y[i], r.y[i + 1], 2, 4.5);
   const maru = buildMarunouchi(scene);
   // 日枝神社の山王の丘の森 (丘の上の社殿が宙に浮いて見えないように、斜面に木を植える)
   {
@@ -901,6 +921,7 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
             }
             // 桁: 橋の幅いっぱいの厚い桁 (下から見て空が透けないように)
             boxU(cx, cz, ux, uz, L + 0.2, wdt - 0.2, deck - 1.8, deck - 0.45, GIRDER);
+            addSeg(x1, z1, x2, z2, wdt / 2, deck, deck, 2, 1.4);
           }
           // 昌平橋: 赤れんがの一つアーチの橋 (両側の壁にアーチの口、アーチの裏)
           {
@@ -1004,9 +1025,16 @@ export function buildTokyo(scene, renderer, bankSegs = []) {
     city, root, OX, OZ, roofs, rails: () => rails,
     // ある所のビルの屋上の高さ (なければ 0)
     roofAt(x, z) {
-      const f = city.floorAt(x - OX, z - OZ, 1e5);
-      return f.what === 'roof' && f.bd && f.bd.plateau ? f.y + (f.bd.base || 0) : 0; // 描いているビルの屋根だけ
+      // 描いているビル (PLATEAU) の屋根と、名所の建物 (日枝神社・ホテルニューオータニなど。地形に乗せた高さを足す) の一番高い所
+      const lx = x - OX, lz = z - OZ, l = city.cell(lx, lz);
+      let top = 0;
+      if (l) for (const bd of l) {
+        if (bd.plateau === false || (bd.plateau === undefined && !bd.name) || !city.inside(bd, lx, lz)) continue;
+        top = Math.max(top, bd.h + (bd.plateau ? (bd.base || 0) : Ts(bd.cx, bd.cz)));
+      }
+      return top;
     },
+    solidAt,
     stream(cam, R, budget) { return city.streamTiles(cam.x - OX, cam.z - OZ, R, budget); },
     update(dt, t, night, fogColor, camera) {
       if (rails && rails.update) rails.update(dt);
