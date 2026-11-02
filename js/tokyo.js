@@ -486,9 +486,13 @@ function buildMarunouchi(scene) {
     // 南の端: 丘のトンネルの口 (コンクリートの額と黒い口) と、口の先の草の土手
     { const [ex, ez, r] = at(L), ux = Math.sin(r), uz = Math.cos(r);
       const put = (geo, m, x, y, z) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.y = r; g.add(o); return o; };
-      put(new THREE.BoxGeometry(10, 10, 3), CON, ex + ux * 1.5, deckY + 3.5, ez + uz * 1.5);
-      put(new THREE.BoxGeometry(5.6, 5, 0.3), DARK, ex - ux * 0.05, deckY + 2.1, ez - uz * 0.05);
-      if (opt.cover) { const n = opt.cover, mound = put(new THREE.CylinderGeometry(Math.SQRT1_2, Math.SQRT1_2 * 2.2, 1, 4, 1).rotateY(Math.PI / 4), new THREE.MeshLambertMaterial({ color: 0x5b8a3c }), ex + ux * (n / 2 + 1.5), deckY + 3, ez + uz * (n / 2 + 1.5)); mound.scale.set(22, 11, n + 10); } }
+      // 額 (幅 16m・高さ 13m のコンクリートの壁)、黒い口 (アーチの形: 四角 + 半円)、両側の袖の壁
+      put(new THREE.BoxGeometry(16, 13, 2), CON, ex + ux * 1, deckY + 4.5, ez + uz * 1);
+      put(new THREE.BoxGeometry(17, 0.8, 2.6), CON, ex + ux * 1, deckY + 11.4, ez + uz * 1);
+      put(new THREE.BoxGeometry(7, 4.5, 0.3), DARK, ex - ux * 0.05, deckY + 2.25, ez - uz * 0.05);
+      const arch = put(new THREE.CircleGeometry(3.5, 16, 0, Math.PI), DARK, ex - ux * 0.06, deckY + 4.5, ez - uz * 0.06); arch.rotation.y = r + Math.PI;
+      for (const sd of [-1, 1]) { const wx = ex + Math.cos(r) * sd * 9.5 - ux * 5, wz = ez - Math.sin(r) * sd * 9.5 - uz * 5; const wing = put(new THREE.BoxGeometry(1.2, 9, 11), CON, wx, deckY + 2.5, wz); wing.rotation.y = r + sd * 0.35; }
+      if (opt.cover) { const n = opt.cover, mound = put(new THREE.CylinderGeometry(Math.SQRT1_2, Math.SQRT1_2 * 2.2, 1, 4, 1).rotateY(Math.PI / 4), new THREE.MeshLambertMaterial({ color: 0x5b8a3c }), ex + ux * (1.1 * n + 2), deckY + 4, ez + uz * (1.1 * n + 2)); mound.scale.set(26, 13, n); } } // 土手の北のすそが口の額のすぐ後ろ (口がかくれないように)
     const cars = [];
     for (let i = 0; i < 6; i++) {
       const c = new THREE.Group();
@@ -509,11 +513,11 @@ function buildMarunouchi(scene) {
     // 四谷三丁目から新宿通りの下を来て、交差点 (四ツ谷駅) の下で右へ曲がり (北西から南へ)、外堀と並んで南へ。
     // 新宿通りの南に中央線・総武線のホーム、その南の赤坂口の駅舎の下から丸ノ内線のホームが南へ 125m (屋根が駅舎からはみ出して見える)。
     // 中央線・総武線はそのホームの下をくぐって南西へ行き、丸ノ内線はホームの先 40m ほどで、中央線のトンネルとほぼ並んで丘のトンネルに入る
-    // 中央線と並んで北から南へまっすぐ入り、少しだけ東へふくらむゆるい弧 (航空写真の、赤坂口から南のトンネルまで。前より 20m 東)
-    const N = [35.68575, 139.73040], C = [35.68470, 139.73056], S = [35.68370, 139.73042], pts = [];
+    // 四谷見附橋から南を見て: 右 (外堀通りの側) から入線し、やや左 (東) へ弧を描いて南のトンネルへ。ホームは堀に出てすぐから 125m、その先トンネルまでは線路だけ
+    const N = [35.68580, 139.72985], C = [35.68475, 139.72992], S = [35.68370, 139.73050], pts = [];
     for (let i = 0; i <= 12; i++) { const t = i / 12, a = (1 - t) * (1 - t), b2 = 2 * t * (1 - t), c = t * t; pts.push(ll2(N[0] * a + C[0] * b2 + S[0] * c, N[1] * a + C[1] * b2 + S[1] * c)); }
     const bank = Math.min(terrainH(...pts[0]), terrainH(...pts[12]));
-    curveSite(pts, 160, Math.max(waterY(...ll2(35.6853, 139.7306)) + 5, bank - 4), { platStart: 50, PL: 125, cover: 30 });
+    curveSite(pts, 160, Math.max(waterY(...ll2(35.6853, 139.7306)) + 5, bank - 4), { platStart: 4, PL: 125, cover: 40 });
   }
   return {
     sites,
@@ -524,7 +528,8 @@ function buildMarunouchi(scene) {
         if (s.wait > 0) s.wait -= dt;
         else {
           const prev = s.d; s.d += 12 * s.dir * dt;
-          if (s.station && (prev - mid) * (s.d - mid) <= 0) { s.d = mid; s.wait = 15; }
+          // 駅を通り過ぎる瞬間に止める (止まったあとは、駅の真上から動き出せるように、今の位置からはまたがない)
+          if (s.station && prev !== mid && (prev - mid) * (s.d - mid) <= 0) { s.d = mid; s.wait = 15; }
           if (s.d > total + 60) { s.dir = -1; } if (s.d < -60) { s.dir = 1; }
         }
         s.cars.forEach((c, i) => {
