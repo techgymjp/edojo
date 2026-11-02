@@ -266,6 +266,36 @@ function buildRail(root, city, OX, OZ) {
   const m4 = new THREE.Matrix4();
   piers.forEach(([x, z, y0, y1], i) => { m4.makeScale(1, Math.max(0.1, y1 - y0), 1).setPosition(x, y0, z); pm.setMatrixAt(i, m4); });
   pm.count = piers.length; root.add(pm);
+  // 松住町架道橋 (昌平橋の北詰で総武線が道路をまたぐ、緑の鋼のアーチ橋)
+  {
+    const K = 111320 * Math.cos(35.674 * Math.PI / 180), X = (139.7696 - 139.745) * K, Z = -(35.69865 - 35.674) * 110574;
+    let best = null;
+    for (const r of RAIL) if (r.ln === 's' && !r.t) for (let i = 0; i + 1 < r.x.length; i++) {
+      const dx = r.x[i + 1] - r.x[i], dz = r.z[i + 1] - r.z[i], L2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((X - r.x[i]) * dx + (Z - r.z[i]) * dz) / L2));
+      const px = r.x[i] + dx * t, pz = r.z[i] + dz * t, d = Math.hypot(px - X, pz - Z);
+      if (!best || d < best.d) best = { d, px, pz, y: r.y[i] + (r.y[i + 1] - r.y[i]) * t, ux: dx / Math.sqrt(L2), uz: dz / Math.sqrt(L2) };
+    }
+    if (best && best.d < 40) {
+      const G = new THREE.Group(), green = new THREE.MeshLambertMaterial({ color: 0x4caa5a });
+      G.position.set(best.px, best.y - 0.2, best.pz); G.rotation.y = Math.atan2(best.ux, best.uz);
+      const SPAN = 72, RISE = 9, HW = 5.2;
+      const beam = (x1, y1, z1, x2, y2, z2, w) => { const a = new THREE.Vector3(x1, y1, z1), b = new THREE.Vector3(x2, y2, z2), L = a.distanceTo(b); const m = new THREE.Mesh(new THREE.BoxGeometry(w, w, L), green); m.position.copy(a).add(b).multiplyScalar(0.5); m.lookAt(b); G.add(m); };
+      const arcY = (t) => 1.2 + RISE * Math.sin(Math.PI * t), N = 14;
+      for (const sx of [-HW, HW]) {
+        beam(sx, 0, -SPAN / 2, sx, 0, SPAN / 2, 0.9); // 下の弦 (桁)
+        beam(sx, 1.4, -SPAN / 2, sx, 1.4, SPAN / 2, 0.5); // 手すり
+        for (let k = 0; k < N; k++) {
+          const t0 = k / N, t1 = (k + 1) / N, z0 = -SPAN / 2 + SPAN * t0, z1 = -SPAN / 2 + SPAN * t1;
+          beam(sx, arcY(t0), z0, sx, arcY(t1), z1, 0.8); // アーチ
+          beam(sx, arcY(t0) - 1.6, z0, sx, arcY(t1) - 1.6, z1, 0.5); // アーチの下の弦
+          if (k > 0) beam(sx, 0, z0, sx, arcY(t0), z0, 0.35); // 縦の材
+          beam(sx, 0, z0, sx, arcY(t1) - 1.6, z1, 0.3); // 斜めの材
+        }
+      }
+      for (let k = 1; k < N; k++) { const z = -SPAN / 2 + SPAN * k / N; beam(-HW, arcY(k / N), z, HW, arcY(k / N), z, 0.4); } // 上の横つなぎ
+      root.add(G);
+    }
+  }
   // 電車: 線をつないだ長い道筋を走らせる
   // 端どうしが 5m 以内なら同じ路線の線をつなぐ。分かれ道では、まっすぐに近い方へ
   RAIL.forEach((r) => { r.lk = r.ln || (r.jr ? 'j' : 'm'); });
