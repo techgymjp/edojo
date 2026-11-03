@@ -87,6 +87,11 @@ Capacitor で Android アプリにしています（パッケージ名 `jp.techg
 - 広告（AdMob）: バナーはタイトル・一服・結果の画面だけ。全画面広告は出陣・もう一度・再開・タイトルへ戻るとき。リワード広告は、本丸に忍び込まれたときに見ると、その曲者を押し返して続けられます（1 ゲーム 3 回まで。召し捕りの数は増えず、結果とシェアに「やり直し N 回」と出ます）
 - 手元でビルドするとき: `npm ci` → `npm run android:sync` → `npm run android:open`（Android Studio）
 
+## iOS アプリ
+
+Android と同じ Capacitor で iOS 版も作っています（Bundle ID `jp.techgym.edojo`、`ios/` フォルダ）。Mac での作業手順は [docs/IOS_BUILD.md](docs/IOS_BUILD.md) です。
+push のたびに GitHub Actions（`.github/workflows/ios.yml`）が、署名なしでシミュレーター向けにビルドできるかを確かめます。App Store 用の画像と文章は `docs/store/ios/` にあります。
+
 ## ライセンス
 
 著作権はテックジム株式会社に帰属します（All rights reserved）。詳しくは [LICENSE](LICENSE) を見てください。three.js（MIT）などの同梱ライブラリはそれぞれのライセンスに従います。
