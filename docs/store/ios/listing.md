@@ -16,16 +16,28 @@ Google Play 用は `docs/store/listing.md` です。
 
 ## 日本語
 
-| 欄 | 内容 |
-| --- | --- |
-| 名前（30 文字以内） | `風雲江戸城 〜お濠の忍者召し捕り〜` |
-| サブタイトル（30 文字以内） | `小舟で駆ける江戸の捕物アクション` |
-| キーワード（100 文字以内） | `忍者,江戸,江戸城,お濠,皇居,東京,時代劇,同心,捕物,小舟,ボート,3D,アクション,天守,石垣,外堀,ninja` |
+**名前**（30 文字以内）
+
+```
+風雲江戸城 〜お濠の忍者召し捕り〜
+```
+
+**サブタイトル**（30 文字以内。名前の下に出るひとこと）
+
+```
+小舟で駆ける江戸の捕物アクション
+```
 
 **プロモーション用テキスト**（170 文字以内）
 
 ```
 今の東京のビル街に、江戸城のお濠がよみがえる。小舟でお濠を駆け、ムササビの術で飛び込み水遁の術で忍び寄る 88 人の忍者を、投げ銭と投げ輪で召し捕れ！
+```
+
+**キーワード**（100 文字以内・カンマ区切り）
+
+```
+忍者,江戸,江戸城,お濠,皇居,東京,時代劇,同心,捕物,小舟,ボート,3D,アクション,天守,石垣,外堀,ninja
 ```
 
 **概要**
@@ -36,16 +48,28 @@ Google Play の詳しい説明（`docs/store/listing.md` の日本語）をそ�
 
 ## English (U.S.)
 
-| Field | Text |
-| --- | --- |
-| Name (max 30) | `Edo Castle: Moat Ninja Patrol` |
-| Subtitle (max 30) | `Samurai boat chase in Tokyo` |
-| Keywords (max 100) | `ninja,samurai,japan,tokyo,boat,moat,castle,edo,catch,action,3d,keep,shogun,period,lasso` |
+**Name** (max 30)
+
+```
+Edo Castle: Moat Ninja Patrol
+```
+
+**Subtitle** (max 30)
+
+```
+Samurai boat chase in Tokyo
+```
 
 **Promotional text** (max 170)
 
 ```
 Edo Castle's moats return to modern Tokyo. Race your boat through them and catch 88 ninja gliding in and swimming underwater before they reach the keep!
+```
+
+**Keywords** (max 100, comma separated)
+
+```
+ninja,samurai,japan,tokyo,boat,moat,castle,edo,catch,action,3d,keep,shogun,period,lasso
 ```
 
 **Description**
@@ -68,7 +92,7 @@ Use the English full description of the Google Play listing (`docs/store/listing
 
 ## App Review に関する情報（メモ・英語）
 
-最初の提出のときから入れておきます（`docs/IOS_BUILD.md` 5 章）。
+最初の提出のときから入れておきます（`docs/IOS_BUILD.md` 5 章）。6 はデザインスパム（Guideline 4.3：ほかのアプリの使い回し・量産と見なされる）対策です。
 
 ```
 1. Purpose and audience: Edo Castle: Moat Ninja Patrol is a free 3D action game for ages 13+. The player steers a small boat around the moats of Edo Castle in a recreation of Tokyo and catches 88 ninja with thrown coins and a lasso before they reach the castle keep.
@@ -80,4 +104,6 @@ Use the English full description of the Google Play listing (`docs/store/listing
 4. Regional differences: None, except that the ad consent form appears only where required (e.g. EEA/UK).
 
 5. Regulated content / third-party material: The game is not in a regulated industry. Terrain and water are processed from GSI (Geospatial Information Authority of Japan) tiles, and buildings from Project PLATEAU (MLIT, CC BY 4.0) open data; the sources are shown on the title screen. All other graphics and sounds are original or our own.
+
+6. Uniqueness (Guideline 4.3 - Design Spam): This is not a template, reskin or variation of another app. TECH GYM K.K. publishes several games, but each is a separate, original game with its own code, gameplay, graphics and sound. This game's world was built specifically for it: the moats of Edo Castle restored on top of modern Tokyo from historical maps, elevation data and building data, with hand-made landmarks (castle keep, gates, stone walls, shrines, bridges, railways and expressways). Its gameplay (steering a boat around the moats, catching ninja who glide in from rooftops and swim with bamboo tubes, with coins and a lasso) is unique to this app. There is only one version of this app on the App Store, and it is not a duplicate of any other app.
 ```
