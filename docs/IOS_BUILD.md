@@ -164,7 +164,10 @@ base64 -i AuthKey_XXXXXXXXXX.p8 | tr -d '\n' | pbcopy
 
 ### 7-4. そのあと
 
-登録が終わったら、Claude Code に「iOS の自動アップロードのワークフローを作って」と頼みます。push するたびに、本番広告の設定でビルドし、ビルド番号（Actions の実行回数）を自動で上げて、TestFlight にアップロードするようにします。審査への提出は、これまでどおり App Store Connect で行います。
+このリポジトリには、自動アップロードのワークフロー `.github/workflows/ios-release.yml`（techgymjp/shutoko と同じ）と `scripts/ios_profile.py` が入っています。
+5 つの Secrets を登録すると、main に push するたびに本番広告の設定でビルドし、ビルド番号を **100 + 実行回数** にして TestFlight にアップロードします（Mac から手でアップロードする 1、2、… と重ならない）。
+すぐに動かしたいときは、Actions タブ →「iOS release (TestFlight)」→「Run workflow」。審査への提出は、これまでどおり App Store Connect で行います。
+Bundle ID `jp.techgym.edojo` が Apple Developer の Identifiers に登録済みであることが必要です（0 章）。
 
 **注意**：証明書（.p12）、そのパスワード、API キー（.p8）は、アップロード鍵と同じく、チャット・AI へのアップロード・リポジトリへのコミットで**絶対に共有しない**でください。誤って共有したら、App Store Connect で API キーを取り消し、証明書も取り消して作り直します。
 
