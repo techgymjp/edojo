@@ -24,10 +24,10 @@ window.Ads = (() => {
         rewarded: 'ca-app-pub-3940256099942544/1712485313',
         banner: 'ca-app-pub-3940256099942544/2934735716',
       },
-      // 本番の広告ユニット(AdMob の iOS アプリ「風雲江戸城」)。届くまでは空(本番ビルドでは出さない)
+      // 本番の広告ユニット(AdMob の iOS アプリ「風雲江戸城」)
       production: {
         interstitial: 'ca-app-pub-6411535997477460/9392928723',
-        rewarded: '',
+        rewarded: 'ca-app-pub-6411535997477460/2520398619',
         banner: 'ca-app-pub-6411535997477460/1780188701',
       },
     },

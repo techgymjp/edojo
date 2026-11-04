@@ -18,7 +18,7 @@
 2. **App Store Connect** →「マイ App」→「＋」→「新規 App」
    - iOS ／ 名前：`風雲江戸城 〜お濠の忍者召し捕り〜` ／ プライマリ言語：日本語 ／ バンドル ID：上で登録したもの ／ SKU：`edojo` ／ アクセス制限なし
 3. **AdMob** →「アプリを追加」→ **iOS** →「ストアに掲載されていない」で「風雲江戸城」を登録し、バナー・インタースティシャル・リワードの広告ユニットを作る
-   - アプリ ID（`ca-app-pub-…~…`）と広告ユニット ID 3 つを Claude Code に渡す。`ios/App/App/Info.plist` の `GADApplicationIdentifier` と `js/ads.js` の `UNITS.ios.production` に入れる（届くまではテスト用のアプリ ID で、本番ビルドでは広告が出ない）
+   - アプリ ID（`ca-app-pub-…~…`）と広告ユニット ID 3 つを Claude Code に渡す。`ios/App/App/Info.plist` の `GADApplicationIdentifier` と `js/ads.js` の `UNITS.ios.production` に入れる（入力済み：アプリ ID `~7142169900`、バナー・インタースティシャル・リワードの 3 つ）
    - 「プライバシーとメッセージ」→「欧州の規制」のメッセージに iOS アプリも追加する
 
 ---
