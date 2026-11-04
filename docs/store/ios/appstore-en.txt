@@ -1,0 +1,70 @@
+Edo Castle - App Store listing (English U.S.)
+
+[Name] (max 30)
+Edo Castle: Moat Ninja Patrol
+
+[Subtitle] (max 30)
+Samurai boat chase in Tokyo
+
+[Promotional text] (max 170)
+Edo Castle's moats return to modern Tokyo. Race your boat through them and catch 88 ninja gliding in and swimming underwater before they reach the keep!
+
+[Keywords] (max 100)
+ninja,samurai,japan,tokyo,boat,moat,castle,edo,catch,action,3d,keep,shogun,period,lasso
+
+[Description]
+Defend the castle of Edo.
+
+At dawn, ninja hiding on the rooftops of modern Tokyo glide down into the castle moats one after another.
+Breathing through bamboo tubes, they swim across the outer moat, climb the stone walls of the inner moat and head for the keep.
+As a samurai constable, race your little boat through the moats and catch all 88 ninja with thrown coins and lassos.
+If even one of them gets into the keep, the castle falls.
+
+■ EDO CASTLE'S MOATS, BACK IN MODERN TOKYO
+• Sail the Kanda River, the outer and inner moats and the Nihonbashi River all the way around the castle
+• Moats and ponds that were filled in long ago, like Tameike, are brought back as water using old maps
+• Terrain and water from the Geospatial Information Authority of Japan, and today's skyline from Project PLATEAU building data
+• Glide under expressways, elevated railways and famous bridges
+• Landmarks include the castle keep, turrets, stone walls, gates, Hie Shrine, the State Guest House, the National Diet and the Nippon Budokan
+
+■ CATCH THEM ALL
+• Coins: fire a stream of glowing coins at the bamboo tubes of ninja swimming underwater
+• Lasso: rope a distant ninja, lift him into the air and drop him into the moat
+• Hold to speed up, and jump over earthen bridges and low banks
+• Swirling blue warps link moats that aren't connected
+• The mini-map and guide show the next gate and where the ninja are
+
+■ A DAY IN EDO
+• The sky changes from dawn to dusk and night
+• Period-drama style music with shamisen and taiko drums
+
+■ EASY CONTROLS
+• Steer with the Fwd / Back / L / R buttons, and fight with the Lasso, Coin and Jump buttons
+• If a ninja gets into the keep, you can watch an ad to defeat the intruder and keep playing (up to 5 times per game)
+• Share your catch count and rank with friends
+• Playable offline (ads and sharing need a connection)
+• Available in English and Japanese
+
+Can you protect Edo Castle? To your boat!
+
+[Support URL]
+https://techgym.jp/
+
+[Privacy policy URL]
+https://techgym.jp/privacy-policy-en/
+
+[Copyright]
+2026 TECH GYM K.K.
+
+[App Review notes]
+1. Purpose and audience: Edo Castle: Moat Ninja Patrol is a free 3D action game for ages 13+. The player steers a small boat around the moats of Edo Castle in a recreation of Tokyo and catches 88 ninja with thrown coins and a lasso before they reach the castle keep.
+
+2. How to use: No login or account is needed. Tap START on the title screen to play. Steer with the Fwd / Back / L / R buttons and use Coin, Lasso and Jump. The game is shown in English or Japanese depending on the device language.
+
+3. External services: Google AdMob (banner, interstitial and rewarded ads) with Google's consent form (UMP) and App Tracking Transparency. Rewarded ads are optional: when a ninja gets into the keep, watching one lets the player defeat the intruder and keep playing (up to 5 times per game). No other services or in-app purchases.
+
+4. Regional differences: None, except that the ad consent form appears only where required (e.g. EEA/UK).
+
+5. Regulated content / third-party material: The game is not in a regulated industry. Terrain and water are processed from GSI (Geospatial Information Authority of Japan) tiles, and buildings from Project PLATEAU (MLIT, CC BY 4.0) open data; the sources are shown on the title screen. All other graphics and sounds are original or our own.
+
+6. Uniqueness (Guideline 4.3 - Design Spam): This is not a template, reskin or variation of another app. TECH GYM K.K. publishes several games, but each is a separate, original game with its own code, gameplay, graphics and sound. This game's world was built specifically for it: the moats of Edo Castle restored on top of modern Tokyo from historical maps, elevation data and building data, with hand-made landmarks (castle keep, gates, stone walls, shrines, bridges, railways and expressways). Its gameplay (steering a boat around the moats, catching ninja who glide in from rooftops and swim with bamboo tubes, with coins and a lasso) is unique to this app. There is only one version of this app on the App Store, and it is not a duplicate of any other app.
