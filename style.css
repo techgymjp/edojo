@@ -212,8 +212,8 @@ body.banner .panel { max-height: calc(100vh - 76px); overflow-y: auto; }
   #title .app-meta { font-size: 10px; margin-top: 2px; }
 }
 
-/* Web 版だけ: Android アプリ (Google Play) へのリンク */
+/* web-only:start Android アプリ (Google Play) へのリンク (Web 版だけ) */
 .store-link { margin: 8px 0 2px; font-size: 14px; }
 .store-link a { color: #bfe8ff; text-decoration: underline; }
-body.app .store-link { display: none; }
 @media (orientation: landscape) and (max-height: 500px) { #title .store-link { font-size: 11px; margin: 3px 0 0; } }
+/* web-only:end */

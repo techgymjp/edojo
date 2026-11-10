@@ -1439,8 +1439,10 @@ function buildMinimap() {
 }
 // 本丸の区域 (地図のコード 4) までの距離 (m)。区域の点を間引いて持ち、10m ごとに覚えておく
 let honPts = null; const honMemo = new Map();
+// web-only:start 確かめ・撮影用のフック (Web 版だけ)
 window.__honDist = (x, z) => honDist(x, z);
 window.__mmGet = () => mm;
+// web-only:end
 function honDist(x, z) {
   if (!honPts) { honPts = []; for (let j = 0; j < W.h; j += 4) for (let i = 0; i < W.w; i += 4) if (W.code[j * W.w + i] === 4) honPts.push((i + 0.5) * W.res, (j + 0.5) * W.res); }
   const k = Math.floor(x / 10) * 100000 + Math.floor(z / 10);
@@ -2031,6 +2033,8 @@ fitCamera();
 addEventListener('resize', () => { fitCamera(); renderer.setSize(innerWidth, innerHeight); });
 requestAnimationFrame(loop);
 boot();
+// web-only:start 確かめ・撮影用のフック (Web 版だけ)
 window.__wy = waterY; window.__G = G; window.__P = P; window.__CFG = CFG; window.__ll = ll; window.__gh = groundH;
 window.__tokyo = () => tokyo; window.__cam = camera; window.__THREE = THREE; window.__W = W; window.__renderer = renderer; window.__scene = scene;
 window.__dbg = { route: () => routePoints(), innerDive: (nj) => innerDive(nj), intrude: (nj) => intrude(nj), warps: () => warps, hitNinja, spawnNinja, throwCoins, throwLasso, startGame, navi: () => navi, isWater, cellOf, step, updateNav };
+// web-only:end

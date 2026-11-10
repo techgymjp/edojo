@@ -72,8 +72,9 @@
       ビル: 国土交通省 Project PLATEAU（東京都23区 2020年度、plateau-tokyo23ku-building-mvt-2020 by indigo-lab）<br>
       音: 瀬戸内の海賊王・孤軍奮闘小早川（テックジム）より　3D: three.js
     </div>
-    <!-- Web 版だけ: Android アプリ (Google Play) へのリンク。アプリの中では出さない (body.app) -->
+    <!-- web-only: Android アプリ (Google Play) へのリンク。アプリ用のビルドでは取り除く (scripts/build-web.js) -->
     <div class="store-link"><a class="gp-link" href="https://play.google.com/store/apps/details?id=jp.techgym.edojo" target="_blank" rel="noopener">▶ Android アプリ版（Google Play）</a></div>
+    <!-- /web-only -->
     <div class="app-meta"><span id="appVer"></span> <a href="https://techgym.jp/privacy-policy/" target="_blank" rel="noopener">プライバシーポリシー</a> <button id="btnAdPrivacy" class="link-btn" hidden>広告の設定</button></div>
   </div>
 </div>
@@ -100,7 +101,9 @@
       <tr><td>視点</td><td>Q/E・ホイール</td><td>画面をなぞる</td></tr>
       <tr><td>一時停止</td><td>P・Esc</td><td>「止」</td></tr>
     </table>
+    <!-- web-only -->
     <div class="store-link"><a class="gp-link" href="https://play.google.com/store/apps/details?id=jp.techgym.edojo" target="_blank" rel="noopener">▶ Android アプリ版（Google Play）</a></div>
+    <!-- /web-only -->
     <button id="howtoClose" class="btn primary">閉じる</button>
   </div>
 </div>

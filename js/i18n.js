@@ -1,5 +1,8 @@
-// 日本語と英語 (端末の言語が日本語でなければ英語)。?lang=en / ?lang=ja で切り替えて確かめられる
-const q = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('lang') : null;
+// 日本語と英語 (端末の言語が日本語でなければ英語)
+let q = null;
+// web-only:start 確かめ用: ?lang=en / ?lang=ja で言語を切り替える (Web 版だけ)
+q = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('lang') : null;
+// web-only:end
 export const LANG = q === 'en' || q === 'ja' ? q : (typeof navigator !== 'undefined' && !/^ja\b/i.test(navigator.language || '') ? 'en' : 'ja');
 export const EN = LANG === 'en';
 // 日本語と英語のどちらかを返す
@@ -46,7 +49,9 @@ export function applyEnglishPage() {
   set('#title .legal', 'Moats &amp; rivers: GSI vector tiles (water), with Edo-period moats restored<br>Buildings: Project PLATEAU, MLIT (Tokyo 23 wards 2020, plateau-tokyo23ku-building-mvt-2020 by indigo-lab)<br>Sound: from TECH GYM games · 3D: three.js');
   set('.app-meta a', 'Privacy policy');
   set('#btnAdPrivacy', 'Ad settings');
+  // web-only:start
   document.querySelectorAll('.gp-link').forEach((a) => { a.textContent = '▶ Get the Android app on Google Play'; });
+  // web-only:end
   set('#howto h2', 'How to play');
   set('#howto .story', 'Dawn in Edo. Ninja hiding on the rooftops outside the outer moat glide down into the water with the <b>flying squirrel technique</b>, then swim across hidden underwater, breathing through <b>bamboo tubes</b>. Once across, they walk to the inner moat, dive in, climb the castle\'s stone walls and head for the keep (Honmaru).<br>Starting near Asakusabashi, steer your boat around the outer moat and into the inner moats. Catch all <b>88 ninja</b> with <b>coins</b> and your <b>lasso</b>. They set out one after another over 10 minutes, and ninja lying in wait jump in when your boat comes near.<br>If even one ninja gets into the keep, you lose.');
   set('#howto ul', `

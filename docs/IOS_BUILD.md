@@ -171,6 +171,11 @@ Bundle ID `jp.techgym.edojo` が Apple Developer の Identifiers に登録済み
 
 **注意**：証明書（.p12）、そのパスワード、API キー（.p8）は、アップロード鍵と同じく、チャット・AI へのアップロード・リポジトリへのコミットで**絶対に共有しない**でください。誤って共有したら、App Store Connect で API キーを取り消し、証明書も取り消して作り直します。
 
+## Web 版だけの部分はアプリに入れない（Guideline 5.6 対策）
+
+Google Play へのリンク、確かめ・撮影用のフック、URL（`?lang=`）での言語切り替えは Web 版だけのものです。HTML は `<!-- web-only -->` 〜 `<!-- /web-only -->`、JS は `// web-only:start` 〜 `// web-only:end`、CSS は `/* web-only:start */` 〜 `/* web-only:end */` で囲んであり、アプリ用のビルド（`npm run build:app`。`android:sync`・`ios:sync`・`ios:release` と GitHub Actions が使う）では取り除きます。
+「他社ストアへのリンク＋アプリの中でだけ隠すコード」がバンドルに入っていると、審査で「審査中に隠した機能」（Guideline 5.6）と見なされることがあるためです（techgymjp/chabudai で実際にリジェクトされた）。Web 版だけのものを足すときは、必ずこの目印で囲んでください。
+
 ## つまずきやすいところ
 
 | 症状 | 対処 |
