@@ -13,7 +13,7 @@ window.Ads = (() => {
       },
       // 本番の広告ユニット(AdMob の Android アプリ「風雲江戸城」)。空の種類は本番ビルドでは出さない
       production: {
-        interstitial: 'ca-app-pub-6411535997477460/2934126300',
+        interstitial: 'ca-app-pub-6411535997477460/2327022576',
         rewarded: 'ca-app-pub-6411535997477460/6631322021',
         banner: 'ca-app-pub-6411535997477460/9667949830',
       },
