@@ -27,7 +27,7 @@ window.Ads = (() => {
       // 本番の広告ユニット(AdMob の iOS アプリ「風雲江戸城」)
       production: {
         interstitial: 'ca-app-pub-6411535997477460/9977783473',
-        rewarded: 'ca-app-pub-6411535997477460/2520398619',
+        rewarded: 'ca-app-pub-6411535997477460/9782342358',
         banner: 'ca-app-pub-6411535997477460/7347750702',
       },
     },
